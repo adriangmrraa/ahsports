@@ -28,7 +28,7 @@
   - Tamaño máximo: 5MB (configurable en next.config.ts ya está en 5mb)
   - Verificar: upload de un PNG pequeño → archivo en `/public/uploads/` → URL accesible con `curl`.
 
-- [ ] **F4-02** Página `/admin/pedidos/[id]/arte` — Revisión de arte.
+- [x] **F4-02** Página `/admin/pedidos/[id]/arte` — Revisión de arte. **VERIFICADO 2026-09-04**: `src/app/(admin)/admin/pedidos/[id]/arte/{page.tsx,ArteManager.tsx}` — carga order+org+attachments+count applications, grid de cards con preview/badges kind+status, aprobar/rechazar/reemplazar/archivar vía ArteManager, upload inline. Drizzle real, tsc EXIT 0.
   - Carga: order + attachments (orderId) + count de applications por attachment
   - Header: "Adjuntos y aplicaciones" + count + botón "Subir adjunto"
   - Grid de cards (3 cols desktop, 1 col mobile): cada attachment como card con:
@@ -48,13 +48,13 @@
     5. Insert `attachments` con `orderId, kind, name, originalName, mimeType, sizeBytes, url, status: "pendiente_revision", uploadedByRole: "admin"`
   - Verificar: subir imagen → aparece en grid → aprobar → badge cambia.
 
-- [ ] **F4-03** API `POST /api/attachments` (multipart) + `PATCH /api/attachments/[id]` (status, notes).
+- [x] **F4-03** API `POST /api/attachments` (multipart) + `PATCH /api/attachments/[id]` (status, notes). **VERIFICADO 2026-09-04**: `src/app/api/attachments/route.ts` (GET filtros + POST multipart con Zod + validateFile + activeStorage.upload + insert con status pendiente_revision/uploadedByRole=admin) + `src/app/api/attachments/[id]/route.ts` (PATCH status/notes + DELETE hard con guard de applications). tsc EXIT 0.
   - `POST` acepta FormData: `file, kind, orderId?, organizationId?, name?` (al menos uno de orderId/organizationId)
   - Zod-ish (FormData parsing): `kind: z.enum([...])`, `orderId?: z.string().uuid()`, `organizationId?: z.string().uuid()`
   - `PATCH` body JSON: `{status?, notes?, name?}` con status enum
   - Verificar: subir via curl con `-F "file=@..."` + ver attachment en DB.
 
-- [ ] **F4-04** Página `/admin/organizaciones/[id]/adjuntos` — Biblioteca reutilizable.
+- [x] **F4-04** Página `/admin/organizaciones/[id]/adjuntos` — Biblioteca reutilizable. **VERIFICADO 2026-09-04**: `src/app/(admin)/admin/organizaciones/[id]/adjuntos/{page.tsx,CopyToOrderButton.tsx}` — carga attachments aprobados de la org (orderId IS NULL), filtro por kind, botón "Copiar a pedido" con modal (listOpenOrgOrders → copyAttachmentToOrder). tsc EXIT 0.
   - Carga: attachments WHERE `organizationId = id AND orderId IS NULL AND status = 'aprobado'`
   - UI: grid similar a F4-02 pero filtrado por `kind` (chips: Todos, Logos, Sponsors, etc.)
   - Botón "Copiar a pedido" abre modal con `<Select>` de pedidos abiertos del cliente, copia attachment a ese pedido (FK update)
@@ -62,7 +62,7 @@
 
 ## B. Aplicaciones (archivo × ubicación × técnica)
 
-- [ ] **F4-05** Página `/admin/pedidos/[id]/arte/[attachmentId]` — Editor de aplicaciones.
+- [x] **F4-05** Página `/admin/pedidos/[id]/arte/[attachmentId]` — Editor de aplicaciones. **VERIFICADO 2026-09-04**: `src/app/(admin)/admin/pedidos/[id]/arte/[attachmentId]/{page.tsx,ApplicationsManager.tsx}` — carga attachment + applications + line/product.zones, tabs información/aplicaciones/historial, form agregar aplicación (zone, view, technique, widthCm/heightCm, quantity, instructions) vía addApplication. tsc EXIT 0.
   - Carga: attachment + applications (FK) + line del pedido (para obtener `product.zones`)
   - UI: header con preview del adjunto + name. Tabs:
     1. **Información**: campos básicos (notes, status, version)
@@ -77,7 +77,7 @@
     4. Insert applications
   - Verificar: agregar "Logo pecho izquierdo, sublimación, 8x8cm" → aparece en lista.
 
-- [ ] **F4-06** API `POST /api/attachments/[id]/applications` + `DELETE /api/applications/[id]`.
+- [x] **F4-06** API `POST /api/attachments/[id]/applications` + `DELETE /api/applications/[id]`. **VERIFICADO 2026-09-04**: `src/app/api/attachments/[id]/applications/route.ts` (POST crea application) + `src/app/api/applications/[id]/route.ts` (DELETE hard). tsc EXIT 0.
   - `POST` body: `{orderLineId?, zone, view, techniqueId?, widthCm?, heightCm?, quantity?, instructions?}` → crea
   - `DELETE` → cascade ya configurado. Soft-delete? NO — las applications son detalles, hard-delete OK
   - Verificar: 2 endpoints funcionales con tsc EXIT 0.
