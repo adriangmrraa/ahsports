@@ -14,7 +14,7 @@
 - **Stack**: Next.js 15 App Router + TS strict + Tailwind v4 + Drizzle ORM + Neon (Postgres serverless) + Lucide React + Zod + auth cookie firmada con scrypt (sin NextAuth, sin Supabase)
 - **Design system base**: **Kinetic Industrial** (proveniente de Stitch — cyan primario, amber highlight, violet producción, sobre midnight)
 - **Deploy target**: Render (Web Service + Neon Postgres)
-- **Fase actual**: F4 (adjuntos + arte + presupuesto público + seguimiento) ⏳ pendiente — 0/22. F3 ✅ completa 26/26 @2026-09-04 (SDD f3-ciclo-operativo + sdd-verify PASS WITH WARNINGS). Restan 38 tareas (F4: 22, F5: 16).
+- **Fase actual**: F4 (adjuntos + arte + presupuesto público + seguimiento) en curso — 17/22. F3 ✅ completa 26/26. Restan 21 tareas (F4: 5, F5: 16).
 - **IMPORTANTE para el próximo agente**: NO asumir que el código actual compila ni corre. Hay issues conocidos en F1 que requieren fix antes de empezar F2 — ver `KNOWN-ISSUES.md`. Antes de empezar a construir, leer `docs/02-ARCHITECTURE.md` §4 (decisiones D1..D7) y `docs/06-STANDARDS-BUILDING.md` para mantener consistencia.
 
 ---
@@ -81,10 +81,10 @@
 | `BUILD_PROGRESS-F0.md` | F0 — Audit del material Stitch + análisis del dominio | 8 | 8 | ✅ **COMPLETO** (F0 finalizada) |
 | `BUILD_PROGRESS-F1.md` | F1 — Fundación (Next.js + Drizzle + Neon + Auth + Design system) | 14 | 14 | ✅ **COMPLETO** (F1 finalizada — scaffold + UI primitives + schema base) |
 | `BUILD_PROGRESS-F2.md` | F2 — Núcleo operativo (Productos + Insumos + Técnicas + Recetas + Talles + Pricing rules) | 22 | 22 | ✅ **COMPLETO** @2026-09-04 (todos los grupos con typecheck+build+e2e vs Neon) |
-| `BUILD_PROGRESS-F3.md` | F3 — Clientes + Pedidos + Planilla + Kanban producción + Motor cotización | 26 | 0 | ⏳ **PENDIENTE** (estructura creada, código NO escrito) |
-| `BUILD_PROGRESS-F4.md` | F4 — Adjuntos + Arte + Aplicaciones + Presupuesto público (5 pasos) + Seguimiento | 22 | 0 | ⏳ **PENDIENTE** (estructura creada, código NO escrito) |
+| `BUILD_PROGRESS-F3.md` | F3 — Clientes + Pedidos + Planilla + Kanban producción + Motor cotización | 26 | 26 | ✅ **COMPLETO** @2026-09-04 |
+| `BUILD_PROGRESS-F4.md` | F4 — Adjuntos + Arte + Aplicaciones + Presupuesto público (5 pasos) + Seguimiento | 22 | 17 | 🟢 **EN CURSO** (F4-01..17 ✓ — siguiente: F4-18 validación E2E) |
 | `BUILD_PROGRESS-F5.md` | F5 — Caja + Pagos + Configuración + Render deploy + Cierre | 16 | 0 | ⏳ **PENDIENTE** (estructura creada, código NO escrito) |
-| **TOTAL** | — | **108** | **70** | F0 (8) + F1 (14) + F2 (22) + F3 (26) completas. Restan 38 (F4: 22, F5: 16). |
+| **TOTAL** | — | **108** | **87** | F0 (8) + F1 (14) + F2 (22) + F3 (26) + F4 (17) completas. Restan 21 (F4: 5, F5: 16). |
 
 ---
 

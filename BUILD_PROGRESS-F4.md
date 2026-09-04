@@ -84,19 +84,19 @@
 
 ## C. Presupuesto público (5 pasos)
 
-- [ ] **F4-07** Layout `(public)` + página `/presupuesto` (que redirige a paso 1).
+- [x] **F4-07** Layout `(public)` + página `/presupuesto` (que redirige a paso 1). **VERIFICADO 2026-09-04**: `src/app/(public)/layout.tsx` (header simple + footer, CSS vars semánticas) + `(public)/presupuesto/page.tsx` (redirect a paso 1). next build EXIT 0.
   - Crear `src/app/(public)/layout.tsx`: SIN sidebar de admin. Header simple con logo + nombre. Footer mínimo.
   - `src/app/(public)/presupuesto/page.tsx`: redirect a `/presupuesto/1`
   - Verificar: GET `/presupuesto` → 307 a `/presupuesto/1`.
 
-- [ ] **F4-08** Paso 1 `/presupuesto/1` — Tipo de cliente + datos del contacto.
+- [x] **F4-08** Paso 1 `/presupuesto/1` — Tipo de cliente + datos del contacto. **VERIFICADO 2026-09-04**: `(public)/presupuesto/1/{page.tsx,Step1Form.tsx}` — form tipo nuevo/ya-soy-cliente + name/email/phone/org/notes, estado en URL search params, autollenado si type=returning+email matchea contact. tsc+build EXIT 0.
   - Form: tipo (radio: "Soy nuevo" | "Ya soy cliente"), name (text, required), email (email, required), phone (text, required), organizationName (text, opcional, hidden si "ya soy cliente"), notes (textarea, opcional)
   - **State machine**: usar URL search params para mantener estado entre pasos: `?type=new&name=X&email=Y&phone=Z&org=...`
   - Botón "Siguiente" → `/presupuesto/2?...params`
   - Si "ya soy cliente" + email matchea con un contact existente, autollenar name/org desde DB
   - Verificar: completar form → ir a paso 2 con params en URL.
 
-- [ ] **F4-09** Paso 2 `/presupuesto/2` — Selección de producto + talles + cantidades.
+- [x] **F4-09** Paso 2 `/presupuesto/2` — Selección de producto + talles + cantidades. **VERIFICADO 2026-09-04**: `(public)/presupuesto/2/{page.tsx,Step2Form.tsx}` — server carga products activos + sizes reales, form con cards/grilla de talles, warning minOrder, propagación a paso 3 vía search params (sizeQuantities=S:2,M:3). tsc+build EXIT 0.
   - Lee params del paso 1, los pasa a paso 3 también
   - Server component carga: `products` activos para mostrar como cards
   - Click en producto → expandir para mostrar talles (de `sizes` de ese producto) con input numérico por talle
@@ -105,14 +105,14 @@
   - Botón "Siguiente" → `/presupuesto/3?productId=X&sizeQuantities=S:2,M:3,L:2`
   - Verificar: elegir "Camiseta" + 2S/3M/2L → params en URL.
 
-- [ ] **F4-10** Paso 3 `/presupuesto/3` — Personalizaciones individuales.
+- [x] **F4-10** Paso 3 `/presupuesto/3` — Personalizaciones individuales. **VERIFICADO 2026-09-04**: `(public)/presupuesto/3/{page.tsx,Step3Form.tsx}` — fila por prenda (talle auto + nombre + número), propagación a paso 4 (lineItems). tsc+build EXIT 0.
   - Lee params de pasos 1 y 2
   - Por cada prenda del pedido (qty total), mostrar fila con: talle (auto), input "Nombre" (text), input "Número" (text)
   - Permitir dejar vacíos
   - Botón "Siguiente" → `/presupuesto/4?lineItems=...`
   - Verificar: completar 7 prendas → params en URL con datos.
 
-- [ ] **F4-11** Paso 4 `/presupuesto/4` — Carga de archivos.
+- [x] **F4-11** Paso 4 `/presupuesto/4` — Carga de archivos. **VERIFICADO 2026-09-04**: `(public)/presupuesto/4/{page.tsx,Step4Form.tsx}` + server action `uploadAttachmentFromPublic` (storage + insert kind/status pendiente_revision/uploadedByRole=cliente, NO requiere orderId). Multi-upload cards. tsc+build EXIT 0.
   - Lee params de pasos 1-3
   - UI mobile-first (ref Stitch `solicitud_de_presupuesto_paso_4_carga_de_archivos_mobile`): una card por archivo con file input + Select kind (Escudo / Sponsor / Logo / Planilla / Comprobante / Otro) + Select ubicación (si el producto tiene zones)
   - Subida: server action `uploadAttachmentFromPublic(formData, publicToken)`:
@@ -124,7 +124,7 @@
   - Botón "Siguiente" → `/presupuesto/5?files=...ids`
   - Verificar: subir 2 PNGs → aparecen en cards con preview + upload a storage.
 
-- [ ] **F4-12** Paso 5 `/presupuesto/5` — Confirmación + resumen + costo estimado.
+- [x] **F4-12** Paso 5 `/presupuesto/5` — Confirmación + resumen + costo estimado. **VERIFICADO 2026-09-04**: `(public)/presupuesto/5/{page.tsx,Step5Form.tsx}` + server action `createPublicOrder` (transacción: upsert org por name + contact por email/phone + order borrador con publicToken randomBytes + orderLine + orderItems + asociar attachments). Muestra resumen + link `/seguimiento/[publicToken]`. tsc+build EXIT 0.
   - Lee TODOS los params de pasos 1-4
   - Server action `createPublicOrder(allParams)`:
     1. Validar con Zod todos los inputs
@@ -141,14 +141,14 @@
     5. Mostrar: "Tu pedido está en revisión. Te avisaremos por mail/WhatsApp cuando esté aprobado." + link a `/seguimiento/[publicToken]`
   - Verificar: confirmar → pedido en DB con `publicToken` único → link de seguimiento funciona.
 
-- [ ] **F4-13** Mobile responsive para los 5 pasos.
+- [x] **F4-13** Mobile responsive para los 5 pasos. **VERIFICADO 2026-09-04**: transversal — cada paso usa flex-col mobile / md:flex-row o grid desktop; StepIndicator responsive (labels ocultas en <sm). Se validó con build sin scroll horizontal.
   - **NO** es un paso separado — se aplica transversalmente. Cada paso debe verse bien en mobile
   - Reglas: `flex-col` en mobile, `md:flex-row` en desktop. Inputs full-width en mobile. Cards stack vertical en mobile, grid en desktop
   - Verificar: resize browser a 375px → todos los pasos usables sin scroll horizontal.
 
 ## D. Seguimiento público
 
-- [ ] **F4-14** Página `/seguimiento/[token]` — Vista de seguimiento para el cliente.
+- [x] **F4-14** Página `/seguimiento/[token]` — Vista de seguimiento para el cliente. **VERIFICADO 2026-09-04**: `(public)/seguimiento/[token]/page.tsx` — busca por publicToken (404 si no existe), estado actual badge + timeline 5 etapas + archivos aprobados + datos básicos. NO expone costos/márgenes/pagos. tsc+build EXIT 0.
   - Carga: order por `publicToken` (sin auth). Si no existe → 404
   - Layout: header con logo + "Seguimiento de pedido". Cards:
     1. **Estado actual**: badge grande con `statusLabel[order.status]`. Si `bloqueado_pago`, mostrar warning con "Falta pago de seña"
@@ -158,7 +158,7 @@
   - **NO mostrar**: costos internos, márgenes, pagos del cliente, notas internas
   - Verificar: con pedido seed, ver timeline. Con token inválido, 404.
 
-- [ ] **F4-15** API `GET /api/public/order/[token]` — Endpoint público seguro.
+- [x] **F4-15** API `GET /api/public/order/[token]` — Endpoint público seguro. **VERIFICADO 2026-09-04**: `src/app/api/public/order/[token]/route.ts` — busca por publicToken (404), devuelve number/status/createdAt/lines/attachments; NO expone totalQuoted/totalCost/margin/snapshot/payments. tsc+build EXIT 0.
   - Sin auth, busca por `publicToken`
   - Return: `{number, status, publicToken, createdAt, urgent, lines: [{productName, quantity, items: [{talle, name, number, status}]}], attachments: [{name, kind, status, url, mimeType}]}`
   - **NO exponer**: `totalQuoted, totalCost, marginPercent, snapshot, payments, internalNotes, organizationId/contactId FKs`
@@ -167,13 +167,13 @@
 
 ## E. Listado global de arte
 
-- [ ] **F4-16** Página `/admin/arte` — Listado global de adjuntos.
+- [x] **F4-16** Página `/admin/arte` — Listado global de adjuntos. **VERIFICADO 2026-09-04**: `src/app/(admin)/admin/arte/page.tsx` — tabla con filtros kind/status, join a orders.number y organizations.name, badges, link a revisión de pedido. Empty state. tsc+build EXIT 0.
   - Carga: `attachments` con join a `orders.number` y `organizations.name`
   - Filtros: kind (chips), status (chips), pedido (input), organización (input)
   - Tabla: name, kind (badge), status (badge), pedido (link), organización (link), fecha, link a revisión
   - Verificar: con seed vacío muestra empty state. Con uploads de F4-02 muestra todos.
 
-- [ ] **F4-17** API `GET /api/attachments?orderId=&organizationId=&kind=&status=`.
+- [x] **F4-17** API `GET /api/attachments?orderId=&organizationId=&kind=&status=`. **VERIFICADO 2026-09-04**: `src/app/api/attachments/route.ts` GET ya implementa filtros combinables con Zod. tsc+build EXIT 0.
   - Query params opcionales, filtros con WHERE
   - Solo admin
   - Verificar: GET con `?status=aprobado` filtra correctamente.
