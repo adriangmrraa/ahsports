@@ -7,8 +7,9 @@ import { createPublicOrder } from "@/app/actions/public-orders";
 
 interface Props {
   productName: string;
-  items: { talle: string; name: string; number: string }[];
+  items: { talle: string; name: string; number: string; sizeId: string }[];
   total: number;
+  sizeQuantities: { sizeId: string; quantity: number }[];
   contactInfo: { name: string; email: string; phone: string; org: string };
   type: "new" | "returning";
   notes?: string;
@@ -19,7 +20,7 @@ interface Props {
  * F4-12 — Paso 5 form: confirma y dispara createPublicOrder. Muestra el resultado
  * con link a /seguimiento/[publicToken].
  */
-export function Step5Form({ productName, items, total, contactInfo, type, notes, fileIds }: Props) {
+export function Step5Form({ productName, items, total, sizeQuantities, contactInfo, type, notes, fileIds }: Props) {
   const [result, setResult] = useState<{ publicToken: string; number: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -36,9 +37,12 @@ export function Step5Form({ productName, items, total, contactInfo, type, notes,
         organizationName: contactInfo.org || undefined,
         notes,
         productId: new URLSearchParams(window.location.search).get("productId") ?? "",
-        productName,
-        sizeQuantities: items.map((i) => i.talle).join(":"), // repetido por talle no crítico acá
-        lineItems: items.map((i) => `${i.talle}|${i.name}|${i.number}`).join(","),
+        sizeQuantities,
+        items: items.map((item) => ({
+          sizeId: item.sizeId,
+          individualName: item.name || null,
+          individualNumber: item.number || null,
+        })),
         fileIds,
       });
       if (res.ok) setResult({ publicToken: res.publicToken, number: res.number });

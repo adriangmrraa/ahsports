@@ -226,6 +226,36 @@ export const copyAttachmentSchema = z.object({
   orderId: z.string().min(1).max(36),
 });
 
+/** Public wizard payload. Totals, labels and pricing are derived from the DB. */
+export const createPublicOrderSchema = z.object({
+  type: z.enum(["new", "returning"]),
+  name: z.string().trim().min(1).max(255),
+  email: z.string().trim().email("Email inválido").max(255),
+  phone: z.string().trim().min(3).max(64),
+  organizationName: z.string().trim().min(1).max(255).optional(),
+  notes: z.string().trim().max(4000).optional(),
+  productId: z.string().uuid(),
+  sizeQuantities: z.array(z.object({
+    sizeId: z.string().uuid(),
+    quantity: z.number().int().min(1).max(1000),
+  })).min(1).max(32),
+  items: z.array(z.object({
+    sizeId: z.string().uuid(),
+    individualName: z.string().trim().max(128).optional().nullable(),
+    individualNumber: z.string().trim().max(32).optional().nullable(),
+  })).min(1).max(1000),
+  fileIds: z.array(z.string().uuid()).max(20).default([]),
+}).strict().superRefine((value, ctx) => {
+  const seenSizes = new Set<string>();
+  for (const size of value.sizeQuantities) {
+    if (seenSizes.has(size.sizeId)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sizeQuantities"], message: "Un talle solo puede enviarse una vez" });
+    seenSizes.add(size.sizeId);
+  }
+  if (new Set(value.fileIds).size !== value.fileIds.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["fileIds"], message: "Un archivo no puede repetirse" });
+  }
+});
+
 export function isUniqueViolation(e: unknown) {
   // Drizzle envuelve el error del driver en `cause` (NeonDbError, code 23505).
   // Se recorre la cadena porque el mensaje externo solo trae la query.

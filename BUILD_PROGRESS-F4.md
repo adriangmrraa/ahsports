@@ -2,7 +2,7 @@
 
 > **Propósito**: cerrar el flujo de cara al público (presupuesto en 5 pasos + seguimiento por token) y la gestión de adjuntos y aplicaciones por ubicación/técnica.
 >
-> **Estado al 2026-09-03**: ⏳ PENDIENTE — 0/22 tareas. **CÓDIGO NO ESCRITO**. Antes de empezar, F2 y F3 deben estar completas (un pedido necesita existir antes de poder tener adjuntos).
+> **Estado al 2026-09-04**: 🟡 EN VALIDACIÓN — 17/22 tareas implementadas y verificadas con `npm run typecheck` + `npm run build`. Quedan las pruebas E2E sobre Neon y el cierre documental; `npm run lint` sigue bloqueado por KI-13 (toolchain).
 
 ---
 
@@ -180,6 +180,8 @@
 
 ## F. Validación end-to-end F4
 
+> **Baseline SDD 2026-09-04**: el flujo ahora valida el payload final con Zod, deriva producto/talles/cantidades desde Neon y persiste las escrituras del pedido dentro de una transacción. La comprobación browser + DB sigue pendiente de una base Neon de integración configurada. La propiedad criptográfica de los uploads pre-pedido se completa en la fase de sesiones de carga/durable storage.
+
 - [ ] **F4-18** Flujo público completo: simular cliente entrando a `/presupuesto`, recorrer 5 pasos, confirmar → pedido en DB → aparece en `/admin/pedidos`.
   - **CRÍTICO**: este test valida que el flujo end-to-end del cliente funciona.
 
@@ -197,7 +199,7 @@
 
 ## Resumen F4
 
-- Tareas: 22 · Completadas: 0 · Pendientes: 22
+- Tareas: 22 · Completadas: 17 · Pendientes: 5 (F4-18..22)
 - 7 grupos: A (Adjuntos 4) · B (Aplicaciones 2) · C (Presupuesto público 7) · D (Seguimiento 2) · E (Arte global 2) · F (Validación 4) · G (Cierre 1)
 - Salida esperada: cliente externo puede pedir presupuesto completo (5 pasos con adjuntos), recibir token, hacer seguimiento; admin gestiona adjuntos y aplicaciones por ubicación/técnica.
 - Dependencias: F2 (productos+talles+regla), F3 (pedidos+cotización)

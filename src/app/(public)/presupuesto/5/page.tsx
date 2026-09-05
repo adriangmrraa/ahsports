@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { products } from "@/db/schema";
+import { products, sizes } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Step5Form } from "./Step5Form";
 import { StepIndicator } from "../_components/StepIndicator";
@@ -31,7 +31,15 @@ export default async function PresupuestoStep5({
   if (!sp.productId || !sp.lineItems) redirect("/presupuesto/2");
 
   const [product] = await db.select().from(products).where(eq(products.id, sp.productId)).limit(1);
+  if (!product || !product.active) redirect("/presupuesto/2");
   const items = parseLineItems(sp.lineItems);
+  const productSizes = await db.select({ id: sizes.id, label: sizes.label }).from(sizes).where(eq(sizes.productId, product.id));
+  const sizeByLabel = new Map(productSizes.map((size) => [size.label, size.id]));
+  const serializedItems = items.map((item) => ({ ...item, sizeId: sizeByLabel.get(item.talle) ?? "" }));
+  const quantities = new Map<string, number>();
+  for (const item of serializedItems) {
+    if (item.sizeId) quantities.set(item.sizeId, (quantities.get(item.sizeId) ?? 0) + 1);
+  }
 
   const contactInfo = {
     name: sp.name ?? "",
@@ -45,9 +53,10 @@ export default async function PresupuestoStep5({
       <StepIndicator current={5} />
       <h1 className="mb-6 mt-6 text-center text-2xl font-bold tracking-tight">Confirmá tu solicitud</h1>
       <Step5Form
-        productName={sp.productName ?? product?.name ?? "Producto"}
-        items={items}
+        productName={product.name}
+        items={serializedItems}
         total={items.length}
+        sizeQuantities={Array.from(quantities, ([sizeId, quantity]) => ({ sizeId, quantity }))}
         contactInfo={contactInfo}
         type={(sp.type as "new" | "returning") ?? "new"}
         notes={sp.notes}
