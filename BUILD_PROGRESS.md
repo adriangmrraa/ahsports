@@ -14,7 +14,7 @@
 - **Stack**: Next.js 15 App Router + TS strict + Tailwind v4 + Drizzle ORM + Neon (Postgres serverless) + Lucide React + Zod + auth cookie firmada con scrypt (sin NextAuth, sin Supabase)
 - **Design system base**: **Kinetic Industrial** (proveniente de Stitch — cyan primario, amber highlight, violet producción, sobre midnight)
 - **Deploy target**: Render (Web Service + Neon Postgres)
-- **Fase actual**: F4 (adjuntos + arte + presupuesto público + seguimiento) en curso — 17/22. F3 ✅ completa 26/26. Restan 21 tareas (F4: 5, F5: 16).
+- **Fase actual**: F4 (adjuntos + arte + presupuesto público + seguimiento) en validación E2E — 17/22. F3 ✅ completa 26/26. F5 en curso — 4/16 (pagos F5-03..06 ✅). Restan 17 tareas (F4: 5 E2E/cierre, F5: 12).
 - **IMPORTANTE para el próximo agente**: NO asumir que el código actual compila ni corre. Hay issues conocidos en F1 que requieren fix antes de empezar F2 — ver `KNOWN-ISSUES.md`. Antes de empezar a construir, leer `docs/02-ARCHITECTURE.md` §4 (decisiones D1..D7) y `docs/06-STANDARDS-BUILDING.md` para mantener consistencia.
 
 ---
@@ -83,8 +83,8 @@
 | `BUILD_PROGRESS-F2.md` | F2 — Núcleo operativo (Productos + Insumos + Técnicas + Recetas + Talles + Pricing rules) | 22 | 22 | ✅ **COMPLETO** @2026-09-04 (todos los grupos con typecheck+build+e2e vs Neon) |
 | `BUILD_PROGRESS-F3.md` | F3 — Clientes + Pedidos + Planilla + Kanban producción + Motor cotización | 26 | 26 | ✅ **COMPLETO** @2026-09-04 |
 | `BUILD_PROGRESS-F4.md` | F4 — Adjuntos + Arte + Aplicaciones + Presupuesto público (5 pasos) + Seguimiento | 22 | 17 | 🟢 **EN CURSO** (F4-01..17 ✓ — siguiente: F4-18 validación E2E) |
-| `BUILD_PROGRESS-F5.md` | F5 — Caja + Pagos + Configuración + Render deploy + Cierre | 16 | 0 | ⏳ **PENDIENTE** (estructura creada, código NO escrito) |
-| **TOTAL** | — | **108** | **87** | F0 (8) + F1 (14) + F2 (22) + F3 (26) + F4 (17) completas. Restan 21 (F4: 5, F5: 16). |
+| `BUILD_PROGRESS-F5.md` | F5 — Caja + Pagos + Configuración + Render deploy + Cierre | 16 | 4 | 🟢 **EN CURSO** (F5-03..06 ✓ pagos — siguiente: F5-01/02 caja) |
+| **TOTAL** | — | **108** | **91** | F0 (8) + F1 (14) + F2 (22) + F3 (26) + F4 (17) + F5 (4) completas. Restan 17 (F4: 5, F5: 12). |
 
 ---
 
@@ -97,7 +97,7 @@
 | F2 | `BUILD_PROGRESS-F2.md` | 22/22 |
 | F3 | `BUILD_PROGRESS-F3.md` | 26/26 |
 | F4 | `BUILD_PROGRESS-F4.md` | 17/22 |
-| F5 | `BUILD_PROGRESS-F5.md` | 0/16 |
+| F5 | `BUILD_PROGRESS-F5.md` | 4/16 |
 
 ---
 
