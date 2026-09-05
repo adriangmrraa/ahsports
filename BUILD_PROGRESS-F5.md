@@ -2,13 +2,13 @@
 
 > **Propósito**: cerrar las pantallas de caja y pagos, terminar la página de configuración con reglas y snapshot del cálculo, y dejar todo deployable en Render con Neon.
 >
-> **Estado al 2026-09-05**: 🟢 EN CURSO — 2/16 (F5-03, F5-04 + backend pagos F5-05/F5-06: actions + API POST/DELETE con recálculo atómico). Migración `0002_payment_cancellation_audit` + `src/lib/payments.ts` como servicio compartido. Resto pendiente: caja (F5-01/02), config (F5-07/08), deploy (F5-09..13), hardening (F5-14/15), cierre (F5-16). **CÓDIGO NO ESCRITO** para esos grupos.
+> **Estado al 2026-09-05**: 🟢 EN CURSO — 6/16 (pagos F5-03..06 ✅ + caja F5-01/02 ✅). Resto pendiente: config (F5-07/08), deploy (F5-09..13), hardening (F5-14/15), cierre (F5-16).
 
 ---
 
 ## A. Caja y saldos
 
-- [ ] **F5-01** Página `/admin/caja` — Saldos por organización.
+- [x] **F5-01** Página `/admin/caja` — Saldos por organización. **VERIFICADO 2026-09-05**: `src/app/(admin)/admin/caja/page.tsx` — cotizado (suma `totalQuoted`) + pagado (suma pagos activos vía centavos enteros) + saldo, deudores primero, click → cuenta corriente. typecheck+build EXIT 0 (41 rutas).
   - Carga: agregación `db.select({orgId: orders.organizationId, totalQuoted: sum(orders.totalQuoted), totalPaid: sum(payments.amount)}).from(orders).leftJoin(payments, eq(payments.orderId, orders.id)).where(not(isNull(orders.organizationId))).groupBy(orders.organizationId)`
   - Para cada org: nombre + total cotizado + total pagado + saldo (deuda)
   - Join con `organizations` para nombre
@@ -16,7 +16,7 @@
   - Click en org → `/admin/caja/[organizationId]`
   - Verificar: con seed (1 org, 0 pedidos) muestra "Club Renacer $0".
 
-- [ ] **F5-02** Página `/admin/caja/[organizationId]` — Cuenta corriente detallada.
+- [x] **F5-02** Página `/admin/caja/[organizationId]` — Cuenta corriente detallada. **VERIFICADO 2026-09-05**: `caja/[organizationId]/page.tsx` — StatCards cotizado/pagado/saldo, timeline cronológico (creación de pedidos + pagos activos), pedidos abiertos con link. typecheck+build EXIT 0.
   - Carga: org + orders (todos) + payments (todos) ordenados cronológicamente
   - Timeline: eventos como "Pedido #415 creado: $8500", "Seña registrada: $4250", "Pago: $2000", etc.
   - Totales: cotizado, pagado, saldo
