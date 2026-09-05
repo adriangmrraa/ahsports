@@ -2,7 +2,7 @@
 
 > **Propósito**: cerrar las pantallas de caja y pagos, terminar la página de configuración con reglas y snapshot del cálculo, y dejar todo deployable en Render con Neon.
 >
-> **Estado al 2026-09-05**: 🟢 EN CURSO — 6/16 (pagos F5-03..06 ✅ + caja F5-01/02 ✅). Resto pendiente: config (F5-07/08), deploy (F5-09..13), hardening (F5-14/15), cierre (F5-16).
+> **Estado al 2026-09-05**: 🟢 EN CURSO — 8/16 (pagos F5-03..06 ✅ + caja F5-01/02 ✅ + config F5-07/08 ✅). Resto pendiente: deploy (F5-09..13), hardening (F5-14/15), cierre (F5-16).
 
 ---
 
@@ -60,7 +60,7 @@
 
 ## C. Configuración general
 
-- [ ] **F5-07** Página `/admin/configuracion` — Hub con todas las reglas.
+- [x] **F5-07** Página `/admin/configuracion` — Hub con todas las reglas. **VERIFICADO 2026-09-05**: hub con 5 secciones (reglas precio + datos taller + notificaciones placeholder + storage info + últimos snapshots). typecheck+build EXIT 0.
   - Server component carga: `pricingRules`, `settings` (key-value)
   - Layout: secciones colapsables (accordion o tabs)
   - Secciones:
@@ -71,7 +71,7 @@
     5. **Snapshots de pricing** (info): lista de los últimos N snapshots globales (de orders.snapshot.generatedAt)
   - Verificar: render limpio, cada sección con su form funcional.
 
-- [ ] **F5-08** Server action `updateSetting(key, value)` — Upsert en `settings`.
+- [x] **F5-08** Server action `updateSetting(key, value)` — Upsert en `settings`. **VERIFICADO 2026-09-05**: `src/app/actions/settings.ts` (requireUser + allowlist `taller_*` + ON CONFLICT DO UPDATE); upsert probado contra Neon (insert→update, probe eliminada). typecheck+build EXIT 0.
   - Zod: `key: z.string().min(1).max(128), value: z.any()` (jsonb arbitrario)
   - Lógica: `INSERT ... ON CONFLICT (key) DO UPDATE`
   - Verificar: cambiar `taller_nombre` → reload → muestra el nuevo valor.

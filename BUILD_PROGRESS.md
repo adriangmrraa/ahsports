@@ -14,7 +14,7 @@
 - **Stack**: Next.js 15 App Router + TS strict + Tailwind v4 + Drizzle ORM + Neon (Postgres serverless) + Lucide React + Zod + auth cookie firmada con scrypt (sin NextAuth, sin Supabase)
 - **Design system base**: **Kinetic Industrial** (proveniente de Stitch — cyan primario, amber highlight, violet producción, sobre midnight)
 - **Deploy target**: Render (Web Service + Neon Postgres)
-- **Fase actual**: F5 (config + deploy) en curso — 6/16 (pagos F5-03..06 ✅ + caja F5-01/02 ✅). F4 ✅ completa 22/22 @2026-09-05. Restan 10 tareas.
+- **Fase actual**: F5 (deploy + hardening + cierre) en curso — 8/16 (pagos ✅ + caja ✅ + config ✅). F4 ✅ completa 22/22 @2026-09-05. Restan 8 tareas.
 - **IMPORTANTE para el próximo agente**: NO asumir que el código actual compila ni corre. Hay issues conocidos en F1 que requieren fix antes de empezar F2 — ver `KNOWN-ISSUES.md`. Antes de empezar a construir, leer `docs/02-ARCHITECTURE.md` §4 (decisiones D1..D7) y `docs/06-STANDARDS-BUILDING.md` para mantener consistencia.
 
 ---
@@ -83,8 +83,8 @@
 | `BUILD_PROGRESS-F2.md` | F2 — Núcleo operativo (Productos + Insumos + Técnicas + Recetas + Talles + Pricing rules) | 22 | 22 | ✅ **COMPLETO** @2026-09-04 (todos los grupos con typecheck+build+e2e vs Neon) |
 | `BUILD_PROGRESS-F3.md` | F3 — Clientes + Pedidos + Planilla + Kanban producción + Motor cotización | 26 | 26 | ✅ **COMPLETO** @2026-09-04 |
 | `BUILD_PROGRESS-F4.md` | F4 — Adjuntos + Arte + Aplicaciones + Presupuesto público (5 pasos) + Seguimiento | 22 | 22 | ✅ **COMPLETO** @2026-09-05 (E2E vs Neon + cierre) |
-| `BUILD_PROGRESS-F5.md` | F5 — Caja + Pagos + Configuración + Render deploy + Cierre | 16 | 6 | 🟢 **EN CURSO** (pagos+caja ✓ — siguiente: F5-07/08 config) |
-| **TOTAL** | — | **108** | **98** | F0 (8) + F1 (14) + F2 (22) + F3 (26) + F4 (22) + F5 (6) completas. Restan 10 (F5). |
+| `BUILD_PROGRESS-F5.md` | F5 — Caja + Pagos + Configuración + Render deploy + Cierre | 16 | 8 | 🟢 **EN CURSO** (pagos+caja+config ✓ — siguiente: F5-09..13 deploy) |
+| **TOTAL** | — | **108** | **100** | F0 (8) + F1 (14) + F2 (22) + F3 (26) + F4 (22) + F5 (8) completas. Restan 8 (F5). |
 
 ---
 
