@@ -2,6 +2,16 @@
 
 > Reglas + convenciones del proyecto **AH Sports OS**, leídas por cada sesión/agente antes de actuar.
 
+## Ubicación del proyecto y entorno (leer primero)
+
+- **Repo GitHub = esta carpeta**: `estabilizacion/ah sports/App de gestion/`. La carpeta padre `ah sports/` solo contiene material origen (Stitch, documentos) — NO es el repo. Todos los comandos (`npm`, `git`) se ejecutan acá adentro.
+- **`.env` vive acá adentro** (`App de gestion/.env`, gitignored, NUNCA commitear). Contiene la `DATABASE_URL` real de Neon + `SESSION_SECRET`. Si falta una variable, pedirla al usuario; NO inventarla ni pushear a prod.
+- **Neon ya tiene datos**: base + seed aplicados (admin, Club Renacer, 4 productos, regla pricing). Reglas DB:
+  1. Recon de solo-lectura ANTES de cualquier escritura (tablas + counts).
+  2. `npm run db:seed` hace `TRUNCATE` destructivo — NUNCA correrlo sin confirmación explícita del usuario.
+  3. Migraciones `src/db/migrations/000<N>_*.sql` son idempotentes (`IF NOT EXISTS`) — `npm run db:migrate` es seguro de re-ejecutar.
+  4. Scripts temporales de verificación van en `C:\Users\Asus\AppData\Local\Temp\opencode\`, se copian acá solo para ejecutar (resolución de módulos) y se borran después; verificar `git status` limpio.
+
 ## Documentación
 
 | Archivo | Para qué |
@@ -70,10 +80,10 @@ PENDIENTES.md           # Lo pendiente
 
 1. Leer `KNOWN-ISSUES.md` (lista de bugs concretos con ubicación)
 2. `npm install`
-3. `cp .env.example .env` → setear `DATABASE_URL` de Neon
+3. Verificar `.env` local (tiene `DATABASE_URL` de Neon + `SESSION_SECRET`). Si no existe: `cp .env.example .env` y pedir la URL al usuario.
 4. `npm run typecheck` (esperar que pase después de los fixes)
-5. `npm run db:push`
-6. `npm run db:seed` (F2-20 — no existe aún, hay que crearlo)
+5. `npm run db:migrate` (idempotente; NO `db:push` en una DB con datos)
+6. `npm run db:seed` solo si la DB está vacía y con confirmación explícita — hace TRUNCATE
 7. `npm run dev` → http://localhost:3000
 
 Login seed: `admin@ahsports.com` / `admin1234` (F2-20)
