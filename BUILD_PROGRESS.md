@@ -95,8 +95,8 @@
 | F0 | `BUILD_PROGRESS-F0.md` | 8/8 |
 | F1 | `BUILD_PROGRESS-F1.md` | 14/14 |
 | F2 | `BUILD_PROGRESS-F2.md` | 22/22 |
-| F3 | `BUILD_PROGRESS-F3.md` | 0/26 |
-| F4 | `BUILD_PROGRESS-F4.md` | 0/22 |
+| F3 | `BUILD_PROGRESS-F3.md` | 26/26 |
+| F4 | `BUILD_PROGRESS-F4.md` | 17/22 |
 | F5 | `BUILD_PROGRESS-F5.md` | 0/16 |
 
 ---
