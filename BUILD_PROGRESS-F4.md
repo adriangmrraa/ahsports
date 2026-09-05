@@ -112,7 +112,7 @@
   - Botón "Siguiente" → `/presupuesto/4?lineItems=...`
   - Verificar: completar 7 prendas → params en URL con datos.
 
-- [x] **F4-11** Paso 4 `/presupuesto/4` — Carga de archivos. **VERIFICADO 2026-09-04**: `(public)/presupuesto/4/{page.tsx,Step4Form.tsx}` + server action `uploadAttachmentFromPublic` (storage + insert kind/status pendiente_revision/uploadedByRole=cliente, NO requiere orderId). Multi-upload cards. tsc+build EXIT 0.
+- [x] **F4-11** Paso 4 `/presupuesto/4` — Carga de archivos. **VERIFICADO 2026-09-04**: `(public)/presupuesto/4/{page.tsx,Step4Form.tsx}` + server action `uploadAttachmentFromPublic` (storage + insert kind/status pendiente_revision/uploadedByRole=cliente, NO requiere orderId). **ENDURECIDO 2026-09-04**: cada carga ahora exige sesión opaca, secreta y expirable; la confirmación reclama únicamente adjuntos de esa sesión y la consume de forma atómica. Multi-upload cards. tsc+build EXIT 0.
   - Lee params de pasos 1-3
   - UI mobile-first (ref Stitch `solicitud_de_presupuesto_paso_4_carga_de_archivos_mobile`): una card por archivo con file input + Select kind (Escudo / Sponsor / Logo / Planilla / Comprobante / Otro) + Select ubicación (si el producto tiene zones)
   - Subida: server action `uploadAttachmentFromPublic(formData, publicToken)`:
@@ -180,7 +180,7 @@
 
 ## F. Validación end-to-end F4
 
-> **Baseline SDD 2026-09-04**: el flujo ahora valida el payload final con Zod, deriva producto/talles/cantidades desde Neon y persiste las escrituras del pedido dentro de una transacción. La comprobación browser + DB sigue pendiente de una base Neon de integración configurada. La propiedad criptográfica de los uploads pre-pedido se completa en la fase de sesiones de carga/durable storage.
+> **Baseline SDD 2026-09-04**: el flujo valida el payload final con Zod, deriva producto/talles/cantidades desde Neon y persiste las escrituras del pedido dentro de una transacción. Los uploads pre-pedido ahora usan una sesión opaca con secreto hasheado, vencimiento, consumo atómico y limpieza segura de huérfanos. `typecheck` + `build` vuelven a pasar. La comprobación browser + DB sigue pendiente: el shell de verificación no tiene `DATABASE_URL` exportada para ejecutar el flujo contra Neon sin riesgo sobre una base no identificada.
 
 - [ ] **F4-18** Flujo público completo: simular cliente entrando a `/presupuesto`, recorrer 5 pasos, confirmar → pedido en DB → aparece en `/admin/pedidos`.
   - **CRÍTICO**: este test valida que el flujo end-to-end del cliente funciona.
@@ -189,7 +189,7 @@
 
 - [ ] **F4-20** Aprobar un adjunto desde panel admin → el cliente lo ve como "aprobado" en `/seguimiento/[token]`.
 
-- [ ] **F4-21** `npm run build` EXIT 0 + `npm run lint` EXIT 0 + `npm run typecheck` EXIT 0.
+- [ ] **F4-21** `npm run build` EXIT 0 + `npm run lint` EXIT 0 + `npm run typecheck` EXIT 0. **PARCIAL VERIFICADO 2026-09-04**: `npm run typecheck` y `npm run build` EXIT 0; no ejecutar lint hasta corregir el toolchain interactivo conocido (KI-13).
 
 ## G. Cierre F4
 

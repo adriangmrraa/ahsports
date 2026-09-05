@@ -54,6 +54,7 @@ export const attachmentStatus = pgEnum("attachment_status", [
   "rechazado",
   "archivado",
 ]);
+export const uploadSessionStatus = pgEnum("upload_session_status", ["active", "consumed", "expired"]);
 export const applicationView = pgEnum("application_view", ["frente", "espalda", "lateral", "manga", "otro"]);
 export const organizationKind = pgEnum("organization_kind", ["club", "empresa", "colegio", "institucion", "particular"]);
 export const leadStatus = pgEnum("lead_status", ["nuevo", "contactado", "calificado", "convertido", "perdido"]);
@@ -268,6 +269,25 @@ export const orderItems = pgTable(
   }),
 );
 
+/**
+ * Opaque, short-lived proof for files uploaded before a public order exists.
+ * Only the SHA-256 hash of the browser secret is persisted.
+ */
+export const uploadSessions = pgTable(
+  "upload_sessions",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    secretHash: varchar("secret_hash", { length: 64 }).notNull(),
+    status: uploadSessionStatus("status").notNull().default("active"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    expiryIdx: index("upload_sessions_expiry_idx").on(t.status, t.expiresAt),
+  }),
+);
+
 export const attachments = pgTable(
   "attachments",
   {
@@ -276,12 +296,17 @@ export const attachments = pgTable(
     organizationId: varchar("organization_id", { length: 36 }).references(() => organizations.id, { onDelete: "cascade" }),
     orderLineId: varchar("order_line_id", { length: 36 }).references(() => orderLines.id, { onDelete: "set null" }),
     orderItemId: varchar("order_item_id", { length: 36 }).references(() => orderItems.id, { onDelete: "set null" }),
+    uploadSessionId: varchar("upload_session_id", { length: 36 }).references(() => uploadSessions.id, { onDelete: "set null" }),
     kind: attachmentKind("kind").notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     originalName: varchar("original_name", { length: 255 }),
     mimeType: varchar("mime_type", { length: 128 }),
     sizeBytes: integer("size_bytes"),
     url: text("url").notNull(),
+    /** Provider-independent object identity. `url` remains for legacy/local previews. */
+    storageKey: varchar("storage_key", { length: 512 }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     status: attachmentStatus("status").notNull().default("pendiente_revision"),
     uploadedByRole: varchar("uploaded_by_role", { length: 32 }).notNull().default("cliente"),
     version: integer("version").notNull().default(1),
@@ -291,6 +316,7 @@ export const attachments = pgTable(
   (t) => ({
     orderIdx: index("attachments_order_idx").on(t.orderId),
     orgIdx: index("attachments_org_idx").on(t.organizationId),
+    uploadSessionIdx: index("attachments_upload_session_idx").on(t.uploadSessionId, t.status),
   }),
 );
 
@@ -400,7 +426,12 @@ export const bomItemsRelations = relations(bomItems, ({ one }) => ({
 export const attachmentsRelations = relations(attachments, ({ one, many }) => ({
   order: one(orders, { fields: [attachments.orderId], references: [orders.id] }),
   organization: one(organizations, { fields: [attachments.organizationId], references: [organizations.id] }),
+  uploadSession: one(uploadSessions, { fields: [attachments.uploadSessionId], references: [uploadSessions.id] }),
   applications: many(applications),
+}));
+
+export const uploadSessionsRelations = relations(uploadSessions, ({ many }) => ({
+  attachments: many(attachments),
 }));
 
 export const paymentsRelations = relations(payments, ({ one }) => ({

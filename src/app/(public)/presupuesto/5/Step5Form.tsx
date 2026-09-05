@@ -14,13 +14,16 @@ interface Props {
   type: "new" | "returning";
   notes?: string;
   fileIds?: string[];
+  uploadSessionId: string;
+  uploadSessionSecret: string;
+  backHref: string;
 }
 
 /**
  * F4-12 — Paso 5 form: confirma y dispara createPublicOrder. Muestra el resultado
  * con link a /seguimiento/[publicToken].
  */
-export function Step5Form({ productName, items, total, sizeQuantities, contactInfo, type, notes, fileIds }: Props) {
+export function Step5Form({ productName, items, total, sizeQuantities, contactInfo, type, notes, fileIds, uploadSessionId, uploadSessionSecret, backHref }: Props) {
   const [result, setResult] = useState<{ publicToken: string; number: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -44,9 +47,11 @@ export function Step5Form({ productName, items, total, sizeQuantities, contactIn
           individualNumber: item.number || null,
         })),
         fileIds,
+        uploadSessionId,
+        uploadSessionSecret,
       });
       if (res.ok) setResult({ publicToken: res.publicToken, number: res.number });
-      else setError("No se pudo guardar tu solicitud. Probá de nuevo.");
+      else setError(res.error);
     });
   }
 
@@ -88,7 +93,7 @@ export function Step5Form({ productName, items, total, sizeQuantities, contactIn
 
       {error && <p className="text-sm text-red-400">{error}</p>}
       <div className="flex items-center justify-between">
-        <Link href="/presupuesto/4" className="text-sm text-on-surface-variant hover:text-on-surface">
+        <Link href={backHref} className="text-sm text-on-surface-variant hover:text-on-surface">
           ← Volver
         </Link>
         <Button type="submit">Confirmar solicitud</Button>

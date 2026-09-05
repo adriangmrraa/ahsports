@@ -4,32 +4,51 @@ import { revalidatePath } from "next/cache";
 import { randomBytes } from "node:crypto";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/db/client";
-import { attachments, contacts, orderItems, orderLines, orders, organizations, products, sizes } from "@/db/schema";
+import { attachments, contacts, orderItems, orderLines, orders, organizations, products, sizes, uploadSessions } from "@/db/schema";
 import { withDbTransaction } from "@/lib/db-transaction";
+import { cleanupExpiredPublicUploads, createPublicUploadSession, getLivePublicUploadSession, matchesPublicUploadSecret } from "@/lib/public-upload-sessions";
 import { activeStorage, buildAttachmentPath, validateFile } from "@/lib/storage";
-import { attachmentKindSchema, createPublicOrderSchema } from "@/lib/validators";
+import { createPublicOrderSchema, publicAttachmentUploadSchema } from "@/lib/validators";
 
 type PublicOrderFailure = { ok: false; error: string; issues?: unknown };
 
+/** Starts a short-lived, secret-backed browser upload session for wizard step 4. */
+export async function beginPublicUploadSession() {
+  try {
+    await cleanupExpiredPublicUploads();
+    const session = await createPublicUploadSession();
+    return { ok: true as const, ...session };
+  } catch {
+    return { ok: false as const, error: "No se pudo preparar la carga de archivos" };
+  }
+}
+
 /** Stages a client asset; order ownership is claimed only at confirmation. */
-export async function uploadAttachmentFromPublic(formData: FormData) {
+export async function uploadAttachmentFromPublic(formData: FormData, sessionInput: unknown) {
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { ok: false as const, error: "Archivo requerido" };
-  const kindParsed = attachmentKindSchema.safeParse(formData.get("kind"));
-  if (!kindParsed.success) return { ok: false as const, error: "Tipo de adjunto inválido" };
+  const sessionParsed = publicAttachmentUploadSchema.safeParse({
+    kind: formData.get("kind"),
+    ...(typeof sessionInput === "object" && sessionInput ? sessionInput : {}),
+  });
+  if (!sessionParsed.success) return { ok: false as const, error: "Sesión o tipo de adjunto inválido" };
+  const session = await getLivePublicUploadSession(sessionParsed.data.uploadSessionId, sessionParsed.data.uploadSessionSecret);
+  if (!session) return { ok: false as const, error: "La sesión de carga venció. Volvé a abrir este paso." };
   const valid = validateFile(file);
   if (!valid.ok) return { ok: false as const, error: valid.error };
 
   const originalName = file.name || "archivo";
   try {
+    const storageKey = buildAttachmentPath({ orderId: session.id, originalName });
     const stored = await activeStorage.upload(
       Buffer.from(await file.arrayBuffer()),
-      buildAttachmentPath({ orderId: null, originalName }),
+      storageKey,
       file.type,
     );
     const [row] = await db.insert(attachments).values({
-      kind: kindParsed.data, name: originalName, originalName, mimeType: file.type,
-      sizeBytes: stored.size, url: stored.url, status: "pendiente_revision", uploadedByRole: "cliente",
+      kind: sessionParsed.data.kind, name: originalName, originalName, mimeType: file.type,
+      sizeBytes: stored.size, url: stored.url, storageKey, uploadSessionId: session.id,
+      expiresAt: session.expiresAt, status: "pendiente_revision", uploadedByRole: "cliente",
     }).returning({ id: attachments.id, url: attachments.url, name: attachments.name, kind: attachments.kind });
     if (!row) return { ok: false as const, error: "No se pudo registrar el adjunto" };
     revalidatePath("/presupuesto/4");
@@ -52,6 +71,11 @@ export async function createPublicOrder(input: unknown): Promise<
 
   try {
     const result = await withDbTransaction(async (tx) => {
+      const [uploadSession] = await tx.select().from(uploadSessions)
+        .where(and(eq(uploadSessions.id, data.uploadSessionId), eq(uploadSessions.status, "active"))).limit(1);
+      if (!uploadSession || uploadSession.expiresAt <= new Date() || !matchesPublicUploadSecret(uploadSession.secretHash, data.uploadSessionSecret)) {
+        throw new PublicOrderDomainError("La sesión de carga venció o no corresponde a esta solicitud. Volvé a cargar los archivos.");
+      }
       const [product] = await tx.select({ id: products.id, minOrder: products.minOrder })
         .from(products).where(and(eq(products.id, data.productId), eq(products.active, true))).limit(1);
       if (!product) throw new PublicOrderDomainError("El producto seleccionado ya no está disponible");
@@ -124,14 +148,17 @@ export async function createPublicOrder(input: unknown): Promise<
       })));
 
       if (data.fileIds.length > 0) {
-        const claimed = await tx.update(attachments).set({ orderId: order.id, organizationId })
+        const claimed = await tx.update(attachments).set({ orderId: order.id, organizationId, expiresAt: null })
           .where(and(inArray(attachments.id, data.fileIds), isNull(attachments.orderId), isNull(attachments.organizationId),
-            eq(attachments.status, "pendiente_revision"), eq(attachments.uploadedByRole, "cliente")))
+            eq(attachments.uploadSessionId, uploadSession.id), eq(attachments.status, "pendiente_revision"),
+            eq(attachments.uploadedByRole, "cliente"), isNull(attachments.deletedAt)))
           .returning({ id: attachments.id });
         if (claimed.length !== data.fileIds.length) {
           throw new PublicOrderDomainError("Uno o más adjuntos ya no están disponibles. Volvé a cargarlos.");
         }
       }
+      await tx.update(uploadSessions).set({ status: "consumed", consumedAt: new Date() })
+        .where(and(eq(uploadSessions.id, uploadSession.id), eq(uploadSessions.status, "active")));
       return { orderId: order.id, number: order.number, publicToken };
     });
     revalidatePath("/presupuesto/5");

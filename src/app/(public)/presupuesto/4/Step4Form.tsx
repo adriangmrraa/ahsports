@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button";
-import { uploadAttachmentFromPublic } from "@/app/actions/public-orders";
+import { beginPublicUploadSession, uploadAttachmentFromPublic } from "@/app/actions/public-orders";
 
 const KINDS = [
   { value: "identidad_organizacion", label: "Logo / Identidad" },
@@ -25,15 +25,39 @@ export function Step4Form({ initialParams }: { initialParams: Record<string, str
   const [uploads, setUploads] = useState<Uploaded[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [session, setSession] = useState<{ id: string; secret: string } | null>(() => {
+    const id = initialParams.uploadSessionId;
+    const secret = initialParams.uploadSessionSecret;
+    return id && secret ? { id, secret } : null;
+  });
   const [, startTransition] = useTransition();
 
+  useEffect(() => {
+    if (session) return;
+    let cancelled = false;
+    startTransition(async () => {
+      const result = await beginPublicUploadSession();
+      if (cancelled) return;
+      if (!result.ok) setError(result.error);
+      else setSession({ id: result.id, secret: result.secret });
+    });
+    return () => { cancelled = true; };
+  }, [session, startTransition]);
+
   async function onFile(file: File) {
+    if (!session) {
+      setError("La sesión de carga todavía no está lista. Intentá nuevamente.");
+      return;
+    }
     setBusy(true);
     setError(null);
     const form = new FormData();
     form.append("file", file);
     form.append("kind", "identidad_organizacion");
-    const res = await uploadAttachmentFromPublic(form);
+    const res = await uploadAttachmentFromPublic(form, {
+      uploadSessionId: session.id,
+      uploadSessionSecret: session.secret,
+    });
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
@@ -47,6 +71,12 @@ export function Step4Form({ initialParams }: { initialParams: Record<string, str
     const params = new URLSearchParams(window.location.search);
     const ids = uploads.map((u) => u.id);
     if (ids.length) params.set("files", ids.join(","));
+    if (!session) {
+      setError("No se pudo validar la sesión de carga. Recargá este paso.");
+      return;
+    }
+    params.set("uploadSessionId", session.id);
+    params.set("uploadSessionSecret", session.secret);
     router.push(`/presupuesto/5?${params.toString()}`);
   }
 
@@ -105,7 +135,7 @@ export function Step4Form({ initialParams }: { initialParams: Record<string, str
         <button type="button" onClick={() => router.back()} className="text-sm text-on-surface-variant hover:text-on-surface">
           ← Volver
         </button>
-        <Button type="submit">Revisar y confirmar →</Button>
+        <Button type="submit" disabled={!session || busy}>Revisar y confirmar →</Button>
       </div>
     </form>
   );

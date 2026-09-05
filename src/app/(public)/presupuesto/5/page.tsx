@@ -29,6 +29,7 @@ export default async function PresupuestoStep5({
 }) {
   const sp = await searchParams;
   if (!sp.productId || !sp.lineItems) redirect("/presupuesto/2");
+  if (!sp.uploadSessionId || !sp.uploadSessionSecret) redirect("/presupuesto/4");
 
   const [product] = await db.select().from(products).where(eq(products.id, sp.productId)).limit(1);
   if (!product || !product.active) redirect("/presupuesto/2");
@@ -61,6 +62,9 @@ export default async function PresupuestoStep5({
         type={(sp.type as "new" | "returning") ?? "new"}
         notes={sp.notes}
         fileIds={sp.files ? sp.files.split(",").filter(Boolean) : undefined}
+        uploadSessionId={sp.uploadSessionId}
+        uploadSessionSecret={sp.uploadSessionSecret}
+        backHref={`/presupuesto/4?${new URLSearchParams(sp as Record<string, string>).toString()}`}
       />
     </div>
   );

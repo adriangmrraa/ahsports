@@ -245,6 +245,8 @@ export const createPublicOrderSchema = z.object({
     individualNumber: z.string().trim().max(32).optional().nullable(),
   })).min(1).max(1000),
   fileIds: z.array(z.string().uuid()).max(20).default([]),
+  uploadSessionId: z.string().uuid(),
+  uploadSessionSecret: z.string().min(32).max(128),
 }).strict().superRefine((value, ctx) => {
   const seenSizes = new Set<string>();
   for (const size of value.sizeQuantities) {
@@ -255,6 +257,13 @@ export const createPublicOrderSchema = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["fileIds"], message: "Un archivo no puede repetirse" });
   }
 });
+
+/** Public pre-order upload metadata. The file itself is validated separately. */
+export const publicAttachmentUploadSchema = z.object({
+  kind: attachmentKindSchema,
+  uploadSessionId: z.string().uuid(),
+  uploadSessionSecret: z.string().min(32).max(128),
+}).strict();
 
 export function isUniqueViolation(e: unknown) {
   // Drizzle envuelve el error del driver en `cause` (NeonDbError, code 23505).
