@@ -182,6 +182,24 @@ export const attachmentStatusSchema = z.enum([
 
 export const applicationViewSchema = z.enum(["frente", "espalda", "lateral", "manga", "otro"]);
 
+export const paymentKindSchema = z.enum(["sena", "pago", "saldo"]);
+export const paymentMethodSchema = z.enum(["efectivo", "transferencia", "cheque", "mercadopago", "otro"]);
+
+/** F5-04 — Alta de pago. El recálculo de bloqueo lo hace el servicio. */
+export const registerPaymentSchema = z.object({
+  orderId: z.string().min(1).max(36),
+  kind: paymentKindSchema,
+  method: paymentMethodSchema,
+  amount: z.number().finite().positive().max(999999999999),
+  reference: z.string().trim().max(128).optional().nullable(),
+  notes: z.string().trim().max(2000).optional().nullable(),
+}).strict();
+
+/** F5-06 — Cancelación (soft-delete) de un pago. */
+export const cancelPaymentSchema = z.object({
+  paymentId: z.string().min(1).max(36),
+}).strict();
+
 /** Upload multipart: kind + al menos uno de orderId / organizationId. */
 export const attachmentUploadSchema = z
   .object({

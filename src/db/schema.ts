@@ -39,6 +39,7 @@ export const productionStage = pgEnum("production_stage", [
 ]);
 export const paymentMethod = pgEnum("payment_method", ["efectivo", "transferencia", "cheque", "mercadopago", "otro"]);
 export const paymentKind = pgEnum("payment_kind", ["sena", "pago", "saldo"]);
+export const paymentEventType = pgEnum("payment_event_type", ["registered", "cancelled"]);
 export const attachmentKind = pgEnum("attachment_kind", [
   "identidad_organizacion",
   "sponsor",
@@ -351,9 +352,34 @@ export const payments = pgTable(
     reference: varchar("reference", { length: 128 }),
     notes: text("notes"),
     createdById: varchar("created_by_id", { length: 36 }).references(() => users.id),
+    /** Soft-cancel: cancelled rows never count toward order totals. */
+    cancelled: boolean("cancelled").notNull().default(false),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelledBy: varchar("cancelled_by", { length: 36 }).references(() => users.id),
   },
   (t) => ({
     orderIdx: index("payments_order_idx").on(t.orderId),
+  }),
+);
+
+/**
+ * Immutable audit trail for payment lifecycle. Rows are insert-only:
+ * no update/delete path exists in the application.
+ */
+export const paymentEvents = pgTable(
+  "payment_events",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    paymentId: varchar("payment_id", { length: 36 }).notNull().references(() => payments.id, { onDelete: "cascade" }),
+    orderId: varchar("order_id", { length: 36 }).notNull().references(() => orders.id, { onDelete: "cascade" }),
+    type: paymentEventType("type").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    createdById: varchar("created_by_id", { length: 36 }).references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    orderIdx: index("payment_events_order_idx").on(t.orderId),
+    paymentIdx: index("payment_events_payment_idx").on(t.paymentId),
   }),
 );
 
@@ -434,6 +460,12 @@ export const uploadSessionsRelations = relations(uploadSessions, ({ many }) => (
   attachments: many(attachments),
 }));
 
-export const paymentsRelations = relations(payments, ({ one }) => ({
+export const paymentsRelations = relations(payments, ({ one, many }) => ({
   order: one(orders, { fields: [payments.orderId], references: [orders.id] }),
+  events: many(paymentEvents),
+}));
+
+export const paymentEventsRelations = relations(paymentEvents, ({ one }) => ({
+  payment: one(payments, { fields: [paymentEvents.paymentId], references: [payments.id] }),
+  order: one(orders, { fields: [paymentEvents.orderId], references: [orders.id] }),
 }));
