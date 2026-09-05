@@ -2,7 +2,7 @@
 
 > **Propósito**: cerrar las pantallas de caja y pagos, terminar la página de configuración con reglas y snapshot del cálculo, y dejar todo deployable en Render con Neon.
 >
-> **Estado al 2026-09-03**: ⏳ PENDIENTE — 0/16 tareas. **CÓDIGO NO ESCRITO**. Antes de empezar, F2-F4 deben estar completas (los pagos se calculan contra pedidos existentes).
+> **Estado al 2026-09-05**: 🟢 EN CURSO — 2/16 (F5-03, F5-04 + backend pagos F5-05/F5-06: actions + API POST/DELETE con recálculo atómico). Migración `0002_payment_cancellation_audit` + `src/lib/payments.ts` como servicio compartido. Resto pendiente: caja (F5-01/02), config (F5-07/08), deploy (F5-09..13), hardening (F5-14/15), cierre (F5-16). **CÓDIGO NO ESCRITO** para esos grupos.
 
 ---
 
@@ -25,14 +25,14 @@
 
 ## B. Pagos
 
-- [ ] **F5-03** Página `/admin/pagos` — Listado global de pagos.
+- [x] **F5-03** Página `/admin/pagos` — Listado global de pagos. **VERIFICADO 2026-09-05**: `src/app/(admin)/admin/pagos/page.tsx` — filtros kind/method/rango fechas + checkbox incluir-cancelados, join a orders.number y organizations.name, total de activos al pie, cancelados tachados. typecheck+build EXIT 0 (40 rutas).
   - Carga: payments con join a orders.number y organizations.name
   - Filtros: rango de fechas (dateFrom, dateTo), method (chips), kind (chips), organización (input)
   - Tabla: fecha, orden (#), organización, kind, method, amount, reference
   - Totales al pie: suma filtrada
   - Verificar: con seed vacío, empty state.
 
-- [ ] **F5-04** Página `/admin/pedidos/[id]/pagos` — Pagos del pedido + form alta.
+- [x] **F5-04** Página `/admin/pedidos/[id]/pagos` — Pagos del pedido + form alta. **VERIFICADO 2026-09-05**: `pagos/{page.tsx,PagosForms.tsx}` + `src/app/actions/payments.ts` (registerPayment/cancelPayment con requireUser+Zod+withDbTransaction) + `src/lib/payments.ts` (centavos enteros, gate bloqueado_pago↔aprobado, eventos inmutables). StatCards cotizado/pagado/saldo/falta-seña; cancelados no cuentan. typecheck+build EXIT 0.
   - Carga: payments del pedido + totales (cotizado, pagado, saldo, faltaSena)
   - Form "Registrar pago": kind (Select: sena|pago|saldo), method (Select: efectivo|transferencia|cheque|mercadopago|otro), amount (number, required, min 0.01), reference (text, opcional), notes (textarea, opcional)
   - Lista de pagos existentes con botón "Cancelar" (soft-delete via `cancelled=true`)
@@ -47,13 +47,13 @@
          - Loggear el desbloqueo
   - Verificar: registrar seña de $4250 sobre pedido cotizado en $8500 → status cambia de bloqueado_pago a aprobado.
 
-- [ ] **F5-05** API `POST /api/payments` — Crear pago con recálculo de bloqueo.
+- [x] **F5-05** API `POST /api/payments` — Crear pago con recálculo de bloqueo. **VERIFICADO 2026-09-05**: `src/app/api/payments/route.ts` — misma `registerPaymentTx` reutilizable que la action. build EXIT 0.
   - Mismo comportamiento que F5-04 server action
   - Zod validation
   - **CRÍTICO**: encapsular la lógica de recálculo de bloqueo en una función `recalculateBlockStatus(orderId, db)` reutilizable
   - Verificar: API + recálculo.
 
-- [ ] **F5-06** API `DELETE /api/payments/[id]` — Cancelar pago (soft).
+- [x] **F5-06** API `DELETE /api/payments/[id]` — Cancelar pago (soft). **VERIFICADO 2026-09-05**: `src/app/api/payments/[id]/route.ts` — `cancelPaymentTx` + recálculo (puede re-bloquear). build EXIT 0.
   - Update `payments.cancelled = true` + `cancelledAt = now()` + `cancelledBy = user.id`
   - Recalcular bloqueo (puede volver a bloquear si el saldo restante < mínimo)
   - Verificar: cancelar un pago que generaba desbloqueo → status vuelve a bloqueado.
