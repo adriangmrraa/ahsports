@@ -24,6 +24,17 @@ function hashPasswordSeed(password: string) {
   return `${salt}:${hash}`;
 }
 
+function getAdminPassword(): string {
+  const pwd = process.env.ADMIN_PASSWORD;
+  if (!pwd || pwd.length < 8) {
+    throw new Error(
+      "Seed: variable ADMIN_PASSWORD requerida (mín. 8 caracteres). Ej: $env:ADMIN_PASSWORD='clave-segura'; npm run db:seed",
+    );
+  }
+  return pwd;
+}
+const adminPassword = getAdminPassword();
+
 async function main() {
   // 1. Limpiar todo (orden cubierto por CASCADE)
   await db.execute(sql`TRUNCATE TABLE production_events, payments, applications, attachments, order_items, order_lines, orders, bom_items, bom_recipes, sizes, products, pricing_rules, techniques, materials, contacts, organizations, sessions, users RESTART IDENTITY CASCADE`);
@@ -31,7 +42,7 @@ async function main() {
   // 2. Admin
   await db.insert(users).values({
     email: "admin@ahsports.com",
-    passwordHash: hashPasswordSeed("admin1234"),
+    passwordHash: hashPasswordSeed(adminPassword),
     name: "Admin AH Sports",
     role: "admin",
   });
@@ -127,7 +138,7 @@ async function main() {
     { recipeId: receta.id, materialId: tinta.id, quantity: "0.04", wastePercent: "5" },
   ]);
 
-  console.log("Seed completo. Login: admin@ahsports.com / admin1234");
+  console.log("Seed completo. Admin creado: admin@ahsports.com (password definida en ADMIN_PASSWORD).");
 }
 
 main().catch((e) => {

@@ -34,19 +34,16 @@ export function LoginForm() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className="label-caps text-on-surface-variant block mb-1.5">Email</label>
-        <Input type="email" name="email" required defaultValue="admin@ahsports.com" autoComplete="email" />
+        <Input type="email" name="email" required autoComplete="email" />
       </div>
       <div>
         <label className="label-caps text-on-surface-variant block mb-1.5">Contraseña</label>
-        <Input type="password" name="password" required defaultValue="admin1234" autoComplete="current-password" />
+        <Input type="password" name="password" required autoComplete="current-password" />
       </div>
       {error && <p className="text-sm text-error bg-error/10 border border-error/30 px-3 py-2 rounded">{error}</p>}
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Ingresando..." : "Ingresar"}
       </Button>
-      <p className="text-xs text-on-surface-variant text-center pt-2 border-t border-outline-variant">
-        Demo: <span className="data-mono">admin@ahsports.com / admin1234</span>
-      </p>
     </form>
   );
 }

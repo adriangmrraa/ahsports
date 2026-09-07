@@ -86,4 +86,4 @@ PENDIENTES.md           # Lo pendiente
 6. `npm run db:seed` solo si la DB está vacía y con confirmación explícita — hace TRUNCATE
 7. `npm run dev` → http://localhost:3000
 
-Login seed: `admin@ahsports.com` / `admin1234` (F2-20)
+Login seed: `admin@ahsports.com` — password la define `ADMIN_PASSWORD` en el seed (NO hay credenciales default, ver F2-20)

@@ -18,22 +18,30 @@ Stack unificado con FusaLabs / AdminYa / Dentalogic:
 npm install
 cp .env.example .env   # setear DATABASE_URL de Neon
 npm run db:push        # crea el schema en Neon
+$env:ADMIN_PASSWORD='clave-segura'   # password del admin (la define el taller)
 npm run db:seed        # datos demo (admin + productos + organización)
 npm run dev            # http://localhost:3000
 ```
 
-Login por defecto (seed):
-- email: `admin@ahsports.com`
-- password: `admin1234`
+> ⚠️ **No existen credenciales demo.** El seed crea el admin con la password de la variable `ADMIN_PASSWORD` (mín. 8 caracteres, sin default). No hay formulario "demo" en el login.
 
 ## Deploy en Render
 
-1. Crear Web Service apuntando a este repo
+1. Crear Web Service apuntando a este repo (o usar `render.yaml` incluido)
 2. Build command: `npm install && npm run db:push && npm run build`
 3. Start command: `npm start`
 4. Variables de entorno:
    - `DATABASE_URL` (Neon connection string)
-   - `SESSION_SECRET` (32+ chars random)
+   - `SESSION_SECRET` (32+ chars random, **fijo**: si cambia entre deploys, todas las sesiones se invalidan)
+   - `ADMIN_PASSWORD` (usa solo para el seed: `npm run db:seed` con `ADMIN_PASSWORD` set, una sola vez)
+5. Primer deploy → `https://ah-sports-os.onrender.com/` responde 200
+
+### Troubleshooting
+
+- **Build falla en `db:push`**: `DATABASE_URL` mal o ausente → verificar env vars en Render y que apunte al proyecto correcto de Neon.
+- **Login falla tras un deploy**: `SESSION_SECRET` cambió → fijar valor estable.
+- **Login rechaza credenciales validadas en dev**: el hash se genera con la password de `ADMIN_PASSWORD` al seedar; repetir seed con la misma password.
+- **500 al cargar dashboard**: schema no aplicado → re-correr `npm run db:push` (migraciones no requeridas en MVP).
 
 `render.yaml` incluido para deploy declarativo.
 

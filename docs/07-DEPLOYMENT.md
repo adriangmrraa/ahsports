@@ -53,14 +53,15 @@ Después del primer deploy:
 
 1. Render → Shell → ejecutar:
    ```bash
-   npm run db:seed
+   ADMIN_PASSWORD='clave-segura-del-taller' npm run db:seed
    ```
-2. Esto crea: admin user (`admin@ahsports.com` / `admin1234`), organización demo, 5 materiales, 3 técnicas, 4 productos con talles y recetas
-3. **Cambiar el password del admin** desde la UI después del primer login
+   (La password del admin se define con `ADMIN_PASSWORD`; **no hay credenciales default ni formulario demo**.)
+2. Esto crea: admin user (`admin@ahsports.com`), organización demo, 5 materiales, 3 técnicas, 4 productos con talles y recetas
+3. **No hay UI de cambio de password**: la del admin queda fijada por el seed (re-seedear con `ADMIN_PASSWORD` distinta la cambia).
 
 Alternativa: ejecutar seed localmente apuntando a la DB de producción (con cuidado):
 ```bash
-DATABASE_URL=postgresql://... npm run db:seed
+$env:ADMIN_PASSWORD='clave-segura-del-taller'; DATABASE_URL=postgresql://... npm run db:seed
 ```
 
 ## 6. Custom domain (opcional)
