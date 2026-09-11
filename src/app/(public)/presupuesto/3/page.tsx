@@ -31,20 +31,20 @@ export default async function PresupuestoStep3({
   const sp = await searchParams;
   if (!sp.productId) redirect("/presupuesto/2");
 
-  const [product] = await db.select().from(products).where(eq(products.id, sp.productId)).limit(1);
+  const [product] = await db.select({ name: products.name }).from(products).where(eq(products.id, sp.productId)).limit(1);
   if (!product) redirect("/presupuesto/2");
 
   const sizes = parseSizes(sp.sizeQuantities);
   const total = Number(sp.total || sizes.reduce((a, s) => a + s.qty, 0)) || 0;
 
   return (
-    <div className="px-4 py-10">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <StepIndicator current={3} />
-      <h1 className="mb-2 mt-6 text-center text-2xl font-bold tracking-tight">Personalización</h1>
+      <h1 className="mb-2 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Personalización</h1>
       <p className="mb-6 text-center text-sm text-on-surface-variant">
         {product.name} · {total} prendas
       </p>
-      <Step3Form productName={product.name} sizes={sizes} total={total} />
+      <Step3Form productName={product.name} sizes={sizes} total={total} noSize={sizes.length === 0} />
     </div>
   );
 }

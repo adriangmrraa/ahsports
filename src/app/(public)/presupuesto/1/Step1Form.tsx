@@ -37,9 +37,9 @@ export function Step1Form({ existing }: { existing?: { name?: string; email?: st
   }
 
   return (
-    <form onSubmit={goNext} className="mx-auto flex max-w-xl flex-col gap-5">
+    <form onSubmit={goNext} className="mx-auto flex w-full max-w-xl flex-col gap-5">
       {/* Tipo */}
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         {[
           { v: "new", label: "Soy nuevo" },
           { v: "returning", label: "Ya soy cliente" },
@@ -48,7 +48,7 @@ export function Step1Form({ existing }: { existing?: { name?: string; email?: st
             key={o.v}
             type="button"
             onClick={() => setType(o.v as "new" | "returning")}
-            className={`flex-1 rounded-xl border px-4 py-3 text-sm font-medium transition ${
+            className={`min-h-11 flex-1 rounded-xl border px-4 py-3 text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 ${
               type === o.v ? "border-primary bg-primary/15 text-primary" : "border-outline-variant bg-surface-container text-on-surface-variant"
             }`}
           >
@@ -57,7 +57,7 @@ export function Step1Form({ existing }: { existing?: { name?: string; email?: st
         ))}
       </div>
 
-      <div className="flex flex-col gap-4 rounded-2xl border border-outline-variant bg-surface-container p-6">
+      <div className="flex flex-col gap-4 rounded-2xl border border-outline-variant bg-surface-container p-4 sm:p-6">
         <label className="flex flex-col gap-1">
           <Label>Nombre del contacto</Label>
           <Input value={form.name} onChange={(e) => update("name", e.target.value)} required placeholder="Ej: Marcelo Nievas" />

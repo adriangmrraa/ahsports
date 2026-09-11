@@ -31,13 +31,13 @@ export default async function PresupuestoStep5({
   if (!sp.productId || !sp.lineItems) redirect("/presupuesto/2");
   if (!sp.uploadSessionId || !sp.uploadSessionSecret) redirect("/presupuesto/4");
 
-  const [product] = await db.select().from(products).where(eq(products.id, sp.productId)).limit(1);
+  const [product] = await db.select({ id: products.id, name: products.name, active: products.active }).from(products).where(eq(products.id, sp.productId)).limit(1);
   if (!product || !product.active) redirect("/presupuesto/2");
   const items = parseLineItems(sp.lineItems);
   const productSizes = await db.select({ id: sizes.id, label: sizes.label }).from(sizes).where(eq(sizes.productId, product.id));
   const sizeByLabel = new Map(productSizes.map((size) => [size.label, size.id]));
-  const serializedItems = items.map((item) => ({ ...item, sizeId: sizeByLabel.get(item.talle) ?? "" }));
-  const quantities = new Map<string, number>();
+  const serializedItems = items.map((item) => ({ ...item, sizeId: sizeByLabel.get(item.talle) ?? null }));
+  const quantities = new Map<string | null, number>();
   for (const item of serializedItems) {
     if (item.sizeId) quantities.set(item.sizeId, (quantities.get(item.sizeId) ?? 0) + 1);
   }
@@ -50,9 +50,9 @@ export default async function PresupuestoStep5({
   };
 
   return (
-    <div className="px-4 py-10">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <StepIndicator current={5} />
-      <h1 className="mb-6 mt-6 text-center text-2xl font-bold tracking-tight">Confirmá tu solicitud</h1>
+      <h1 className="mb-6 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Confirmá tu solicitud</h1>
       <Step5Form
         productName={product.name}
         items={serializedItems}

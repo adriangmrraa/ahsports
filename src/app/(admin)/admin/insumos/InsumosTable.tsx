@@ -8,7 +8,7 @@ import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { formatCurrency } from "@/lib/utils";
 import type { materials } from "@/db/schema";
 
-type Row = typeof materials.$inferSelect;
+type Row = typeof materials.$inferSelect & { supplierName: string | null };
 
 export function InsumosTable({ rows }: { rows: Row[] }) {
   const [query, setQuery] = useState("");
@@ -22,7 +22,7 @@ export function InsumosTable({ rows }: { rows: Row[] }) {
     return rows.filter((r) => {
       if (onlyActive && !r.active) return false;
       if (category && r.category !== category) return false;
-      if (q && !`${r.name} ${r.supplier ?? ""}`.toLowerCase().includes(q)) return false;
+      if (q && !`${r.name} ${r.supplierName ?? r.supplier ?? ""}`.toLowerCase().includes(q)) return false;
       return true;
     });
   }, [rows, query, category, onlyActive]);
@@ -80,7 +80,7 @@ export function InsumosTable({ rows }: { rows: Row[] }) {
                 <TD className="text-on-surface-variant">{m.category}</TD>
                 <TD className="data-mono">{m.unit}</TD>
                 <TD align="right">{formatCurrency(m.unitPrice)}</TD>
-                <TD className="text-on-surface-variant">{m.supplier ?? "—"}</TD>
+                <TD className="text-on-surface-variant">{m.supplierName ?? m.supplier ?? "—"}</TD>
                 <TD>
                   <Link href={`/admin/insumos/${m.id}`} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${m.active ? "bg-primary/10 border-primary/40 text-primary" : "border-outline-variant text-on-surface-variant"}`}>
                     {m.active ? "ACTIVO" : "INACTIVO"}

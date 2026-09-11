@@ -7,12 +7,15 @@ import { Input, Select, Field } from "@/components/ui/Input";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Plus, X, ChevronDown } from "lucide-react";
 import type { bomItems, bomRecipes, materials, sizes, techniques } from "@/db/schema";
+import { consumptionUnit } from "@/lib/consumption";
 
 type Recipe = typeof bomRecipes.$inferSelect;
 type Item = typeof bomItems.$inferSelect;
 type Technique = typeof techniques.$inferSelect;
 type Size = typeof sizes.$inferSelect;
 type Material = typeof materials.$inferSelect;
+type ConsumptionMode = "direct" | "yield";
+type ItemForm = { materialId: string; consumptionMode: ConsumptionMode; directQuantity: string; unitsPerConsumptionUnit: string; wastePercent: string };
 
 const GENERAL_KEY = "__general__";
 
@@ -38,7 +41,9 @@ export function RecetasEditor({
   const [newTechniqueId, setNewTechniqueId] = useState("");
   const [newSizeId, setNewSizeId] = useState("");
   const [newNotes, setNewNotes] = useState("");
-  const [itemForm, setItemForm] = useState<Record<string, { materialId: string; quantity: string; wastePercent: string }>>({});
+  const [itemForm, setItemForm] = useState<Record<string, ItemForm>>({});
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
 
   const materialById = useMemo(() => new Map(materials.map((m) => [m.id, m])), [materials]);
   const sizeById = useMemo(() => new Map(sizes.map((s) => [s.id, s.label])), [sizes]);
@@ -76,11 +81,23 @@ export function RecetasEditor({
   }
 
   function formFor(recipeId: string) {
-    return itemForm[recipeId] ?? { materialId: "", quantity: "", wastePercent: "0" };
+    return itemForm[recipeId] ?? { materialId: "", consumptionMode: "direct", directQuantity: "", unitsPerConsumptionUnit: "", wastePercent: "0" };
   }
 
-  function setForm(recipeId: string, patch: Partial<{ materialId: string; quantity: string; wastePercent: string }>) {
+  function setForm(recipeId: string, patch: Partial<ItemForm>) {
     setItemForm((prev) => ({ ...prev, [recipeId]: { ...formFor(recipeId), ...patch } }));
+  }
+
+  function editItem(recipeId: string, item: Item) {
+    setEditingItemId(item.id);
+    setEditingRecipeId(recipeId);
+    setForm(recipeId, {
+      materialId: item.materialId,
+      consumptionMode: item.consumptionMode,
+      directQuantity: item.directQuantity ?? (item.consumptionMode === "direct" ? item.quantity : ""),
+      unitsPerConsumptionUnit: item.unitsPerConsumptionUnit ?? "",
+      wastePercent: item.wastePercent,
+    });
   }
 
   async function createRecipe(e: React.FormEvent<HTMLFormElement>) {
@@ -123,7 +140,9 @@ export function RecetasEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           materialId: form.materialId,
-          quantity: Number(form.quantity),
+          consumptionMode: form.consumptionMode,
+          directQuantity: form.consumptionMode === "direct" ? Number(form.directQuantity) : null,
+          unitsPerConsumptionUnit: form.consumptionMode === "yield" ? Number(form.unitsPerConsumptionUnit) : null,
           wastePercent: Number(form.wastePercent || 0),
         }),
       });
@@ -132,7 +151,36 @@ export function RecetasEditor({
         setError(d.error ?? "Error agregando item");
         return;
       }
-      setItemForm((prev) => ({ ...prev, [recipeId]: { materialId: "", quantity: "", wastePercent: "0" } }));
+      setItemForm((prev) => ({ ...prev, [recipeId]: { materialId: "", consumptionMode: "direct", directQuantity: "", unitsPerConsumptionUnit: "", wastePercent: "0" } }));
+      router.refresh();
+    });
+  }
+
+  async function updateItem(e: React.FormEvent<HTMLFormElement>, recipeId: string) {
+    e.preventDefault();
+    if (!editingItemId) return;
+    const form = formFor(recipeId);
+    setError(null);
+    startTransition(async () => {
+      const res = await fetch(`/api/recipes/items/${editingItemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          materialId: form.materialId,
+          consumptionMode: form.consumptionMode,
+          directQuantity: form.consumptionMode === "direct" ? Number(form.directQuantity) : null,
+          unitsPerConsumptionUnit: form.consumptionMode === "yield" ? Number(form.unitsPerConsumptionUnit) : null,
+          wastePercent: Number(form.wastePercent || 0),
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? "Error editando item");
+        return;
+      }
+      setEditingItemId(null);
+      setEditingRecipeId(null);
+      setItemForm((prev) => ({ ...prev, [recipeId]: { materialId: "", consumptionMode: "direct", directQuantity: "", unitsPerConsumptionUnit: "", wastePercent: "0" } }));
       router.refresh();
     });
   }
@@ -229,7 +277,8 @@ export function RecetasEditor({
                             <THead>
                               <tr>
                                 <TH>Material</TH>
-                                <TH align="right">Cantidad</TH>
+                                <TH align="right">Consumo</TH>
+                                <TH align="right">Método</TH>
                                 <TH align="right">Merma %</TH>
                                 <TH align="right">Acciones</TH>
                               </tr>
@@ -237,15 +286,31 @@ export function RecetasEditor({
                             <tbody>
                               {recipeItems.map((item) => {
                                 const material = materialById.get(item.materialId);
+                                const isEditing = editingItemId === item.id && editingRecipeId === recipe.id;
                                 return (
                                   <TR key={item.id}>
                                     <TD className="text-on-surface">
                                       {material?.name ?? "Material eliminado"}
                                       {material && <span className="block text-xs text-on-surface-variant">{material.unit}</span>}
                                     </TD>
-                                    <TD align="right">{item.quantity}</TD>
+                                    <TD align="right">
+                                      {item.consumptionMode === "yield"
+                                        ? `1 ${material ? consumptionUnit(material.unit) : "unidad"} / ${item.unitsPerConsumptionUnit} prendas`
+                                        : `${item.directQuantity ?? item.quantity} ${material ? consumptionUnit(material.unit) : "unidad"} / prenda`}
+                                    </TD>
+                                    <TD align="right" className="text-xs">{item.consumptionMode === "yield" ? "Rendimiento" : "Directo"}</TD>
                                     <TD align="right">{item.wastePercent}%</TD>
                                     <TD align="right">
+                                      <Button variant="ghost" size="sm" disabled={pending} onClick={() => {
+                                        if (isEditing) {
+                                          setEditingItemId(null);
+                                          setEditingRecipeId(null);
+                                        } else {
+                                          editItem(recipe.id, item);
+                                        }
+                                      }}>
+                                        {isEditing ? "Cancelar" : "Editar"}
+                                      </Button>
                                       <Button
                                         variant="ghost"
                                         size="sm"
@@ -263,31 +328,39 @@ export function RecetasEditor({
                           </Table>
                         )}
 
-                        <form onSubmit={(e) => addItem(e, recipe.id)} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end pt-2 border-t border-outline-variant">
-                          <div className="md:col-span-6">
-                            <Field label="Material">
+                        <form onSubmit={(e) => editingItemId && editingRecipeId === recipe.id ? updateItem(e, recipe.id) : addItem(e, recipe.id)} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end pt-2 border-t border-outline-variant">
+                          <div className="md:col-span-4">
+                            <Field label="Material" hint="La cantidad usa la unidad del material; kilo se normaliza a metro">
                               <Select value={form.materialId} onChange={(e) => setForm(recipe.id, { materialId: e.target.value })}>
                                 <option value="">Elegir material...</option>
                                 {materials.map((m) => (
-                                  <option key={m.id} value={m.id}>{m.name} · {m.unit}</option>
+                                  <option key={m.id} value={m.id}>{m.name} · {m.unit === "kilo" ? "kilo (consumo en metros)" : m.unit}</option>
                                 ))}
                               </Select>
                             </Field>
                           </div>
-                          <div className="md:col-span-2">
-                            <Field label="Cantidad">
-                              <Input
-                                type="number"
-                                step="0.001"
-                                min="0"
-                                required
-                                value={form.quantity}
-                                onChange={(e) => setForm(recipe.id, { quantity: e.target.value })}
-                                placeholder="0.92"
-                              />
+                          <div className="md:col-span-3">
+                            <Field label="Método">
+                              <Select value={form.consumptionMode} onChange={(e) => setForm(recipe.id, { consumptionMode: e.target.value as ConsumptionMode })}>
+                                <option value="direct">Directo: cantidad por prenda</option>
+                                <option value="yield">Rendimiento: prendas por unidad</option>
+                              </Select>
                             </Field>
                           </div>
                           <div className="md:col-span-2">
+                            <Field label={form.consumptionMode === "direct" ? `Cantidad por prenda${(() => { const sel = materialById.get(form.materialId); return sel ? ` (${sel.unit === "kilo" ? "metro" : sel.unit})` : ""; })()}` : "Prendas por unidad"}>
+                              <Input
+                                type="number"
+                                step="0.001"
+                                min="0.001"
+                                required
+                                value={form.consumptionMode === "direct" ? form.directQuantity : form.unitsPerConsumptionUnit}
+                                onChange={(e) => setForm(recipe.id, form.consumptionMode === "direct" ? { directQuantity: e.target.value } : { unitsPerConsumptionUnit: e.target.value })}
+                                placeholder={form.consumptionMode === "direct" ? "0.8" : "2"}
+                              />
+                            </Field>
+                          </div>
+                          <div className="md:col-span-1">
                             <Field label="Merma %">
                               <Input
                                 type="number"
@@ -302,7 +375,7 @@ export function RecetasEditor({
                           </div>
                           <div className="md:col-span-2">
                             <Button type="submit" size="sm" disabled={pending} className="w-full">
-                              <Plus className="w-3 h-3" /> Agregar
+                              <Plus className="w-3 h-3" /> {editingItemId && editingRecipeId === recipe.id ? "Guardar cambio" : "Agregar"}
                             </Button>
                           </div>
                         </form>

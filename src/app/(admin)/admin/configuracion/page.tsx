@@ -6,6 +6,7 @@ import { formatDateTime } from "@/lib/utils";
 import { Badge, Card, PageHeader } from "@/components/ui/Card";
 import { PricingRulesManager } from "./PricingRulesManager";
 import { WorkshopSettingsForm } from "./WorkshopSettingsForm";
+import { LinkButton } from "@/components/ui/Button";
 
 /**
  * F5-07 — /admin/configuracion: hub con todas las reglas.
@@ -32,6 +33,7 @@ export default async function ConfiguracionPage() {
       <PageHeader
         title="Configuración"
         subtitle={`${rules.length} reglas de precio · solo una puede estar activa`}
+        action={<LinkButton href="/admin/configuracion/catalogo" variant="secondary">Catálogo de clasificación</LinkButton>}
       />
 
       <div className="flex flex-col gap-6">

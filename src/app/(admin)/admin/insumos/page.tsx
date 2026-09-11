@@ -1,13 +1,19 @@
 import { db } from "@/db/client";
-import { materials } from "@/db/schema";
+import { materials, suppliers } from "@/db/schema";
 import { desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Plus } from "lucide-react";
 import { InsumosTable } from "./InsumosTable";
 
 export default async function InsumosPage() {
-  const rows = await db.select().from(materials).orderBy(desc(materials.createdAt)).limit(500);
+  const rows = await db
+    .select({ material: materials, supplierName: suppliers.name })
+    .from(materials)
+    .leftJoin(suppliers, eq(materials.supplierId, suppliers.id))
+    .orderBy(desc(materials.createdAt))
+    .limit(500);
 
   return (
     <>
@@ -25,7 +31,7 @@ export default async function InsumosPage() {
           </div>
         </Card>
       ) : (
-        <InsumosTable rows={rows} />
+        <InsumosTable rows={rows.map(({ material, supplierName }) => ({ ...material, supplierName }))} />
       )}
     </>
   );

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Input, Select } from "@/components/ui/Input";
 
 interface CatalogProduct {
   id: string;
@@ -24,7 +25,10 @@ export function Step2Form({ catalog }: { catalog: CatalogProduct[] }) {
 
   const [qty, setQty] = useState<Record<string, number>>({});
 
-  const total = product?.sizes.reduce((acc, s) => acc + (qty[s.id] || 0), 0) ?? 0;
+  const [directQuantity, setDirectQuantity] = useState(0);
+  const total = product?.sizes.length
+    ? product.sizes.reduce((acc, s) => acc + (qty[s.id] || 0), 0)
+    : directQuantity;
 
   function goNext(e: React.FormEvent) {
     e.preventDefault();
@@ -42,23 +46,24 @@ export function Step2Form({ catalog }: { catalog: CatalogProduct[] }) {
   }
 
   return (
-    <form onSubmit={goNext} className="mx-auto flex max-w-2xl flex-col gap-5">
+    <form onSubmit={goNext} className="mx-auto flex w-full max-w-2xl flex-col gap-5">
       <label className="flex flex-col gap-1">
         <span className="text-sm text-on-surface-variant">Producto</span>
-        <select
+        <Select
           value={productId}
           onChange={(e) => {
             setProductId(e.target.value);
             setQty({});
+            setDirectQuantity(0);
           }}
-          className="rounded-lg border border-outline-variant bg-surface-container px-3 py-2"
+          aria-label="Producto"
         >
           {catalog.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
 
       {product && (
@@ -68,21 +73,34 @@ export function Step2Form({ catalog }: { catalog: CatalogProduct[] }) {
             <p className="text-xs text-amber-400">Pedido mínimo: {product.minOrder} unidades</p>
           )}
 
-          <div className="rounded-2xl border border-outline-variant bg-surface-container p-5">
+          <div className="rounded-2xl border border-outline-variant bg-surface-container p-4 sm:p-5">
             <h3 className="mb-3 text-sm font-semibold">Cantidad por talle</h3>
             {product.sizes.length === 0 ? (
-              <p className="text-sm text-on-surface-variant">Este producto no tiene talles configurados.</p>
+              <label className="flex max-w-xs items-center justify-between gap-3 text-sm text-on-surface-variant">
+                <span>Cantidad</span>
+                <Input
+                  type="number"
+                  min={0}
+                  value={directQuantity}
+                  onChange={(e) => setDirectQuantity(Math.max(0, Number(e.target.value)))}
+                  aria-label="Cantidad"
+                  controlSize="sm"
+                  className="w-24 text-right"
+                />
+              </label>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {product.sizes.map((s) => (
                   <label key={s.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-container-high p-2">
                     <span className="text-sm">{s.label}</span>
-                    <input
+                    <Input
                       type="number"
                       min={0}
                       value={qty[s.id] ?? 0}
                       onChange={(e) => setQty((q) => ({ ...q, [s.id]: Math.max(0, Number(e.target.value)) }))}
-                      className="w-16 rounded border border-outline-variant bg-surface px-2 py-1 text-right"
+                      aria-label={`Cantidad talle ${s.label}`}
+                      controlSize="sm"
+                      className="w-16 text-right"
                     />
                   </label>
                 ))}

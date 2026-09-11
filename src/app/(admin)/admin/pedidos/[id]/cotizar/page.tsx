@@ -7,8 +7,8 @@ import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { formatCurrency, formatPercent } from "@/lib/utils";
-import { quoteOrder } from "@/lib/pricing";
-import { AlertTriangle, ArrowLeft, Settings } from "lucide-react";
+import { loadOrderLineSizeQuantities, quoteOrder } from "@/lib/pricing";
+import { ArrowLeft, Settings } from "lucide-react";
 import { ConfirmQuoteForm, ReQuoteForm } from "./QuoteActions";
 
 const CLOSED_STATUS = ["entregado", "cancelado"] as const;
@@ -95,20 +95,54 @@ export default async function CotizarPage({ params }: { params: Promise<{ id: st
     );
   }
 
+  const sizeQuantities = await loadOrderLineSizeQuantities(dbLines.map((line) => line.id));
+
   // Preview: quoteOrder() SIN writes — nada se persiste en esta página.
-  const quote = await quoteOrder({
-    lines: dbLines.map((l) => ({
-      productId: l.productId,
-      quantity: l.quantity,
-      sizeId: null,
-      techniqueId: l.techniqueId,
-    })),
-    urgent: order.urgent,
-  });
+  // F6 — quoteOrder() tira error de dominio (sin receta / sin rendimiento):
+  // se muestra como tarjeta de error con CTA en vez de romper la página.
+  let quote: Awaited<ReturnType<typeof quoteOrder>> | null = null;
+  let quoteError: string | null = null;
+  try {
+    quote = await quoteOrder({
+      lines: dbLines.map((l) => ({
+        orderLineId: l.id,
+        productId: l.productId,
+        quantity: l.quantity,
+        sizeQuantities: sizeQuantities.get(l.id),
+        techniqueId: l.techniqueId,
+      })),
+      urgent: order.urgent,
+    });
+  } catch (e) {
+    quoteError = e instanceof Error ? e.message : "No se pudo cotizar el pedido";
+  }
+
+  if (!quote) {
+    return (
+      <>
+        <PageHeader
+          title={
+            <span className="flex items-center gap-3">
+              <Link href={`/admin/pedidos/${order.id}`} className="text-on-surface-variant hover:text-primary">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+              Pedido #{order.number} — Cotizar
+            </span>
+          }
+          subtitle="Vista previa sin guardar"
+        />
+        <Card title="No se puede cotizar todavía">
+          <p className="text-sm text-on-surface-variant mb-4">{quoteError}</p>
+          <div className="flex gap-2">
+            <LinkButton href="/admin/recetas" variant="primary" size="sm">Ir a recetas (BOM)</LinkButton>
+            <LinkButton href="/admin/insumos" variant="secondary" size="sm">Revisar insumos</LinkButton>
+          </div>
+        </Card>
+      </>
+    );
+  }
 
   const closed = (CLOSED_STATUS as readonly string[]).includes(order.status);
-  const noRecipeCount = quote.lines.filter((l) => l.materials.length === 0).length;
-
   return (
     <>
       <PageHeader
@@ -171,21 +205,17 @@ export default async function CotizarPage({ params }: { params: Promise<{ id: st
           </THead>
           <tbody>
             {quote.lines.map((l, i) => {
-              // KI-05: pricing.ts advierte por consola cuando recipes.length===0
-              // (costo=0); aquí se refleja en UI como warning amarillo.
-              const withoutRecipe = l.materials.length === 0;
               const sku = dbLines[i]?.productSku;
+              const sizeSummary = l.sizeBreakdown
+                .filter((size) => size.sizeId)
+                .map((size) => `${size.sizeLabel ?? "Talle"}: ${size.quantity}`)
+                .join(" · ");
               return (
                 <TR key={`${l.productId}-${i}`}>
                   <TD>
                     <div className="text-on-surface">{l.productName}</div>
                     {sku && <div className="text-xs text-on-surface-variant data-mono">{sku}</div>}
-                    {withoutRecipe && (
-                      <p className="mt-1 inline-flex items-start gap-1 text-xs text-warning bg-warning/10 rounded px-2 py-1">
-                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                        Sin receta configurada — costo estimado en 0. Verificar BOM en /admin/recetas.
-                      </p>
-                    )}
+                    {sizeSummary && <div className="text-xs text-on-surface-variant">{sizeSummary}</div>}
                   </TD>
                   <TD align="center">{l.quantity}</TD>
                   <TD align="right">{formatCurrency(l.unitCost)}</TD>
@@ -211,12 +241,6 @@ export default async function CotizarPage({ params }: { params: Promise<{ id: st
             })}
           </tbody>
         </Table>
-        {noRecipeCount > 0 && (
-          <p className="mt-3 text-xs text-on-surface-variant">
-            {noRecipeCount} línea(s) sin receta: el costo puede estar subestimado. Confirmar igual guarda
-            unitPrice/unitCost recalculados en el servidor.
-          </p>
-        )}
       </Card>
 
       {!closed && (

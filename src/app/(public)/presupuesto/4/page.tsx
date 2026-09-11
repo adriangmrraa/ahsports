@@ -14,9 +14,9 @@ export default async function PresupuestoStep4({
 }) {
   const sp = await searchParams;
   return (
-    <div className="px-4 py-10">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <StepIndicator current={4} />
-      <h1 className="mb-2 mt-6 text-center text-2xl font-bold tracking-tight">Cargá tus archivos</h1>
+      <h1 className="mb-2 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Cargá tus archivos</h1>
       <p className="mb-6 text-center text-sm text-on-surface-variant">
         Escudos, sponsors, logos o planillas (opcional). Mínimo 0, podés seguir sin archivos.
       </p>

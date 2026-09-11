@@ -6,6 +6,8 @@ import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Plus } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { labelGarmentFamily, labelGarmentType } from "@/lib/garments";
+import { labelProductTaxonomy } from "@/lib/product-taxonomy";
 
 export default async function ProductosPage() {
   const rows = await db.select().from(products).orderBy(desc(products.createdAt)).limit(500);
@@ -33,6 +35,7 @@ export default async function ProductosPage() {
               <TH>SKU</TH>
               <TH>Nombre</TH>
               <TH>Categoría</TH>
+              <TH>Familia / tipo</TH>
               <TH align="right">Precio base</TH>
               <TH>Zonas</TH>
               <TH align="right">Acciones</TH>
@@ -43,7 +46,8 @@ export default async function ProductosPage() {
               <TR key={p.id}>
                 <TD className="text-primary">{p.sku}</TD>
                 <TD className="text-on-surface">{p.name}</TD>
-                <TD className="text-on-surface-variant">{p.category ?? "—"}</TD>
+                <TD className="text-xs text-on-surface-variant">{labelProductTaxonomy(p.productCategory)} · {labelProductTaxonomy(p.productSubcategory)}</TD>
+                <TD className="text-xs text-on-surface-variant">{labelProductTaxonomy(p.productType)}{p.productKind === "bundle" ? " · conjunto" : p.garmentFamily ? ` · ${labelGarmentFamily(p.garmentFamily)}${p.garmentType ? ` · ${labelGarmentType(p.garmentType)}` : ""}` : ""}</TD>
                 <TD align="right">{formatCurrency(p.basePrice)}</TD>
                 <TD className="text-xs text-on-surface-variant">
                   {Array.isArray(p.zones) ? (p.zones as string[]).join(", ") : "—"}

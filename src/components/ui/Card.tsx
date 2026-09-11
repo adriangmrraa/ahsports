@@ -2,15 +2,22 @@ import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
 type Tone = "primary" | "secondary" | "tertiary" | "error" | "success" | "warning" | "muted";
+type CardVariant = "default" | "subtle" | "flat";
 
 const tones: Record<Tone, string> = {
-  primary: "bg-primary/15 border-primary/40 text-primary",
+  primary: "bg-status-info/15 border-status-info/40 text-status-info",
   secondary: "bg-secondary/15 border-secondary/40 text-secondary",
   tertiary: "bg-tertiary/15 border-tertiary/40 text-tertiary",
-  error: "bg-error/15 border-error/40 text-error",
-  success: "bg-success/15 border-success/40 text-success",
-  warning: "bg-warning/15 border-warning/40 text-warning",
-  muted: "bg-surface-container-high border-outline-variant text-on-surface-variant",
+  error: "bg-status-danger/15 border-status-danger/40 text-status-danger",
+  success: "bg-status-success/15 border-status-success/40 text-status-success",
+  warning: "bg-status-warning/15 border-status-warning/40 text-status-warning",
+  muted: "bg-surface-container-high border-outline-variant text-content-secondary",
+};
+
+const cardVariants: Record<CardVariant, string> = {
+  default: "bg-surface-container-low border border-outline-variant",
+  subtle: "bg-surface-container border border-outline-variant",
+  flat: "bg-transparent",
 };
 
 export function Badge({ tone = "muted", children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
@@ -27,9 +34,9 @@ export function Badge({ tone = "muted", children, className }: { tone?: Tone; ch
   );
 }
 
-export function Card({ children, className, title, action }: { children: ReactNode; className?: string; title?: ReactNode; action?: ReactNode }) {
+export function Card({ children, className, title, action, variant = "default" }: { children: ReactNode; className?: string; title?: ReactNode; action?: ReactNode; variant?: CardVariant }) {
   return (
-    <div className={cn("glass-panel rounded-lg p-5", className)}>
+    <div className={cn("rounded-md p-5", cardVariants[variant], className)}>
       {(title || action) && (
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-outline-variant">
           {title && <h3 className="font-headline text-lg text-on-surface">{title}</h3>}
@@ -47,15 +54,17 @@ export function StatCard({
   delta,
   tone = "primary",
   icon,
+  variant = "default",
 }: {
   label: string;
   value: ReactNode;
   delta?: ReactNode;
   tone?: Tone;
   icon?: ReactNode;
+  variant?: CardVariant;
 }) {
   return (
-    <div className="glass-panel rounded-lg p-5 flex flex-col justify-between min-h-[140px]">
+    <div className={cn("rounded-md p-5 flex flex-col justify-between min-h-[140px]", cardVariants[variant])}>
       <div className="flex justify-between items-start">
         <span className="label-caps text-on-surface-variant">{label}</span>
         {icon && <span className={cn(tones[tone], "p-1.5 rounded")}>{icon}</span>}
@@ -82,7 +91,7 @@ export function PageHeader({ title, subtitle, action }: { title: ReactNode; subt
 
 export function EmptyState({ title, description, action }: { title: ReactNode; description?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="glass-panel rounded-lg p-10 text-center">
+    <div className="rounded-md border border-outline-variant bg-surface-container-low p-8 text-center">
       <p className="label-caps text-primary mb-2">{title}</p>
       {description && <p className="text-sm text-on-surface-variant max-w-md mx-auto mb-4">{description}</p>}
       {action}

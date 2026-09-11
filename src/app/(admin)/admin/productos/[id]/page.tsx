@@ -1,12 +1,16 @@
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
-import { products, sizes, bomRecipes, techniques } from "@/db/schema";
+import { garmentMolds, productBundleItems, productBundles, products, sizes, bomRecipes, techniques } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { formatCurrency } from "@/lib/utils";
 import { ProductoForm } from "../nuevo/ProductoForm";
+import { asc } from "drizzle-orm";
+import { labelGarmentFamily, labelGarmentType } from "@/lib/garments";
+import { labelProductTaxonomy } from "@/lib/product-taxonomy";
+import { getProductTaxonomy } from "@/lib/product-taxonomy-store";
 
 export default async function ProductoDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,18 +20,23 @@ export default async function ProductoDetallePage({ params }: { params: Promise<
   const productSizes = await db.select().from(sizes).where(eq(sizes.productId, id)).orderBy(sizes.order);
   const recipes = await db.select().from(bomRecipes).where(eq(bomRecipes.productId, id));
   const techs = await db.select().from(techniques);
+  const molds = await db.select().from(garmentMolds).where(eq(garmentMolds.active, true)).orderBy(asc(garmentMolds.name));
+  const componentProducts = await db.select({ id: products.id, sku: products.sku, name: products.name, productKind: products.productKind }).from(products).where(eq(products.active, true)).orderBy(asc(products.name));
+  const taxonomy = await getProductTaxonomy();
+  const [bundle] = await db.select({ id: productBundles.id }).from(productBundles).where(eq(productBundles.productId, id)).limit(1);
+  const bundleItems = bundle ? await db.select().from(productBundleItems).where(eq(productBundleItems.bundleId, bundle.id)) : [];
 
   return (
     <>
       <PageHeader
         title={product.name}
-        subtitle={`${product.sku} · ${product.category ?? "Sin categoría"}`}
+        subtitle={`${product.sku} · ${labelProductTaxonomy(product.productCategory)} · ${labelProductTaxonomy(product.productSubcategory)} · ${labelProductTaxonomy(product.productType)}${product.productKind === "bundle" ? " · Conjunto" : product.garmentFamily ? ` · ${labelGarmentFamily(product.garmentFamily)}${product.garmentType ? ` · ${labelGarmentType(product.garmentType)}` : ""}` : ""}`}
         action={<LinkButton href={`/admin/productos/${id}/talles`} variant="secondary">Configurar talles</LinkButton>}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <Card title="Datos del producto">
-          <ProductoForm initial={{ ...product, zones: product.zones as string[] }} />
+          <ProductoForm initial={{ ...product, zones: product.zones as string[], bundleItems: bundleItems.map((item) => ({ componentProductId: item.componentProductId, quantity: item.quantity, sizeMode: item.sizeMode, componentSizeId: item.componentSizeId })) }} molds={molds} componentProducts={componentProducts} taxonomy={taxonomy} />
         </Card>
 
         <Card title="Zonas válidas">
@@ -42,6 +51,21 @@ export default async function ProductoDetallePage({ params }: { params: Promise<
           </div>
         </Card>
       </div>
+
+      {product.productKind === "bundle" && (
+        <Card title="Componentes del conjunto" className="mb-6">
+          {bundleItems.length === 0 ? (
+            <p className="text-sm text-on-surface-variant">Sin componentes configurados.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {bundleItems.map((item) => {
+                const component = componentProducts.find((candidate) => candidate.id === item.componentProductId);
+                return <li key={item.id} className="flex justify-between gap-3 border-b border-outline-variant/50 pb-2 last:border-0"><span>{component?.name ?? "Producto eliminado"}</span><span className="data-mono text-on-surface-variant">× {item.quantity} · {item.sizeMode === "same_label" ? "mismo talle" : "talle fijo"}</span></li>;
+              })}
+            </ul>
+          )}
+        </Card>
+      )}
 
       <Card title="Talles" className="mb-6" action={<LinkButton href={`/admin/productos/${id}/talles`} variant="ghost" size="sm">Editar →</LinkButton>}>
         {productSizes.length === 0 ? (

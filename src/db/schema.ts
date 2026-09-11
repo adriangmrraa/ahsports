@@ -60,6 +60,12 @@ export const applicationView = pgEnum("application_view", ["frente", "espalda", 
 export const organizationKind = pgEnum("organization_kind", ["club", "empresa", "colegio", "institucion", "particular"]);
 export const leadStatus = pgEnum("lead_status", ["nuevo", "contactado", "calificado", "convertido", "perdido"]);
 export const materialUnit = pgEnum("material_unit", ["metro", "kilo", "unidad", "centimetro", "mililitro", "metro_cuadrado", "rollo"]);
+export const bomConsumptionMode = pgEnum("bom_consumption_mode", ["direct", "yield"]);
+export const garmentFamily = pgEnum("garment_family", ["parte_superior", "campera", "pantalon", "short_futbol", "bermuda", "accesorio"]);
+export const garmentType = pgEnum("garment_type", ["remera", "chomba", "camiseta", "campera", "pantalon", "short", "bermuda", "conjunto", "accesorio"]);
+export const productKind = pgEnum("product_kind", ["garment", "bundle"]);
+export const bundleSizeMode = pgEnum("bundle_size_mode", ["same_label", "fixed"]);
+export const productTaxonomyNodeKind = pgEnum("product_taxonomy_node_kind", ["category", "subcategory", "type"]);
 
 export const users = pgTable("users", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
@@ -99,6 +105,23 @@ export const contacts = pgTable("contacts", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const suppliers = pgTable("suppliers", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 64 }),
+  email: varchar("email", { length: 255 }),
+  address: varchar("address", { length: 255 }),
+  contactName: varchar("contact_name", { length: 255 }),
+  taxId: varchar("tax_id", { length: 64 }),
+  notes: text("notes"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  normalizedNameUnique: uniqueIndex("suppliers_name_unique_idx")
+    .on(sql`lower(btrim(${t.name}))`)
+    .where(sql`btrim(${t.name}) <> ''`),
+}));
+
 export const materials = pgTable("materials", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
@@ -106,6 +129,7 @@ export const materials = pgTable("materials", {
   unit: materialUnit("unit").notNull(),
   unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull().default("0"),
   supplier: varchar("supplier", { length: 255 }),
+  supplierId: varchar("supplier_id", { length: 36 }).references(() => suppliers.id, { onDelete: "set null" }),
   color: varchar("color", { length: 64 }),
   width: numeric("width", { precision: 8, scale: 2 }),
   gramsPerMeter: numeric("grams_per_meter", { precision: 8, scale: 2 }),
@@ -126,18 +150,55 @@ export const techniques = pgTable("techniques", {
   active: boolean("active").notNull().default(true),
 });
 
+export type GarmentMeasurementSchema = { required: string[]; optional: string[] };
+
+export const garmentMolds = pgTable("garment_molds", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 128 }).notNull(),
+  family: garmentFamily("family").notNull(),
+  measurementSchema: jsonb("measurement_schema").$type<GarmentMeasurementSchema>().notNull().default(sql`'{"required":[],"optional":[]}'::jsonb`),
+  notes: text("notes"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const products = pgTable("products", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   sku: varchar("sku", { length: 64 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   category: varchar("category", { length: 128 }),
+  productKind: productKind("product_kind").notNull().default("garment"),
+  productCategory: varchar("product_category", { length: 128 }).notNull().default("indumentaria"),
+  productSubcategory: varchar("product_subcategory", { length: 128 }).notNull().default("prendas"),
+  productType: varchar("product_type", { length: 128 }).notNull().default("otro"),
+  garmentFamily: garmentFamily("garment_family"),
+  garmentType: garmentType("garment_type"),
+  moldId: varchar("mold_id", { length: 36 }).references(() => garmentMolds.id, { onDelete: "set null" }),
   basePrice: numeric("base_price", { precision: 12, scale: 2 }).notNull().default("0"),
   minOrder: integer("min_order").notNull().default(1),
   zones: jsonb("zones").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Editable catalog for the general product classification used by admin forms. */
+export const productTaxonomyNodes = pgTable("product_taxonomy_nodes", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  kind: productTaxonomyNodeKind("kind").notNull(),
+  value: varchar("value", { length: 128 }).notNull(),
+  label: varchar("label", { length: 255 }).notNull(),
+  // The self-referencing FK is declared in SQL migration; keeping this column
+  // plain here avoids Drizzle's recursive table initializer type cycle.
+  parentId: varchar("parent_id", { length: 36 }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  parentIdx: index("product_taxonomy_nodes_parent_idx").on(t.parentId),
+  lookupIdx: index("product_taxonomy_nodes_lookup_idx").on(t.kind, t.parentId, t.value),
+  uniqueValue: uniqueIndex("product_taxonomy_nodes_unique_value_idx").on(t.kind, sql`coalesce(${t.parentId}, '')`, t.value),
+}));
 
 export const sizes = pgTable("sizes", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
@@ -147,12 +208,32 @@ export const sizes = pgTable("sizes", {
   measurements: jsonb("measurements").$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
 });
 
+export const productBundles = pgTable("product_bundles", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id", { length: 36 }).notNull().unique().references(() => products.id, { onDelete: "cascade" }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const productBundleItems = pgTable("product_bundle_items", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  bundleId: varchar("bundle_id", { length: 36 }).notNull().references(() => productBundles.id, { onDelete: "cascade" }),
+  componentProductId: varchar("component_product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "restrict" }),
+  quantity: numeric("quantity", { precision: 8, scale: 2 }).notNull().default("1"),
+  sizeMode: bundleSizeMode("size_mode").notNull().default("same_label"),
+  componentSizeId: varchar("component_size_id", { length: 36 }).references(() => sizes.id, { onDelete: "restrict" }),
+}, (t) => ({
+  bundleIdx: index("product_bundle_items_bundle_idx").on(t.bundleId),
+}));
+
 export const bomRecipes = pgTable(
   "bom_recipes",
   {
     id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
     productId: varchar("product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "cascade" }),
-    sizeId: varchar("size_id", { length: 36 }).references(() => sizes.id, { onDelete: "cascade" }),
+    // A size can be removed only after its recipes/references are explicitly
+    // removed. The API preserves IDs on edit and rejects referenced deletes.
+    sizeId: varchar("size_id", { length: 36 }).references(() => sizes.id, { onDelete: "restrict" }),
     techniqueId: varchar("technique_id", { length: 36 }).references(() => techniques.id, { onDelete: "set null" }),
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -168,7 +249,11 @@ export const bomItems = pgTable(
     id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
     recipeId: varchar("recipe_id", { length: 36 }).notNull().references(() => bomRecipes.id, { onDelete: "cascade" }),
     materialId: varchar("material_id", { length: 36 }).notNull().references(() => materials.id),
+    consumptionMode: bomConsumptionMode("consumption_mode").notNull().default("direct"),
+    /** Legacy quantity is kept as the calculated base quantity for compatibility. */
     quantity: numeric("quantity", { precision: 12, scale: 4 }).notNull(),
+    directQuantity: numeric("direct_quantity", { precision: 12, scale: 4 }),
+    unitsPerConsumptionUnit: numeric("units_per_consumption_unit", { precision: 12, scale: 4 }),
     wastePercent: numeric("waste_percent", { precision: 5, scale: 2 }).notNull().default("0"),
   },
   (t) => ({
@@ -215,8 +300,26 @@ export const orders = pgTable(
   }),
 );
 
+export type MaterialConsumptionSnapshot = {
+  itemId?: string;
+  sourceProductId?: string;
+  sourceProductName?: string;
+  materialId?: string;
+  name: string;
+  unit: string;
+  sizeId: string | null;
+  sizeLabel: string | null;
+  consumptionMode: "direct" | "yield";
+  directQuantity: number | null;
+  unitsPerConsumptionUnit: number | null;
+  baseQuantityPerUnit: number;
+  calculatedQuantityPerUnit: number;
+  totalQuantity: number;
+  wastePercent: number;
+};
+
 export type PricingSnapshot = {
-  rule: { id: string; name: string; marginPercent: number; urgentSurcharge: number; minAdvancePercent: number };
+  rule: { id: string; name: string; marginPercent: number; urgentSurcharge: number; minAdvancePercent: number; rounding: number };
   lines: Array<{
     orderLineId?: string;
     productId: string;
@@ -225,7 +328,27 @@ export type PricingSnapshot = {
     unitCost: number;
     unitPrice: number;
     subtotal: number;
-    materials: Array<{ name: string; totalQuantity: number; unit: string }>;
+    materials: Array<{ materialId?: string; name: string; totalQuantity: number; unit: string }>;
+    bundleComponents?: Array<{ productId: string; productName: string; quantity: number }>;
+    techniques?: Array<{
+      id: string;
+      name: string;
+      costPerUnit: number;
+      costPerSquareMeter: number;
+      setupCost: number;
+      setupCostApplied: boolean;
+      areaM2: number | null;
+    }>;
+    sizeBreakdown?: Array<{
+      sizeId: string | null;
+      sizeLabel: string | null;
+      quantity: number;
+      unitCost: number;
+      unitPrice: number;
+      subtotal: number;
+      materials: Array<{ materialId?: string; name: string; totalQuantity: number; unit: string }>;
+      consumption?: MaterialConsumptionSnapshot[];
+    }>;
   }>;
   totals: { cost: number; price: number; margin: number; marginPercent: number };
   generatedAt: string;
@@ -415,6 +538,18 @@ export const contactsRelations = relations(contacts, ({ one }) => ({
   organization: one(organizations, { fields: [contacts.organizationId], references: [organizations.id] }),
 }));
 
+export const suppliersRelations = relations(suppliers, ({ many }) => ({
+  materials: many(materials),
+}));
+
+export const materialsRelations = relations(materials, ({ one }) => ({
+  supplierRef: one(suppliers, { fields: [materials.supplierId], references: [suppliers.id] }),
+}));
+
+export const garmentMoldsRelations = relations(garmentMolds, ({ many }) => ({
+  products: many(products),
+}));
+
 export const ordersRelations = relations(orders, ({ one, many }) => ({
   organization: one(organizations, { fields: [orders.organizationId], references: [organizations.id] }),
   contact: one(contacts, { fields: [orders.contactId], references: [contacts.id] }),
@@ -431,10 +566,24 @@ export const orderLinesRelations = relations(orderLines, ({ one, many }) => ({
   items: many(orderItems),
 }));
 
-export const productsRelations = relations(products, ({ many }) => ({
+export const productsRelations = relations(products, ({ one, many }) => ({
+  mold: one(garmentMolds, { fields: [products.moldId], references: [garmentMolds.id] }),
   sizes: many(sizes),
   recipes: many(bomRecipes),
   lines: many(orderLines),
+  bundle: one(productBundles, { fields: [products.id], references: [productBundles.productId] }),
+  bundleItems: many(productBundleItems),
+}));
+
+export const productBundlesRelations = relations(productBundles, ({ one, many }) => ({
+  product: one(products, { fields: [productBundles.productId], references: [products.id] }),
+  items: many(productBundleItems),
+}));
+
+export const productBundleItemsRelations = relations(productBundleItems, ({ one }) => ({
+  bundle: one(productBundles, { fields: [productBundleItems.bundleId], references: [productBundles.id] }),
+  componentProduct: one(products, { fields: [productBundleItems.componentProductId], references: [products.id] }),
+  componentSize: one(sizes, { fields: [productBundleItems.componentSizeId], references: [sizes.id] }),
 }));
 
 export const bomRecipesRelations = relations(bomRecipes, ({ one, many }) => ({

@@ -15,6 +15,48 @@
       "when": 1725480000001,
       "tag": "0002_payment_cancellation_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786396800000,
+      "tag": "0003_suppliers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786396800001,
+      "tag": "0004_f6_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786396800002,
+      "tag": "0005_bom_consumption",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786396800003,
+      "tag": "0006_garment_families_bundles",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786396800004,
+      "tag": "0007_product_taxonomy",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786396800005,
+      "tag": "0008_product_taxonomy_catalog",
+      "breakpoints": true
     }
   ]
 }

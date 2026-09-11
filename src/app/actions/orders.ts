@@ -7,7 +7,7 @@ import { orderItems, orderLines, orders, payments, pricingRules, products, sizes
 import type { SnapshotHistoryEntry } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { generatePublicToken } from "@/lib/utils";
-import { quoteOrder } from "@/lib/pricing";
+import { loadOrderLineSizeQuantities, quoteOrder } from "@/lib/pricing";
 import { confirmQuoteSchema, createOrderLineSchema, orderSchema, reQuoteOrderSchema } from "@/lib/validators";
 import { eq } from "drizzle-orm";
 
@@ -116,7 +116,17 @@ type QuoteActionError = { ok: false; error: string; issues?: unknown };
 
 async function loadQuotableLines(orderId: string) {
   const lines = await db.select().from(orderLines).where(eq(orderLines.orderId, orderId));
-  return lines;
+  const sizeQuantities = await loadOrderLineSizeQuantities(lines.map((line) => line.id));
+  return lines.map((line) => ({
+    line,
+    quoteInput: {
+      orderLineId: line.id,
+      productId: line.productId,
+      quantity: line.quantity,
+      techniqueId: line.techniqueId,
+      sizeQuantities: sizeQuantities.get(line.id),
+    },
+  }));
 }
 
 /**
@@ -136,37 +146,34 @@ export async function confirmQuote(input: unknown): Promise<{ ok: true; status: 
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order) return { ok: false as const, error: "Pedido no encontrado" };
 
-  const dbLines = await loadQuotableLines(orderId);
-  if (dbLines.length === 0) {
+  const quotableLines = await loadQuotableLines(orderId);
+  if (quotableLines.length === 0) {
     return { ok: false as const, error: "El pedido no tiene líneas para cotizar" };
   }
 
   let quote;
   try {
     quote = await quoteOrder({
-      lines: dbLines.map((l) => ({
-        productId: l.productId,
-        quantity: l.quantity,
-        sizeId: null,
-        techniqueId: l.techniqueId,
-      })),
+      lines: quotableLines.map(({ quoteInput }) => quoteInput),
       urgent: order.urgent,
       pricingRuleId: pricingRuleId ?? undefined,
     });
-  } catch {
-    return { ok: false as const, error: "No hay regla de pricing activa. Configurala en /admin/configuracion." };
+  } catch (e) {
+    // F6 — quoteOrder() tira errores de dominio (sin receta, sin rendimiento,
+    // sin regla): se muestran tal cual en vez del genérico de regla.
+    return { ok: false as const, error: e instanceof Error ? e.message : "No se pudo cotizar el pedido" };
   }
 
   // 1. Actualiza líneas con costo/precio recalculados (mismo orden del input;
   // FK garantiza que ningún producto falta, el índice se mantiene alineado).
   // Neon HTTP: sin tx — secuencial con comentario.
-  for (let i = 0; i < dbLines.length; i++) {
+  for (let i = 0; i < quotableLines.length; i++) {
     const ql = quote.lines[i];
     if (!ql) continue;
     await db
       .update(orderLines)
       .set({ unitPrice: String(ql.unitPrice), unitCost: String(ql.unitCost) })
-      .where(eq(orderLines.id, dbLines[i].id));
+      .where(eq(orderLines.id, quotableLines[i].line.id));
   }
 
   // 2. Append del snapshot previo al historial (solo si existe).
@@ -234,8 +241,8 @@ export async function reQuoteOrder(input: unknown): Promise<{ ok: true } | Quote
     return { ok: false as const, error: `No se puede re-cotizar un pedido ${order.status}` };
   }
 
-  const dbLines = await loadQuotableLines(orderId);
-  if (dbLines.length === 0) {
+  const quotableLines = await loadQuotableLines(orderId);
+  if (quotableLines.length === 0) {
     return { ok: false as const, error: "El pedido no tiene líneas para cotizar" };
   }
 
@@ -253,27 +260,22 @@ export async function reQuoteOrder(input: unknown): Promise<{ ok: true } | Quote
   let quote;
   try {
     quote = await quoteOrder({
-      lines: dbLines.map((l) => ({
-        productId: l.productId,
-        quantity: l.quantity,
-        sizeId: null,
-        techniqueId: l.techniqueId,
-      })),
+      lines: quotableLines.map(({ quoteInput }) => quoteInput),
       urgent,
       pricingRuleId: ruleId,
     });
-  } catch {
-    return { ok: false as const, error: "No hay regla de pricing activa. Configurala en /admin/configuracion." };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "No se pudo re-cotizar el pedido" };
   }
 
   // Neon HTTP: sin tx — secuencial: líneas → pedido (status intacto).
-  for (let i = 0; i < dbLines.length; i++) {
+  for (let i = 0; i < quotableLines.length; i++) {
     const ql = quote.lines[i];
     if (!ql) continue;
     await db
       .update(orderLines)
       .set({ unitPrice: String(ql.unitPrice), unitCost: String(ql.unitCost) })
-      .where(eq(orderLines.id, dbLines[i].id));
+      .where(eq(orderLines.id, quotableLines[i].line.id));
   }
 
   const history = [...(order.snapshotHistory ?? [])];

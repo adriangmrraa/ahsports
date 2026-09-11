@@ -77,9 +77,11 @@ Implementado en `src/lib/pricing.ts`.
 ```ts
 {
   lines: Array<{
+    orderLineId?: string; // server-side order line, required for m² techniques
     productId: string;
     quantity: number;
-    sizeId?: string | null;
+    sizeQuantities?: Array<{ sizeId: string | null; quantity: number }>; // derived from order_items
+    sizeId?: string | null; // legacy/internal one-size caller
     techniqueId?: string | null;
     overrideUnitPrice?: number | null;  // admin puede override manual
   }>;
@@ -92,19 +94,22 @@ Implementado en `src/lib/pricing.ts`.
 
 1. Buscar producto (404 si no existe).
 2. Si `techniqueId`, buscar técnica (404 si no existe).
-3. Buscar receta más específica:
+3. Para cada talle/cantidad persistido en `order_items`, buscar receta más específica:
    - `(sizeId + techniqueId)` exacto → si no
    - `(sizeId)` solo → si no
    - `(techniqueId)` solo → si no
    - general (sin size ni technique)
 4. Para cada `bomItems` de la receta:
    ```
-   qtyWithWaste = bomItem.quantity * (1 + bomItem.wastePercent/100)
-   cost += qtyWithWaste * material.unitPrice
-   ```
-5. Sumar `technique.costPerUnit + technique.setupCost`.
-6. `unitPrice = (override ?? product.basePrice) * (1 + urgent ? urgentSurcharge/100 : 0)`
-7. `subtotal = unitPrice * quantity`
+   direct: base = bomItem.directQuantity (legado: quantity)
+   yield:  base = 1 / bomItem.unitsPerConsumptionUnit
+   qtyWithWaste = base * (1 + bomItem.wastePercent/100)
+   cost += qtyWithWaste * (material.unitPrice / metersPerKilo si unit=kilo)
+ ```
+5. Sumar `technique.costPerUnit` por prenda. Sumar `setupCost` una sola vez por técnica y línea/lote.
+6. Sumar `costPerSquareMeter × area` solo desde `applications` de la línea con esa técnica y ancho/alto. Si faltan medidas, bloquear la cotización con error accionable.
+7. `unitPrice = costo × (1 + margen) × (1 + recargo urgente)`, redondeado por `pricing_rules.rounding`; `overrideUnitPrice` es la única excepción manual explícita.
+8. `subtotal = unitPrice × quantity` por talle; la línea y el snapshot conservan `sizeBreakdown`.
 
 ### Totales
 ```
@@ -118,14 +123,16 @@ marginPercent = margin / price * 100
 
 ```ts
 {
-  rule: { name, marginPercent, urgentSurcharge, minAdvancePercent },
-  lines: [{ productName, quantity, unitCost, unitPrice, subtotal, materials: [...] }],
+  rule: { name, marginPercent, urgentSurcharge, minAdvancePercent, rounding },
+  lines: [{ productName, quantity, unitCost, unitPrice, subtotal, materials: [...], techniques: [...], sizeBreakdown: [...] }],
   totals: { cost, price, margin, marginPercent },
   generatedAt: ISO string,
 }
 ```
 
 El snapshot se guarda en `orders.snapshot jsonb` inmutable. Re-cotizar genera un nuevo snapshot (no pisa).
+
+Cada entrada `sizeBreakdown` conserva además `consumption` con material, talle, método (`direct`/`yield`), cantidad base, rendimiento, merma y cantidad calculada total. Para materiales comprados por kilo, la unidad de consumo normalizada es metro y requiere `metersPerKilo > 0`.
 
 ## 7. Reglas de bloqueo por seña
 
@@ -176,3 +183,10 @@ piso(metros útiles ÷ consumo unitario con merma)
 2. **Cambio de precio NO afecta pedidos viejos.** Por eso el snapshot.
 3. **Toda mutación sensible (precios, reglas, borrados) queda en `productionEvents` o audit log futuro.**
 4. **El operario NO ve costos ni márgenes**, solo planilla, aplicaciones y materiales a consumir.
+5. **Editar talles no recrea filas existentes.** Se conservan sus IDs para no romper recetas ni referencias de prendas; borrar un talle referenciado se rechaza y requiere una acción explícita previa.
+6. **Proveedor único por nombre normalizado.** `suppliers` aplica unicidad case-insensitive ignorando espacios extremos; la migración 0004 fusiona referencias duplicadas antes de crear el índice.
+7. **Medidas vs. consumo.** `sizes.measurements` describe medidas terminadas numéricas en centímetros y no se usa para inventar un corte. El consumo se carga explícitamente en cada `bomItem` de la receta del talle; si se pretende derivarlo geométricamente sin datos suficientes, el sistema debe bloquear la cotización y pedir esos datos.
+8. **Familia y molde.** Remera, chomba y camiseta son productos independientes que pueden apuntar al mismo `garment_molds`; sus talles se guardan por producto y sus recetas/BOM nunca se comparten implícitamente. Campera, pantalón, short de fútbol y bermuda usan familias propias.
+9. **Conjuntos.** Un `bundle` se compone de productos individuales mediante `product_bundle_items`, con cantidad y estrategia de talle `same_label` o `fixed`. Al cotizar, se resuelve el talle equivalente de cada componente, se suman sus costos/consumos y se aplica el margen al conjunto. No se infiere una receta única ni se permiten componentes bundle anidados.
+10. **Taxonomía general.** Todo producto tiene categoría, subcategoría y tipo general. El vocabulario inicial contempla indumentaria/prendas, mercería, bolsos, mochilas infantiles, manteles de jardín, guardapolvos de jardín y otros; los valores son extensibles y no dependen del molde.
+11. **Artículos sin molde o talle.** Un artículo no textil puede omitir familia, tipo de prenda y molde. Puede tener una receta BOM general (`size_id = null`) y pedirse/cotizarse por cantidad directa, sin inventar talles ni medidas.

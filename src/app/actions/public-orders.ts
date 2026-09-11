@@ -80,9 +80,11 @@ export async function createPublicOrder(input: unknown): Promise<
         .from(products).where(and(eq(products.id, data.productId), eq(products.active, true))).limit(1);
       if (!product) throw new PublicOrderDomainError("El producto seleccionado ya no está disponible");
 
-      const requestedSizeIds = data.sizeQuantities.map((entry) => entry.sizeId);
-      const productSizes = await tx.select({ id: sizes.id }).from(sizes)
-        .where(and(eq(sizes.productId, product.id), inArray(sizes.id, requestedSizeIds)));
+      const requestedSizeIds = data.sizeQuantities.flatMap((entry) => entry.sizeId ? [entry.sizeId] : []);
+      const productSizes = requestedSizeIds.length > 0
+        ? await tx.select({ id: sizes.id }).from(sizes)
+          .where(and(eq(sizes.productId, product.id), inArray(sizes.id, requestedSizeIds)))
+        : [];
       if (productSizes.length !== requestedSizeIds.length) {
         throw new PublicOrderDomainError("Uno o más talles no corresponden al producto seleccionado");
       }
@@ -92,7 +94,7 @@ export async function createPublicOrder(input: unknown): Promise<
       if (expectedItems !== data.items.length) {
         throw new PublicOrderDomainError("Las cantidades por talle no coinciden con las prendas personalizadas");
       }
-      const itemCounts = new Map<string, number>();
+      const itemCounts = new Map<string | null, number>();
       for (const item of data.items) itemCounts.set(item.sizeId, (itemCounts.get(item.sizeId) ?? 0) + 1);
       for (const entry of data.sizeQuantities) {
         if (itemCounts.get(entry.sizeId) !== entry.quantity) {

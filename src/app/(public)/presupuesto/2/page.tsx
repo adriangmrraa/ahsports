@@ -12,7 +12,8 @@ export const metadata = { title: "Presupuesto · Paso 2 · AH Sports" };
  */
 export default async function PresupuestoStep2() {
   const [productRows, sizeRows] = await Promise.all([
-    db.select().from(products).where(eq(products.active, true)).orderBy(products.name),
+    // Keep the public catalog compatible while the additive product-classification migration is pending.
+    db.select({ id: products.id, name: products.name, description: products.description, basePrice: products.basePrice, minOrder: products.minOrder }).from(products).where(eq(products.active, true)).orderBy(products.name),
     db
       .select({ id: sizes.id, productId: sizes.productId, label: sizes.label, order: sizes.order })
       .from(sizes)
@@ -36,9 +37,9 @@ export default async function PresupuestoStep2() {
   }));
 
   return (
-    <div className="px-4 py-10">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <StepIndicator current={2} />
-      <h1 className="mb-6 mt-6 text-center text-2xl font-bold tracking-tight">Elegí el producto y los talles</h1>
+      <h1 className="mb-6 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Elegí el producto y los talles</h1>
       <Step2Form catalog={catalog} />
     </div>
   );

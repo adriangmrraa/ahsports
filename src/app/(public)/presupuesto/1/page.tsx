@@ -28,9 +28,9 @@ export default async function PresupuestoStep1({
   }
 
   return (
-    <div className="px-4 py-10">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <StepIndicator current={1} />
-      <h1 className="mb-6 mt-6 text-center text-2xl font-bold tracking-tight">Pedí tu presupuesto</h1>
+      <h1 className="mb-6 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Pedí tu presupuesto</h1>
       <Step1Form existing={existing} />
     </div>
   );

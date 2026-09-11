@@ -11,6 +11,7 @@ import {
   pricingRules,
   products,
   sizes,
+  suppliers,
   techniques,
   users,
 } from "./schema";
@@ -37,7 +38,7 @@ const adminPassword = getAdminPassword();
 
 async function main() {
   // 1. Limpiar todo (orden cubierto por CASCADE)
-  await db.execute(sql`TRUNCATE TABLE production_events, payments, applications, attachments, order_items, order_lines, orders, bom_items, bom_recipes, sizes, products, pricing_rules, techniques, materials, contacts, organizations, sessions, users RESTART IDENTITY CASCADE`);
+  await db.execute(sql`TRUNCATE TABLE production_events, payments, applications, attachments, order_items, order_lines, orders, bom_items, bom_recipes, sizes, products, pricing_rules, techniques, materials, suppliers, contacts, organizations, sessions, users RESTART IDENTITY CASCADE`);
 
   // 2. Admin
   await db.insert(users).values({
@@ -62,16 +63,27 @@ async function main() {
     status: "calificado",
   });
 
+  // 2b. Proveedores (F6) — entidad con contacto para futura automatización.
+  const [textilSA, hilosNorte, subliMax, dtfPro] = await db
+    .insert(suppliers)
+    .values([
+      { name: "Textil SA", phone: "+5493704000001", email: "ventas@textilsa.com", address: "Formosa", contactName: "Ventas Textil SA" },
+      { name: "Hilos del Norte", phone: "+5493704000002", email: "ventas@hilosdelnorte.com", address: "Formosa", contactName: "Ventas Hilos del Norte" },
+      { name: "SubliMax", phone: "+5493704000003", email: "ventas@sublimax.com", address: "Formosa", contactName: "Ventas SubliMax" },
+      { name: "DTF Pro", phone: "+5493704000004", email: "ventas@dtfpro.com", address: "Formosa", contactName: "Ventas DTF Pro" },
+    ])
+    .returning();
+
   // 4. 6 materiales (F2-20 pedía 5; se agrega tinta porque el BOM la referencia)
   const [telaSet, _interlock, hilo, papel, tinta, _dtf] = await db
     .insert(materials)
     .values([
-      { name: "Set poliéster azul", category: "Tela", unit: "metro", unitPrice: "4500", supplier: "Textil SA", gramsPerMeter: "150", metersPerKilo: "6.5", yieldPercent: "92" },
-      { name: "Interlock blanco", category: "Tela", unit: "metro", unitPrice: "3800", supplier: "Textil SA", gramsPerMeter: "180", yieldPercent: "90" },
-      { name: "Hilo polyester", category: "Insumo", unit: "metro", unitPrice: "12", supplier: "Hilos del Norte", yieldPercent: "100" },
-      { name: "Papel sublimación A4", category: "Insumo", unit: "unidad", unitPrice: "85", supplier: "SubliMax", yieldPercent: "95" },
-      { name: "Tinta sublimación", category: "Insumo", unit: "mililitro", unitPrice: "95", supplier: "SubliMax", yieldPercent: "95" },
-      { name: "Film DTF", category: "Insumo", unit: "metro_cuadrado", unitPrice: "8500", supplier: "DTF Pro", yieldPercent: "90" },
+      { name: "Set poliéster azul", category: "Tela", unit: "metro", unitPrice: "4500", supplier: "Textil SA", supplierId: textilSA.id, gramsPerMeter: "150", metersPerKilo: "6.5", yieldPercent: "92" },
+      { name: "Interlock blanco", category: "Tela", unit: "metro", unitPrice: "3800", supplier: "Textil SA", supplierId: textilSA.id, gramsPerMeter: "180", yieldPercent: "90" },
+      { name: "Hilo polyester", category: "Insumo", unit: "metro", unitPrice: "12", supplier: "Hilos del Norte", supplierId: hilosNorte.id, yieldPercent: "100" },
+      { name: "Papel sublimación A4", category: "Insumo", unit: "unidad", unitPrice: "85", supplier: "SubliMax", supplierId: subliMax.id, yieldPercent: "95" },
+      { name: "Tinta sublimación", category: "Insumo", unit: "mililitro", unitPrice: "95", supplier: "SubliMax", supplierId: subliMax.id, yieldPercent: "95" },
+      { name: "Film DTF", category: "Insumo", unit: "metro_cuadrado", unitPrice: "8500", supplier: "DTF Pro", supplierId: dtfPro.id, yieldPercent: "90" },
     ])
     .returning();
 
@@ -101,10 +113,10 @@ async function main() {
   const [camiseta, short] = await db
     .insert(products)
     .values([
-      { sku: "CAM-SUB-001", name: "Camiseta deportiva manga corta", category: "Camisetas", basePrice: "8500", minOrder: 10, zones: ["Pecho izquierdo", "Pecho central", "Espalda alta", "Espalda baja", "Manga izquierda", "Manga derecha"] },
-      { sku: "SHO-DEP-001", name: "Short deportivo", category: "Shorts", basePrice: "6500", minOrder: 10, zones: ["Pierna izquierda", "Pierna derecha", "Espalda baja"] },
-      { sku: "MUS-DEP-001", name: "Musculosa training", category: "Musculosas", basePrice: "7200", minOrder: 10, zones: ["Pecho central", "Espalda alta"] },
-      { sku: "BOT-001", name: "Botinera", category: "Accesorios", basePrice: "4500", minOrder: 1, zones: ["Frente completo"] },
+      { sku: "CAM-SUB-001", name: "Camiseta deportiva manga corta", category: "Camisetas", productKind: "garment", garmentFamily: "parte_superior", garmentType: "camiseta", basePrice: "8500", minOrder: 10, zones: ["Pecho izquierdo", "Pecho central", "Espalda alta", "Espalda baja", "Manga izquierda", "Manga derecha"] },
+      { sku: "SHO-DEP-001", name: "Short deportivo", category: "Shorts", productKind: "garment", garmentFamily: "short_futbol", garmentType: "short", basePrice: "6500", minOrder: 10, zones: ["Pierna izquierda", "Pierna derecha", "Espalda baja"] },
+      { sku: "MUS-DEP-001", name: "Musculosa training", category: "Musculosas", productKind: "garment", garmentFamily: "parte_superior", garmentType: "remera", basePrice: "7200", minOrder: 10, zones: ["Pecho central", "Espalda alta"] },
+      { sku: "BOT-001", name: "Botinera", category: "Accesorios", productKind: "garment", garmentFamily: "accesorio", garmentType: "accesorio", basePrice: "4500", minOrder: 1, zones: ["Frente completo"] },
     ])
     .returning();
 
@@ -132,10 +144,10 @@ async function main() {
     .returning();
 
   await db.insert(bomItems).values([
-    { recipeId: receta.id, materialId: telaSet.id, quantity: "0.92", wastePercent: "8" },
-    { recipeId: receta.id, materialId: hilo.id, quantity: "8", wastePercent: "0" },
-    { recipeId: receta.id, materialId: papel.id, quantity: "1.05", wastePercent: "5" },
-    { recipeId: receta.id, materialId: tinta.id, quantity: "0.04", wastePercent: "5" },
+    { recipeId: receta.id, materialId: telaSet.id, consumptionMode: "direct", quantity: "0.92", directQuantity: "0.92", wastePercent: "8" },
+    { recipeId: receta.id, materialId: hilo.id, consumptionMode: "direct", quantity: "8", directQuantity: "8", wastePercent: "0" },
+    { recipeId: receta.id, materialId: papel.id, consumptionMode: "direct", quantity: "1.05", directQuantity: "1.05", wastePercent: "5" },
+    { recipeId: receta.id, materialId: tinta.id, consumptionMode: "direct", quantity: "0.04", directQuantity: "0.04", wastePercent: "5" },
   ]);
 
   console.log("Seed completo. Admin creado: admin@ahsports.com (password definida en ADMIN_PASSWORD).");

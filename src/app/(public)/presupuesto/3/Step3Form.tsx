@@ -19,15 +19,21 @@ export function Step3Form({
   productName,
   sizes,
   total,
+  noSize,
 }: {
   productName: string;
   sizes: { label: string; qty: number }[];
   total: number;
+  noSize?: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(() => {
     const r: Row[] = [];
-    for (const s of sizes) for (let i = 0; i < s.qty; i++) r.push({ talle: s.label, name: "", number: "" });
+    if (noSize) {
+      for (let i = 0; i < total; i++) r.push({ talle: "Sin talle", name: "", number: "" });
+    } else {
+      for (const s of sizes) for (let i = 0; i < s.qty; i++) r.push({ talle: s.label, name: "", number: "" });
+    }
     return r;
   });
 
@@ -50,7 +56,24 @@ export function Step3Form({
 
   return (
     <form onSubmit={goNext} className="mx-auto flex max-w-2xl flex-col gap-4">
-      <div className="overflow-x-auto rounded-2xl border border-outline-variant bg-surface-container">
+      <div className="flex flex-col gap-3 sm:hidden">
+        {rows.map((r, i) => (
+          <fieldset key={i} className="rounded-2xl border border-outline-variant bg-surface-container p-4">
+            <legend className="px-1 text-sm font-semibold">Prenda {i + 1} · {r.talle}</legend>
+            <div className="mt-2 flex flex-col gap-3">
+              <label className="flex flex-col gap-1 text-xs text-on-surface-variant">
+                Nombre
+                <Input value={r.name} onChange={(e) => update(i, "name", e.target.value)} placeholder="Opcional" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-on-surface-variant">
+                Número
+                <Input value={r.number} onChange={(e) => update(i, "number", e.target.value)} placeholder="Opcional" inputMode="numeric" />
+              </label>
+            </div>
+          </fieldset>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto rounded-2xl border border-outline-variant bg-surface-container sm:block">
         <table className="w-full text-sm">
           <thead className="border-b border-outline-variant text-left text-on-surface-variant">
             <tr>

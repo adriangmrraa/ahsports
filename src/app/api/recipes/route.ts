@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { bomRecipes, products, sizes, techniques } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { recipeSchema } from "@/lib/validators";
 
 export async function POST(req: NextRequest) {
@@ -16,7 +16,11 @@ export async function POST(req: NextRequest) {
   const [product] = await db.select({ id: products.id }).from(products).where(eq(products.id, d.productId)).limit(1);
   if (!product) return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 });
   if (d.sizeId) {
-    const [size] = await db.select({ id: sizes.id }).from(sizes).where(eq(sizes.id, d.sizeId)).limit(1);
+    const [size] = await db
+      .select({ id: sizes.id })
+      .from(sizes)
+      .where(and(eq(sizes.id, d.sizeId), eq(sizes.productId, d.productId)))
+      .limit(1);
     if (!size) return NextResponse.json({ error: "Talle no encontrado" }, { status: 400 });
   }
   if (d.techniqueId) {

@@ -81,13 +81,13 @@ export function Step4Form({ initialParams }: { initialParams: Record<string, str
   }
 
   return (
-    <form onSubmit={goNext} className="mx-auto flex max-w-2xl flex-col gap-5">
+    <form onSubmit={goNext} className="mx-auto flex w-full max-w-2xl flex-col gap-5">
       {uploads.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container p-10 text-center">
-          <label className="cursor-pointer">
+        <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container p-4 text-center sm:p-8">
+          <label className="flex min-h-11 cursor-pointer items-center justify-center rounded-md px-3 focus-within:outline focus-within:outline-2 focus-within:outline-focus focus-within:outline-offset-2">
             <input
               type="file"
-              className="hidden"
+              className="sr-only"
               accept="image/png,image/jpeg,image/svg+xml,image/webp,application/pdf"
               onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
               disabled={busy}
@@ -100,7 +100,7 @@ export function Step4Form({ initialParams }: { initialParams: Record<string, str
       ) : (
         <div className="flex flex-col gap-3">
           {uploads.map((u) => (
-            <div key={u.id} className="flex items-center justify-between gap-3 rounded-xl border border-outline-variant bg-surface-container p-3">
+            <div key={u.id} className="flex flex-col items-stretch gap-3 rounded-xl border border-outline-variant bg-surface-container p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-3">
                 <img src={u.url} alt={u.name} className="h-10 w-10 rounded object-contain bg-white" />
                 <div className="min-w-0">
@@ -111,16 +111,16 @@ export function Step4Form({ initialParams }: { initialParams: Record<string, str
               <button
                 type="button"
                 onClick={() => setUploads((all) => all.filter((x) => x.id !== u.id))}
-                className="text-sm text-red-400 hover:text-red-300"
+                className="min-h-11 rounded-md px-3 text-left text-sm text-red-400 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:text-center"
               >
                 Quitar
               </button>
             </div>
           ))}
-          <label className="inline-flex cursor-pointer items-center justify-center gap-1 rounded-xl border border-outline-variant px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container">
+          <label className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-1 rounded-xl border border-outline-variant px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container focus-within:outline focus-within:outline-2 focus-within:outline-focus sm:w-auto">
             <input
               type="file"
-              className="hidden"
+              className="sr-only"
               accept="image/png,image/jpeg,image/svg+xml,image/webp,application/pdf"
               onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
               disabled={busy}
@@ -131,7 +131,7 @@ export function Step4Form({ initialParams }: { initialParams: Record<string, str
       )}
 
       {error && <p className="text-sm text-red-400">{error}</p>}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button type="button" onClick={() => router.back()} className="text-sm text-on-surface-variant hover:text-on-surface">
           ← Volver
         </button>

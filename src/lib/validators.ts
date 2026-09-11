@@ -1,17 +1,37 @@
 import { z } from "zod";
+import { BUNDLE_SIZE_MODES, GARMENT_FAMILIES, GARMENT_TYPES, PRODUCT_KINDS } from "@/lib/garments";
+import { validateProductTaxonomy } from "@/lib/product-taxonomy";
 
-export const materialSchema = z.object({
+const productTaxonomyValue = z.string().trim().min(1).max(128);
+
+export const supplierSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  phone: z.string().max(64).optional().nullable(),
+  email: z.string().email("Email inválido").max(255).optional().nullable(),
+  address: z.string().max(255).optional().nullable(),
+  contactName: z.string().max(255).optional().nullable(),
+  taxId: z.string().max(64).optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+export const materialBaseSchema = z.object({
   name: z.string().min(1).max(255),
   category: z.string().min(1).max(128),
   unit: z.enum(["metro", "kilo", "unidad", "centimetro", "mililitro", "metro_cuadrado", "rollo"]),
   unitPrice: z.number().min(0),
   supplier: z.string().optional().nullable(),
+  supplierId: z.string().min(1).max(36).optional().nullable(),
   width: z.number().optional().nullable(),
   gramsPerMeter: z.number().optional().nullable(),
   metersPerKilo: z.number().optional().nullable(),
   yieldPercent: z.number().min(0).max(100).default(85),
   notes: z.string().optional().nullable(),
 });
+
+export const materialSchema = materialBaseSchema.refine(
+  (d) => d.unit !== "kilo" || (d.metersPerKilo != null && d.metersPerKilo > 0),
+  { message: "Si se compra por kilo, cargá cuántos metros rinde el kilo (el sistema convierte a $/metro)", path: ["metersPerKilo"] },
+);
 
 export const techniqueSchema = z.object({
   name: z.string().min(1).max(128),
@@ -30,23 +50,94 @@ export const pricingRuleSchema = z.object({
   active: z.boolean().default(false),
 });
 
-export const productSchema = z.object({
+export const bundleComponentSchema = z.object({
+  componentProductId: z.string().min(1).max(36),
+  quantity: z.number().finite().positive().max(1000).default(1),
+  sizeMode: z.enum(BUNDLE_SIZE_MODES).default("same_label"),
+  componentSizeId: z.string().min(1).max(36).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.sizeMode === "fixed" && !value.componentSizeId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["componentSizeId"], message: "Elegí el talle fijo del componente." });
+  }
+  if (value.sizeMode === "same_label" && value.componentSizeId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["componentSizeId"], message: "El modo mismo talle no usa un talle fijo." });
+  }
+});
+
+const productBaseSchema = z.object({
   sku: z.string().min(1).max(64),
   name: z.string().min(1).max(255),
   description: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
-  basePrice: z.number().min(0),
+  productKind: z.enum(PRODUCT_KINDS).default("garment"),
+  productCategory: productTaxonomyValue.default("indumentaria"),
+  productSubcategory: productTaxonomyValue.default("prendas"),
+  productType: productTaxonomyValue.default("otro"),
+  garmentFamily: z.enum(GARMENT_FAMILIES).nullable().default("parte_superior"),
+  garmentType: z.enum(GARMENT_TYPES).nullable().default("remera"),
+  moldId: z.string().min(1).max(36).optional().nullable(),
+  bundleItems: z.array(bundleComponentSchema).max(32).default([]),
+  // Legado: el precio de venta lo calcula la receta + margen (quoteOrder).
+  // Se conserva como referencia / override manual por línea.
+  basePrice: z.number().min(0).default(0),
   minOrder: z.number().int().min(1).default(1),
   zones: z.array(z.string()).default([]),
 });
+
+export const productSchema = productBaseSchema.superRefine((value, ctx) => {
+  const taxonomyError = validateProductTaxonomy(value.productCategory, value.productSubcategory, value.productType);
+  if (taxonomyError) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["productSubcategory"], message: taxonomyError });
+  if (value.productKind === "bundle" && value.garmentType !== null && value.garmentType !== "conjunto") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["garmentType"], message: "Un producto compuesto debe ser de tipo conjunto." });
+  }
+  if (value.productKind === "garment" && value.garmentType === "conjunto") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["productKind"], message: "El tipo conjunto requiere producto compuesto." });
+  }
+  const familyByType: Record<string, string> = {
+    remera: "parte_superior",
+    chomba: "parte_superior",
+    camiseta: "parte_superior",
+    campera: "campera",
+    pantalon: "pantalon",
+    short: "short_futbol",
+    bermuda: "bermuda",
+    accesorio: "accesorio",
+  };
+  const expectedFamily = value.garmentType ? familyByType[value.garmentType] : undefined;
+  if (expectedFamily && expectedFamily !== value.garmentFamily) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["garmentFamily"], message: `El tipo ${value.garmentType} requiere la familia ${expectedFamily}.` });
+  }
+});
+export const productPatchSchema = productBaseSchema.partial();
+
+const garmentMoldBaseSchema = z.object({
+  name: z.string().trim().min(1).max(128),
+  family: z.enum(GARMENT_FAMILIES),
+  requiredMeasurements: z.array(z.string().trim().min(1).max(64)).max(32).default([]),
+  optionalMeasurements: z.array(z.string().trim().min(1).max(64)).max(32).default([]),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+export const garmentMoldSchema = garmentMoldBaseSchema.superRefine((value, ctx) => {
+  const all = [...value.requiredMeasurements, ...value.optionalMeasurements];
+  if (new Set(all).size !== all.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["optionalMeasurements"], message: "No repitas nombres de medidas entre requeridas y opcionales." });
+  }
+});
+export const garmentMoldPatchSchema = garmentMoldBaseSchema.partial();
 
 export const sizesBatchSchema = z.object({
   sizes: z.array(z.object({
     id: z.string().optional(),
     label: z.string().min(1).max(32),
     order: z.number().int().min(0),
-    measurements: z.record(z.string(), z.number()),
+    measurements: z.record(z.string().trim().min(1).max(64), z.number().finite().nonnegative()),
   })),
+}).superRefine((value, ctx) => {
+  const ids = value.sizes.map((size) => size.id).filter((id): id is string => Boolean(id));
+  if (new Set(ids).size !== ids.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sizes"], message: "Un talle no puede repetirse" });
+  }
 });
 
 export const recipeSchema = z.object({
@@ -58,8 +149,25 @@ export const recipeSchema = z.object({
 
 export const recipeItemSchema = z.object({
   materialId: z.string().min(1).max(36),
-  quantity: z.number().positive(),
+  /** Legacy direct quantity accepted so old clients and imports remain valid. */
+  quantity: z.number().finite().positive().optional(),
+  consumptionMode: z.enum(["direct", "yield"]).default("direct"),
+  directQuantity: z.number().finite().positive().optional().nullable(),
+  unitsPerConsumptionUnit: z.number().finite().positive().optional().nullable(),
   wastePercent: z.number().min(0).max(100).default(0),
+}).strict().superRefine((value, ctx) => {
+  if (value.consumptionMode === "direct" && value.directQuantity == null && value.quantity == null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["directQuantity"], message: "Cargá la cantidad por prenda." });
+  }
+  if (value.consumptionMode === "yield" && value.unitsPerConsumptionUnit == null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["unitsPerConsumptionUnit"], message: "Cargá cuántas prendas rinde una unidad de consumo." });
+  }
+  if (value.consumptionMode === "direct" && value.unitsPerConsumptionUnit != null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["unitsPerConsumptionUnit"], message: "El modo directo no usa rendimiento." });
+  }
+  if (value.consumptionMode === "yield" && value.directQuantity != null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["directQuantity"], message: "El modo rendimiento no usa cantidad directa." });
+  }
 });
 
 export const organizationKindSchema = z.enum(["club", "empresa", "colegio", "institucion", "particular"]);
@@ -254,11 +362,11 @@ export const createPublicOrderSchema = z.object({
   notes: z.string().trim().max(4000).optional(),
   productId: z.string().uuid(),
   sizeQuantities: z.array(z.object({
-    sizeId: z.string().uuid(),
+    sizeId: z.string().uuid().nullable(),
     quantity: z.number().int().min(1).max(1000),
   })).min(1).max(32),
   items: z.array(z.object({
-    sizeId: z.string().uuid(),
+    sizeId: z.string().uuid().nullable(),
     individualName: z.string().trim().max(128).optional().nullable(),
     individualNumber: z.string().trim().max(32).optional().nullable(),
   })).min(1).max(1000),
@@ -266,7 +374,7 @@ export const createPublicOrderSchema = z.object({
   uploadSessionId: z.string().uuid(),
   uploadSessionSecret: z.string().min(32).max(128),
 }).strict().superRefine((value, ctx) => {
-  const seenSizes = new Set<string>();
+  const seenSizes = new Set<string | null>();
   for (const size of value.sizeQuantities) {
     if (seenSizes.has(size.sizeId)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sizeQuantities"], message: "Un talle solo puede enviarse una vez" });
     seenSizes.add(size.sizeId);

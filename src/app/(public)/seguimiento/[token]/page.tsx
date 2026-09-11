@@ -50,12 +50,12 @@ export default async function SeguimientoPage({ params }: { params: Promise<{ to
     .where(eq(attachments.orderId, order.id));
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
-      <h1 className="mb-2 text-2xl font-bold tracking-tight">Seguimiento de pedido</h1>
+    <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
+      <h1 className="mb-2 text-balance text-xl font-bold tracking-tight sm:text-2xl">Seguimiento de pedido</h1>
       <p className="mb-6 text-sm text-on-surface-variant">Pedido #{order.number}</p>
 
       {/* Estado actual */}
-      <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container p-5">
+      <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container p-4 sm:p-5">
         <span className="inline-block rounded-full bg-primary/20 px-3 py-1 text-sm font-semibold text-primary">
           {STATUS_LABEL[order.status] ?? order.status}
         </span>
@@ -68,17 +68,17 @@ export default async function SeguimientoPage({ params }: { params: Promise<{ to
       </div>
 
       {/* Timeline */}
-      <ol className="mb-6 flex items-center justify-between">
+      <ol className="mb-6 grid grid-cols-5 gap-1">
         {TIMELINE.map((label, i) => (
-          <li key={label} className="flex flex-1 flex-col items-center gap-1 text-center">
+          <li key={label} className="flex min-w-0 flex-col items-center gap-1 text-center">
             <span
-              className={`flex h-7 w-7 items-center justify-center rounded-full border text-xs ${
+              className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs ${
                 i <= stage ? "border-primary bg-primary text-on-primary" : "border-outline-variant bg-surface-container"
               }`}
             >
               {i < stage ? "✓" : i + 1}
             </span>
-            <span className={`hidden text-[10px] sm:block ${i <= stage ? "text-primary" : "text-on-surface-variant"}`}>{label}</span>
+            <span className={`text-[10px] leading-tight ${i <= stage ? "text-primary" : "text-on-surface-variant"}`}>{label}</span>
           </li>
         ))}
       </ol>
@@ -87,7 +87,7 @@ export default async function SeguimientoPage({ params }: { params: Promise<{ to
       {atts.filter((a) => a.status === "aprobado").length > 0 && (
         <div className="mb-6">
           <h2 className="mb-2 text-sm font-semibold">Archivos aprobados</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3">
             {atts
               .filter((a) => a.status === "aprobado")
               .map((a) => (

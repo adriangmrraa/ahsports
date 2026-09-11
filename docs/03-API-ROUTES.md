@@ -15,18 +15,31 @@
 
 | Método | Path | Auth | Descripción |
 |--------|------|------|-------------|
-| POST | `/api/products` | admin | Alta de producto |
+| POST | `/api/products` | admin | Alta de producto individual o conjunto; valida taxonomía general, lógica opcional de prenda, molde y componentes |
 | GET | `/api/products/[id]` | admin | Detalle (uso interno, server components usan `db` directo) |
-| PATCH | `/api/products/[id]` | admin | Editar |
+| PATCH | `/api/products/[id]` | admin | Editar categoría/subcategoría/tipo general, clasificación de prenda/molde o componentes del conjunto |
 | DELETE | `/api/products/[id]` | admin | Soft-delete (`active=false`) |
-| POST | `/api/products/[id]/sizes` | admin | Reemplazar batch de talles |
+| POST | `/api/products/[id]/sizes` | admin | Sincronizar batch preservando IDs; rechaza eliminar talles con recetas o prendas históricas |
+| GET | `/api/garment-molds` | admin | Listar moldes base activos |
+| POST | `/api/garment-molds` | admin | Crear molde con familia y medidas requeridas/opcionales |
+| PATCH | `/api/garment-molds/[id]` | admin | Editar definición de medidas del molde |
 
 ## C. Insumos / Materiales
 
 | Método | Path | Auth | Descripción |
 |--------|------|------|-------------|
-| POST | `/api/materials` | admin | Alta |
-| PATCH | `/api/materials/[id]` | admin | Editar |
+| POST | `/api/materials` | admin | Alta (F6: acepta `supplierId`, valida y denormaliza nombre) |
+| PATCH | `/api/materials/[id]` | admin | Editar (F6: acepta `supplierId`; valida el estado final combinado, incluido `kilo` + `metersPerKilo > 0`) |
+| (no DELETE) | — | — | Soft-delete vía `PATCH active=false` |
+
+## C2. Proveedores (F6)
+
+| Método | Path | Auth | Descripción |
+|--------|------|------|-------------|
+| GET | `/api/suppliers` | admin | Listar activos |
+| POST | `/api/suppliers` | admin | Alta |
+| GET | `/api/suppliers/[id]` | admin | Detalle (+ insumos vinculados en la página) |
+| PATCH | `/api/suppliers/[id]` | admin | Editar / activar-desactivar |
 | (no DELETE) | — | — | Soft-delete vía `PATCH active=false` |
 
 ## D. Técnicas
@@ -40,9 +53,10 @@
 
 | Método | Path | Auth | Descripción |
 |--------|------|------|-------------|
-| POST | `/api/recipes` | admin | Alta |
-| POST | `/api/recipes/[id]/items` | admin | Agregar item (material + qty + waste) |
-| DELETE | `/api/recipes/items/[id]` | admin | Quitar item |
+| POST | `/api/recipes` | admin | Alta; valida que `sizeId` pertenezca al `productId` |
+| POST | `/api/recipes/[id]/items` | admin | Agregar item con método `direct` (cantidad por prenda) o `yield` (prendas por unidad), merma y validación de unidad/rendimiento |
+| PATCH | `/api/recipes/items/[itemId]` | admin | Editar material, método, cantidad/rendimiento y merma; mantiene `quantity` legado derivado |
+| DELETE | `/api/recipes/items/[itemId]` | admin | Quitar item |
 
 ## F. Pricing rules
 
@@ -68,9 +82,9 @@
 | PATCH | `/api/orders/[id]` | admin | Editar notas, urgent, etc. |
 | POST | `/api/orders/[id]/lines` | admin | Agregar línea (producto + cant + talle + técnica) |
 | DELETE | `/api/order-lines/[id]` | admin | Quitar línea |
-| POST | `/api/orders/[id]/quote` | admin | Ejecutar `quoteOrder()` y guardar snapshot |
+| (server action) | `confirmQuote({ orderId })` | admin | Ejecutar `quoteOrder()` server-side leyendo talles desde `order_items` y guardar snapshot por talle |
 | POST | `/api/orders/[id]/stage` | admin | Cambiar stage Kanban + crea productionEvent |
-| POST | `/api/orders/[id]/re-quote` | admin | Re-cotizar con snapshot nuevo (no pisa el anterior) |
+| (server action) | `reQuoteOrder({ orderId, urgent })` | admin | Re-cotizar server-side por talle con snapshot nuevo (no pisa el anterior) |
 | PATCH | `/api/order-items/[id]` | admin | Editar nombre/número/talle de una prenda |
 | POST | `/api/order-items/[id]/stage` | admin | Cambiar stage individual |
 
@@ -110,11 +124,10 @@
 
 Para mutaciones dentro de server components, usamos **server actions** en archivos del módulo:
 
-- `lib/actions/orders.ts` — `createOrder`, `addOrderLine`, `quoteOrderAction`, `changeStage`, `reQuoteOrder`
-- `lib/actions/products.ts` — `createProduct`, `updateProduct`, `deleteProduct`, `saveSizes`
-- `lib/actions/materials.ts` — `createMaterial`, `updateMaterial`
-- `lib/actions/payments.ts` — `registerPayment`, `cancelPayment`
-- `lib/actions/attachments.ts` — `uploadAttachment`, `setAttachmentStatus`, `addApplication`
+- `src/app/actions/orders.ts` — `createOrder`, `createOrderLine`, `confirmQuote`, `reQuoteOrder`
+- `src/app/actions/organizations.ts` — mutaciones de organizaciones y contactos
+- `src/app/actions/payments.ts` — `registerPayment`, `cancelPayment`
+- `src/app/actions/attachments.ts` — `uploadAttachment`, `setAttachmentStatus`, `addApplication`
 
 Cada server action valida con Zod + verifica sesión + ejecuta la operación. Son equivalentes a las API routes, viven en el codebase y permiten type-safety end-to-end.
 

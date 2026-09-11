@@ -7,9 +7,9 @@ import { createPublicOrder } from "@/app/actions/public-orders";
 
 interface Props {
   productName: string;
-  items: { talle: string; name: string; number: string; sizeId: string }[];
+  items: { talle: string; name: string; number: string; sizeId: string | null }[];
   total: number;
-  sizeQuantities: { sizeId: string; quantity: number }[];
+  sizeQuantities: { sizeId: string | null; quantity: number }[];
   contactInfo: { name: string; email: string; phone: string; org: string };
   type: "new" | "returning";
   notes?: string;
@@ -72,18 +72,18 @@ export function Step5Form({ productName, items, total, sizeQuantities, contactIn
   }
 
   return (
-    <form onSubmit={confirm} className="mx-auto flex max-w-2xl flex-col gap-5">
-      <div className="rounded-2xl border border-outline-variant bg-surface-container p-6">
+    <form onSubmit={confirm} className="mx-auto flex w-full max-w-2xl flex-col gap-5">
+      <div className="rounded-2xl border border-outline-variant bg-surface-container p-4 sm:p-6">
         <h3 className="mb-3 text-sm font-semibold">Resumen</h3>
         <dl className="space-y-1 text-sm">
-          <div className="flex justify-between"><dt className="text-on-surface-variant">Producto</dt><dd>{productName}</dd></div>
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Producto</dt><dd className="break-words sm:text-right">{productName}</dd></div>
           <div className="flex justify-between"><dt className="text-on-surface-variant">Prendas</dt><dd>{total}</dd></div>
-          <div className="flex justify-between"><dt className="text-on-surface-variant">Contacto</dt><dd>{contactInfo.name} · {contactInfo.phone}</dd></div>
-          {contactInfo.org && <div className="flex justify-between"><dt className="text-on-surface-variant">Organización</dt><dd>{contactInfo.org}</dd></div>}
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Contacto</dt><dd className="break-words sm:text-right">{contactInfo.name} · {contactInfo.phone}</dd></div>
+          {contactInfo.org && <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Organización</dt><dd className="break-words sm:text-right">{contactInfo.org}</dd></div>}
         </dl>
         <ul className="mt-4 flex max-h-40 flex-col gap-1 overflow-y-auto border-t border-outline-variant pt-3">
           {items.slice(0, 40).map((i, idx) => (
-            <li key={idx} className="flex justify-between text-xs text-on-surface-variant">
+            <li key={idx} className="flex flex-col gap-0.5 text-xs text-on-surface-variant sm:flex-row sm:justify-between">
               <span>{i.talle}</span>
               <span>{i.name || "—"} · {i.number || "—"}</span>
             </li>
@@ -92,8 +92,8 @@ export function Step5Form({ productName, items, total, sizeQuantities, contactIn
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
-      <div className="flex items-center justify-between">
-        <Link href={backHref} className="text-sm text-on-surface-variant hover:text-on-surface">
+      <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Link href={backHref} className="flex min-h-11 items-center justify-center rounded-md px-3 text-sm text-on-surface-variant hover:text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:justify-start">
           ← Volver
         </Link>
         <Button type="submit">Confirmar solicitud</Button>

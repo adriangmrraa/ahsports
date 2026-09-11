@@ -14,7 +14,7 @@
 - **Stack**: Next.js 15 App Router + TS strict + Tailwind v4 + Drizzle ORM + Neon (Postgres serverless) + Lucide React + Zod + auth cookie firmada con scrypt (sin NextAuth, sin Supabase)
 - **Design system base**: **Kinetic Industrial** (proveniente de Stitch — cyan primario, amber highlight, violet producción, sobre midnight)
 - **Deploy target**: Render (Web Service + Neon Postgres)
-- **Fase actual**: ✅ **PROYECTO COMPLETO (MVP production-ready)** — F5 16/16 @2026-09-06. Restan solo features de backlog (ver `PENDIENTES.md`).
+- **Fase actual**: 🔧 **F6 — integridad, pricing y taxonomía general** — ampliación implementada y verificada contra Neon; no se ejecutó seed.
 - **IMPORTANTE para el próximo agente**: NO asumir que el código actual compila ni corre. Hay issues conocidos en F1 que requieren fix antes de empezar F2 — ver `KNOWN-ISSUES.md`. Antes de empezar a construir, leer `docs/02-ARCHITECTURE.md` §4 (decisiones D1..D7) y `docs/06-STANDARDS-BUILDING.md` para mantener consistencia.
 
 ---
@@ -84,7 +84,8 @@
 | `BUILD_PROGRESS-F3.md` | F3 — Clientes + Pedidos + Planilla + Kanban producción + Motor cotización | 26 | 26 | ✅ **COMPLETO** @2026-09-04 |
 | `BUILD_PROGRESS-F4.md` | F4 — Adjuntos + Arte + Aplicaciones + Presupuesto público (5 pasos) + Seguimiento | 22 | 22 | ✅ **COMPLETO** @2026-09-05 (E2E vs Neon + cierre) |
 | `BUILD_PROGRESS-F5.md` | F5 — Caja + Pagos + Configuración + Render deploy + Cierre | 16 | 16 | ✅ **COMPLETO** @2026-09-06 (caja+pagos+config ✓, deploy render.yaml/Dockerfile/build prod+smoke ✓, hardening headers+rate limit ✓, cierre RELEASE-NOTES) |
-| **TOTAL** | — | **108** | **108** | ✅ **MVP PRODUCTION-READY** — F0 (8) + F1 (14) + F2 (22) + F3 (26) + F4 (22) + F5 (16). |
+| `BUILD_PROGRESS-F6.md` | F6 — Proveedores + BOM por talle + Pricing trazable + taxonomía general | 15 | 15 | ✅ **VERIFICADO** @2026-09-10 (migraciones 0003–0007, typecheck, lint, build) |
+| **TOTAL** | — | **123** | **123** | ✅ F6 verificada; sin seed ni commit. |
 
 ---
 
@@ -98,6 +99,7 @@
 | F3 | `BUILD_PROGRESS-F3.md` | 26/26 |
 | F4 | `BUILD_PROGRESS-F4.md` | 22/22 |
 | F5 | `BUILD_PROGRESS-F5.md` | 16/16 |
+| F6 | `BUILD_PROGRESS-F6.md` | 15/15 |
 
 ---
 
@@ -110,3 +112,11 @@
 5. Marcá `- [ ]` → `- [x]` + `@fecha-YYYY-MM-DD` + breve VERIFICADO con qué se testeó.
 6. Guardá observación en Engram (`project: ah-sports`).
 7. Reportá: (1) HICE [ID+verif], (2) QUEDA [fase+N], (3) SIGUIENTE [ID+doc].
+## F6.4 — Formularios admin y catálogo editable (2026-09-10)
+
+- Categoría, subcategoría y tipo general de producto ahora son `select` dependientes.
+- Familia y tipo de prenda son dependientes; el molde se filtra por familia.
+- Se agregó catálogo persistente `product_taxonomy_nodes`, migración idempotente `0008_product_taxonomy_catalog.sql`, API CRUD/activación y pantalla `/admin/configuracion/catalogo`.
+- El catálogo histórico sigue disponible como fallback hasta que se carguen opciones propias; los cambios persistentes se administran desde Configuración.
+- Categoría de insumo pasó a `select`, conservando valores históricos al editar.
+- Neon actualizado con `npm run db:migrate`; segunda ejecución verificada como idempotente. No se ejecutó seed ni commit.

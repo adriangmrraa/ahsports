@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { Layers, LayoutDashboard, ShoppingCart, Factory, Package, Users, Warehouse, Settings, LogOut, Image as ImageIcon, Box, Receipt, HardHat, Wrench } from "lucide-react";
+import { Layers, LogOut } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { orders } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { ADMIN_NAV_ICONS, getAdminNavItems } from "@/components/layout/adminNavigation";
+import { AdminMobileNav } from "@/components/layout/AdminMobileNav";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -18,21 +20,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .from(orders)
     .where(eq(orders.status, "bloqueado_pago"));
 
-  const navItems = [
-    { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-    { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart, badge: activeRows.length },
-    { href: "/admin/pedidos/kanban", label: "Producción", icon: Factory },
-    { href: "/admin/pedidos/bloqueados", label: "Bloqueados", icon: HardHat, badge: blockedRows.length },
-    { href: "/admin/productos", label: "Productos", icon: Package },
-    { href: "/admin/recetas", label: "Recetas (BOM)", icon: Layers },
-    { href: "/admin/insumos", label: "Insumos", icon: Box },
-    { href: "/admin/tecnicas", label: "Técnicas", icon: Wrench },
-    { href: "/admin/organizaciones", label: "Clientes", icon: Users },
-    { href: "/admin/arte", label: "Arte & adjuntos", icon: ImageIcon },
-    { href: "/admin/caja", label: "Caja & saldos", icon: Warehouse },
-    { href: "/admin/pagos", label: "Pagos", icon: Receipt },
-    { href: "/admin/configuracion", label: "Configuración", icon: Settings },
-  ];
+  const navItems = getAdminNavItems({ activeOrders: activeRows.length, blockedOrders: blockedRows.length });
 
   return (
     <div className="min-h-screen flex">
@@ -49,7 +37,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
         <nav className="flex-1 flex flex-col gap-1 overflow-y-auto scrollbar-thin">
           {navItems.map((item) => {
-            const Icon = item.icon;
+            const Icon = ADMIN_NAV_ICONS[item.icon];
             return (
               <Link
                 key={item.href}
@@ -90,7 +78,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 min-h-screen p-4 md:p-6 lg:p-8 relative">{children}</main>
+      <main className="relative min-h-screen min-w-0 flex-1 p-4 md:p-6 lg:p-8">
+        <AdminMobileNav items={navItems} user={{ name: user.name, role: user.role }} />
+        {children}
+      </main>
     </div>
   );
 }

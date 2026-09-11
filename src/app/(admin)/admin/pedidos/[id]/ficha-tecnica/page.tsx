@@ -18,6 +18,7 @@ import {
 import { desc, eq, inArray } from "drizzle-orm";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui/Card";
 import type { PricingSnapshot } from "@/db/schema";
+import { calculateBomConsumption, consumptionUnit } from "@/lib/consumption";
 
 export default async function FichaTecnicaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -51,10 +52,10 @@ export default async function FichaTecnicaPage({ params }: { params: Promise<{ i
         .leftJoin(sizes, eq(orderItems.sizeId, sizes.id))
         .where(eq(orderLines.orderId, id))
     : [];
-  const itemsByLine = new Map<string, Array<{ status: string; sizeLabel: string | null; name: string | null; number: string | null }>>();
+  const itemsByLine = new Map<string, Array<{ status: string; sizeId: string | null; sizeLabel: string | null; name: string | null; number: string | null }>>();
   for (const { item, sizeLabel } of items) {
     const arr = itemsByLine.get(item.orderLineId) ?? [];
-    arr.push({ status: item.status, sizeLabel, name: item.individualName, number: item.individualNumber });
+    arr.push({ status: item.status, sizeId: item.sizeId, sizeLabel, name: item.individualName, number: item.individualNumber });
     itemsByLine.set(item.orderLineId, arr);
   }
 
@@ -80,20 +81,36 @@ export default async function FichaTecnicaPage({ params }: { params: Promise<{ i
     const agg = new Map<string, Mat>();
     for (const line of lines) {
       const candidates = recipes.filter((r) => r.productId === line.productId);
-      const recipe =
-        candidates.find((r) => r.techniqueId === line.techniqueId) ??
-        candidates.find((r) => r.techniqueId === null) ??
-        candidates[0];
-      if (!recipe) continue;
-      const rItems = await db.select().from(bomItems).where(eq(bomItems.recipeId, recipe.id));
-      for (const ri of rItems) {
-        const [mat] = await db.select().from(materials).where(eq(materials.id, ri.materialId)).limit(1);
-        if (!mat) continue;
-        const perUnit = Number(ri.quantity) * (1 + Number(ri.wastePercent) / 100);
-        const prev = agg.get(mat.id);
-        const add = perUnit * line.quantity;
-        if (prev) prev.totalQuantity += add;
-        else agg.set(mat.id, { name: mat.name, totalQuantity: Math.round(add * 1000) / 1000, unit: mat.unit });
+      const lineItems = itemsByLine.get(line.id) ?? [];
+      const sizeGroups = new Map<string | null, number>();
+      for (const item of lineItems) {
+        const sizeId = item.sizeId;
+        sizeGroups.set(sizeId, (sizeGroups.get(sizeId) ?? 0) + 1);
+      }
+      if (sizeGroups.size === 0) sizeGroups.set(null, line.quantity);
+      for (const [sizeId, sizeQuantity] of sizeGroups) {
+        const recipe = candidates.find((r) => r.sizeId === sizeId && r.techniqueId === line.techniqueId)
+          ?? candidates.find((r) => r.sizeId === sizeId)
+          ?? candidates.find((r) => r.sizeId === null && r.techniqueId === line.techniqueId)
+          ?? candidates.find((r) => r.sizeId === null && r.techniqueId === null);
+        if (!recipe) continue;
+        const rItems = await db.select().from(bomItems).where(eq(bomItems.recipeId, recipe.id));
+        for (const ri of rItems) {
+          const [mat] = await db.select().from(materials).where(eq(materials.id, ri.materialId)).limit(1);
+          if (!mat) continue;
+          const calculated = calculateBomConsumption({
+            mode: ri.consumptionMode,
+            directQuantity: ri.directQuantity,
+            unitsPerConsumptionUnit: ri.unitsPerConsumptionUnit,
+            legacyQuantity: ri.quantity,
+            wastePercent: ri.wastePercent,
+            materialName: mat.name,
+          });
+          const prev = agg.get(mat.id);
+          const add = calculated.calculatedQuantityPerUnit * sizeQuantity;
+          if (prev) prev.totalQuantity += add;
+          else agg.set(mat.id, { name: mat.name, totalQuantity: Math.round(add * 1000) / 1000, unit: consumptionUnit(mat.unit) });
+        }
       }
     }
     mats = Array.from(agg.values());

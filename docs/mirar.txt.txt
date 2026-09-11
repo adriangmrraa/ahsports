@@ -1,0 +1,17 @@
+Dejé lista la base para trabajar con costos reales y armé la ficha para cargar productos con la dueña.
+Podés usar este documento durante la reunión: Ficha de carga de productos y costos AH Sports.docx.
+La lógica ahora funciona así:
+Cargás el precio de compra del insumo.
+Si una tela se compra por kilo, indicás cuántos metros útiles rinde ese kilo.
+En la receta del producto cargás cuántos metros usa una prenda, más la merma.
+El sistema suma todos los insumos y técnicas, aplica el margen de Configuración y redondea.
+Si cambia el costo de una tela, las cotizaciones nuevas toman el valor actualizado. Las cotizaciones ya confirmadas conservan su historial.
+Ejemplo: frisado a $30.000/kg que rinde 5 m → $6.000/m. Si una campera usa 1 m, su receta empieza con $6.000 de tela, más merma, cierre, puños, mano de obra/técnica y margen.
+También ajusté el panel para que
+
+Productos ya no dependan de un precio manual.
+Insumos explique claramente la conversión kilo → metro.
+Recetas indiquen la unidad correcta de consumo.
+No se pueda cotizar un producto sin receta o una tela por kilo sin rendimiento cargado.
+Validé los cambios con el chequeo de tipos; pasó correctamente.
+¿Arrancamos con la primera camiseta de fútbol y me pasás cómo compran la tela, cuánto cuesta y cuántos metros rinde el kilo?
