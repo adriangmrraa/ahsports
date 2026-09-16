@@ -35,3 +35,8 @@ out
 
 # marcador transitorio de graphify
 .graphify/.graphify_describe_pending
+
+# graphify deja estado en el cwd desde donde corra; ignoramos los anidados
+.opencode/**/.graphify/
+.agents/**/.graphify/
+.codex/**/.graphify/
