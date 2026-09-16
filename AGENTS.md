@@ -144,9 +144,18 @@ Las descripciones de nodos y los nombres de comunidades son lo que hace al grafo
 - Los nombres de comunidad persisten aparte en `.graphify/.graphify_labels.json` y **sobreviven a los rebuilds**.
 - Procedimiento completo, incluyendo el defecto de detección de idioma (`[lang=pt]` en contenido español): `.opencode/skills/graph-first/SKILL.md`.
 
-### NO commitear el grafo
+### El grafo SÍ se versiona
 
-`.graphify/` está en `.gitignore` a propósito. `graphify portable-check` falla con **237 issues** porque `manifest.json` guarda paths absolutos de esta máquina. El grafo es un artefacto **local y derivado**: se reconstruye solo con los hooks.
+`.graphify/graph.json`, `GRAPH_REPORT.md`, `.graphify_labels.json` y `scope.json` **están commiteados**: cualquiera que clone el repo tiene el grafo disponible sin reconstruirlo.
+
+Lo que **no** se versiona (`.gitignore`) son los artefactos atados a esta máquina:
+- `manifest.json` — guarda paths absolutos (`E:/Adrian OS/...`)
+- `branch.json`, `worktree.json` — HEAD y worktree local
+- `cache/`, `*-instructions/` — cachés y prompts regenerables
+
+**El grafo commiteado va ~1 commit atrás por construcción**: contiene nodos de git, así que no puede incluir su propio commit. Después de cada commit el hook reconstruye el grafo y el working tree queda "sucio" con esa diferencia. Es correcto: el grafo del working tree está **adelantado** respecto del commiteado.
+
+**Los nodos de commit de git se autodescriben** desde el asunto del commit (no requieren asistente). Solo los nodos de código nuevos piden descripción.
 
 ### Invocación por agente
 

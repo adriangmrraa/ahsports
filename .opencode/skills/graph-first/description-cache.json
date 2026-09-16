@@ -746,5 +746,8 @@
   "reapply_descriptions_hits": "Nodes resolved to a description, either from the cache or absorbed from the graph.",
   "reapply_descriptions_misses": "Nodes with no description anywhere, which still need an assistant to write one.",
   "commit:repo:github.com/adriangmrraa/ahsports@e4e3f4a9b92f4724a17d339358a1faabb0c8e7a6": "Git commit e4e3f4a chore(graph): versionar el grafo de conocimiento.",
-  "commit:repo:github.com/adriangmrraa/ahsports@ea0201bfbdd38a5a122d242c119398e37402afd8": "Git commit ea0201b fix(graph-first): anclar el cwd de los scripts al repo."
+  "commit:repo:github.com/adriangmrraa/ahsports@ea0201bfbdd38a5a122d242c119398e37402afd8": "Git commit ea0201b fix(graph-first): anclar el cwd de los scripts al repo.",
+  "commit:repo:github.com/adriangmrraa/ahsports@0e81d18a418b2249649df7baee175d3a7a3c2a8c": "Git commit 0e81d18 chore(graph): actualizar grafo con el tooling de agentes.",
+  "commit:repo:github.com/adriangmrraa/ahsports@78912b68203b1f55f5dccffdd556bca9b19da0d7": "Git commit 78912b6 chore(graph): quitar cache espurio y contener el estado anidado de graphify.",
+  "commit:repo:github.com/adriangmrraa/ahsports@81c3c0ecc54441e13cadf5893a08e79c06d7f319": "Git commit 81c3c0e chore(graph): sincronizar grafo con el estado final."
 }

@@ -199,16 +199,35 @@ be delegated to several workers at once. Give each worker the project glossary
 register, `prenda`=order item) so descriptions are accurate rather than generic.
 Never let two workers touch the same file.
 
-## 6. Never commit the graph
+## 6. The graph IS versioned
 
-`.graphify/` is in `.gitignore` **on purpose**.
+`.graphify/graph.json`, `GRAPH_REPORT.md`, `.graphify_labels.json` and
+`scope.json` are **committed**, so anyone who clones the repo gets a usable
+graph without rebuilding it.
 
-`graphify portable-check` fails with 237 issues because `manifest.json` stores
-absolute machine paths (`E:/Adrian OS/...`). The graph is a **local, derived
-artifact**: it rebuilds itself from the hooks.
+Only machine-bound artifacts are gitignored:
 
-If someone proposes committing `.graphify/`, run `graphify portable-check`
-first and show the result. Do not commit it.
+| Excluded | Why |
+|---|---|
+| `manifest.json` | stores absolute machine paths (`E:/Adrian OS/...`) |
+| `branch.json`, `worktree.json` | local HEAD and worktree |
+| `cache/`, `*-instructions/` | regenerable caches and prompts |
+| `.graphify_describe_pending` | transient marker |
+| `.opencode/**/.graphify/`, `.agents/**/.graphify/`, `.codex/**/.graphify/` | stray state graphify writes when it runs from a nested cwd |
+
+**The committed graph is always ~1 commit behind by construction:** it contains
+git commit nodes, so it cannot contain its own commit. After every commit the
+hook rebuilds the graph and the working tree shows that difference as
+"modified". That is correct — the working-tree graph is *ahead* of the
+committed one, not behind.
+
+**Git commit nodes self-describe** from the commit subject (see
+`reapply-descriptions.mjs`), so they never need an assistant. Only genuinely
+new code nodes do.
+
+`graphify portable-check` is **not** a valid gate here: it reports ~237 issues,
+most of them URL route paths (`/admin/pedidos`) misclassified as filesystem
+absolute paths. The genuine problem is `manifest.json`, which is excluded.
 
 ## 7. Agent integration
 
