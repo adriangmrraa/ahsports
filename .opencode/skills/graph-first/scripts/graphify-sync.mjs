@@ -34,17 +34,27 @@
 
 import { spawnSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+// Repo root: .opencode/skills/graph-first/scripts -> up four levels.
+const REPO_ROOT = resolve(HERE, "..", "..", "..", "..");
 const REAPPLY = join(HERE, "reapply-descriptions.mjs");
-const GRAPH = ".graphify/graph.json";
+const GRAPH = join(REPO_ROOT, ".graphify", "graph.json");
 // Tracked in git, so the enrichment travels with the repo.
 const CACHE = join(HERE, "..", "description-cache.json");
 
+// Git hooks run with an environment where graphify mis-resolves its state root
+// and writes a stray .opencode/.graphify/ cache. Pinning the cwd fixes it.
+process.chdir(REPO_ROOT);
+
 function run(cmd, args, { useShell = process.platform === "win32" } = {}) {
-  const res = spawnSync(cmd, args, { stdio: "inherit", shell: useShell });
+  const res = spawnSync(cmd, args, {
+    stdio: "inherit",
+    shell: useShell,
+    cwd: REPO_ROOT,
+  });
   return res.status === 0;
 }
 

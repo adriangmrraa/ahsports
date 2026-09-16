@@ -30,11 +30,17 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SKILL_DIR = join(HERE, "..");
+// Repo root: .opencode/skills/graph-first/scripts -> up four levels.
+const REPO_ROOT = resolve(HERE, "..", "..", "..", "..");
+
+// Git hooks run with an environment where graphify mis-resolves its state root.
+// Pinning the cwd keeps every relative path below anchored to the repo.
+process.chdir(REPO_ROOT);
 
 const GRAPH = ".graphify/graph.json";
 const DIR = ".graphify/description-instructions";

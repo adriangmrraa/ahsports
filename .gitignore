@@ -29,3 +29,6 @@ out
 .graphify/label-instructions/
 .graphify/studio/
 .graphify/[0-9][0-9][0-9][0-9]-*/
+
+# cache espurio que el git hook de graphify crea dentro de .opencode/
+.opencode/.graphify/
