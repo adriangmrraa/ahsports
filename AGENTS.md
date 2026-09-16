@@ -76,14 +76,81 @@ PENDIENTES.md           # Lo pendiente
 
 ## Para retomar
 
-> **⚠️ El siguiente agente DEBE empezar leyendo `KNOWN-ISSUES.md`** — hay bugs reales en el código de F1 que romperán el build. No asumir que `npm run build` o `npm run dev` funcionan sin antes arreglar esos issues.
+> **Estado real: MVP cerrado — F0..F5 = 108/108, deployado.** El aviso viejo sobre "bugs de F1 que romperán el build" ya no aplica: de los 13 issues de `KNOWN-ISSUES.md`, 9 están resueltos. Quedan abiertos solo KI-07 (fuentes, deuda menor) y **KI-13: `npm run lint` está roto a nivel toolchain** — no lo uses como gate; el gate real es `typecheck` + `build`.
 
-1. Leer `KNOWN-ISSUES.md` (lista de bugs concretos con ubicación)
+1. **Consultar el grafo antes de leer código** → `graphify summary` (ver la sección graphify más abajo)
 2. `npm install`
 3. Verificar `.env` local (tiene `DATABASE_URL` de Neon + `SESSION_SECRET`). Si no existe: `cp .env.example .env` y pedir la URL al usuario.
-4. `npm run typecheck` (esperar que pase después de los fixes)
+4. `npm run typecheck`
 5. `npm run db:migrate` (idempotente; NO `db:push` en una DB con datos)
 6. `npm run db:seed` solo si la DB está vacía y con confirmación explícita — hace TRUNCATE
 7. `npm run dev` → http://localhost:3000
 
 Login seed: `admin@ahsports.com` — password la define `ADMIN_PASSWORD` en el seed (NO hay credenciales default, ver F2-20)
+
+## graphify — grafo de conocimiento (LEER ANTES DE EXPLORAR CÓDIGO)
+
+Este repo tiene un grafo de conocimiento en `.graphify/graph.json`: **528 nodos, 1658 edges, 27 comunidades**, todos con descripción. Es la **puerta de entrada al código**.
+
+### Regla dura: grafo primero, código después
+
+1. Para CUALQUIER pregunta sobre código, arquitectura, rutas, modelos de datos, relaciones o impacto de un cambio, **consultá el grafo primero**.
+2. Leé archivos crudos (`read` / `grep`) **solo si** el grafo no alcanza: para editar una línea exacta, verificar un detalle de implementación, o cuando `query` / `explain` devuelvan poco contexto.
+3. Al afirmar algo sobre el código, citá el `source_location` que devuelve el grafo.
+4. Si el grafo no tiene el dato, decilo — no inventes edges ni comportamiento.
+
+### Qué comando usar
+
+| Necesidad | Comando |
+|---|---|
+| Orientación inicial: hubs y comunidades | `graphify summary` |
+| "¿Cómo funciona X?" — contexto amplio | `graphify query "<pregunta>"` |
+| Detalle de un símbolo o archivo | `graphify explain <nodo>` |
+| Cómo se conectan A y B | `graphify path "<A>" "<B>"` |
+| Dependencias desde un nodo | `graphify tree <nodo>` |
+| Blast radius de un cambio | `graphify review-analysis --files <archivos>` |
+| Contexto acotado para review | `graphify review-delta --files <archivos>` |
+| Respuesta GraphRAG (el asistente la sintetiza) | `graphify answer "<pregunta>"` |
+| ¿El grafo quedó viejo? | `graphify check-update` |
+| **Sincronizar el grafo** (el único comando válido) | `node .opencode/skills/graph-first/scripts/graphify-sync.mjs` |
+
+`GRAPH_REPORT.md` es para review de arquitectura amplia. No lo leas entero por defecto.
+
+### Paridad 1:1 con el código (obligatorio)
+
+Los git hooks (`post-commit`, `post-checkout`, `post-merge`, `post-rewrite`) están instalados y **parcheados**: sincronizan el grafo **en background** después de cada commit, sin bloquear git. No los desinstales.
+
+> **Nunca corras `graphify update .` ni `graphify hook-rebuild` a mano.** Los dos **borran las 528 descripciones de nodos** (defecto verificado de graphify 0.18.0: reconstruye `graph.json` sin descripciones y borra los archivos de respuesta al ingerirlos). El único comando válido es:
+>
+> ```
+> node .opencode/skills/graph-first/scripts/graphify-sync.mjs
+> ```
+>
+> Ese script reaplica las descripciones desde el cache versionado (`.opencode/skills/graph-first/description-cache.json`) y después reconstruye + ingiere en **una sola pasada**.
+
+- Si existe `.graphify/needs_update`, el grafo está desactualizado: corré el sync antes de confiar en él y avisá que estaba viejo.
+- Si `graphify check-update` reporta cambios pendientes, sincronizá antes de responder.
+- **Al terminar cambios de código en una sesión, corré el sync** para dejar el grafo en paridad con el working tree.
+- Verificá la paridad: `node -e "const g=require('./.graphify/graph.json');console.log(g.nodes.filter(n=>n.description).length+'/'+g.nodes.length+' descritos')"` — debe dar `528/528` (o el total vigente).
+- El grafo se construye desde el **working tree**, no desde HEAD — incluye cambios sin commitear. `graphify state status` muestra el HEAD analizado.
+
+### Enriquecimiento semántico
+
+Las descripciones de nodos y los nombres de comunidades son lo que hace al grafo consultable en lenguaje natural. Sin ellos las comunidades se llaman `Community N`.
+
+- Las **528 descripciones** viven en el cache versionado `.opencode/skills/graph-first/description-cache.json`. Viaja con el repo: un clon nuevo no necesita re-describir nada.
+- El sync reaplica el cache automáticamente. **No re-describas a mano un nodo que ya está en el cache.**
+- Solo cuando aparecen **nodos nuevos**, el sync reporta `N uncached`. Recién ahí un asistente escribe las oraciones faltantes (una por nodo, **en inglés**) y vuelve a correr el sync, que las absorbe al cache.
+- Los nombres de comunidad persisten aparte en `.graphify/.graphify_labels.json` y **sobreviven a los rebuilds**.
+- Procedimiento completo, incluyendo el defecto de detección de idioma (`[lang=pt]` en contenido español): `.opencode/skills/graph-first/SKILL.md`.
+
+### NO commitear el grafo
+
+`.graphify/` está en `.gitignore` a propósito. `graphify portable-check` falla con **237 issues** porque `manifest.json` guarda paths absolutos de esta máquina. El grafo es un artefacto **local y derivado**: se reconstruye solo con los hooks.
+
+### Invocación por agente
+
+- **opencode**: plugin `.opencode/plugins/graphify.js` (recuerda el grafo antes del primer `bash`) + skill `.opencode/skills/graphify/SKILL.md`
+- **Codex**: hook `.codex/hooks.json` + skill `.agents/skills/graphify/SKILL.md`. El trigger es `$graphify`, **no** `/graphify`
+- **Claude Code**: skill global `~/.claude/skills/graphify/SKILL.md`
+- **Cualquier otro agente**: usá el CLI `graphify` directamente

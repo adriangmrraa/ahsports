@@ -10,3 +10,22 @@ out
 .next-build
 .atl/
 *.tsbuildinfo
+
+# graphify — el grafo SÍ se versiona (graph.json + reporte + labels) para que
+# cualquiera que clone el repo lo tenga disponible sin reconstruirlo.
+# Se excluyen solo los artefactos atados a esta máquina o regenerables:
+#   - manifest.json guarda paths absolutos de esta máquina
+#   - branch.json / worktree.json guardan el HEAD y el worktree local
+#   - cache/ y *-instructions/ son cachés y prompts regenerables
+.graphify/branch.json
+.graphify/worktree.json
+.graphify/needs_update
+.graphify/manifest.json
+.graphify/.graphify_detect.json
+# el cache canónico vive versionado en .opencode/skills/graph-first/
+.graphify/description-cache.json
+.graphify/cache/
+.graphify/description-instructions/
+.graphify/label-instructions/
+.graphify/studio/
+.graphify/[0-9][0-9][0-9][0-9]-*/
