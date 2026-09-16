@@ -32,3 +32,6 @@ out
 
 # cache espurio que el git hook de graphify crea dentro de .opencode/
 .opencode/.graphify/
+
+# marcador transitorio de graphify
+.graphify/.graphify_describe_pending

@@ -1,25 +1,25 @@
 # Graph Report - .  (2026-09-16)
 
 ## Corpus Check
-- 203 files · ~138,757 words
+- 204 files · ~140,592 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 745 nodes · 2176 edges · 42 communities detected
+- 746 nodes · 2180 edges · 42 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
-- Edge kinds: imports: 835 · contains: 575 · imports_from: 437 · MODIFIES: 207 · calls: 61 · ON_BRANCH: 23 · PARENT_OF: 22 · references: 13 · rationale_for: 3
+- Edge kinds: imports: 835 · contains: 575 · imports_from: 437 · MODIFIES: 209 · calls: 61 · ON_BRANCH: 24 · PARENT_OF: 23 · references: 13 · rationale_for: 3
 
 
 ## Input Scope
 - Requested: auto
 - Resolved: committed (source: default-auto)
-- Included files: 203 · Candidates: 221
-- Excluded: 4 untracked · 26322 ignored · 0 sensitive · 0 missing committed
+- Included files: 204 · Candidates: 226
+- Excluded: 3 untracked · 26322 ignored · 0 sensitive · 0 missing committed
 - Recommendation: Use --scope all or graphify.yaml inputs.corpus for a knowledge-base folder.
 
 ## Graph Freshness
-- Built from Git commit: `ea0201b`
+- Built from Git commit: `e4e3f4a`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `db` - 65 edges
@@ -35,15 +35,15 @@
 
 ## Surprising Connections (you probably didn't know these)
 - `1a3144d build(f4): presupuesto público 5 pasos + seguimiento + arte global (F4-07..17)` --ON_BRANCH--> `master`  [EXTRACTED]
-  git → git  _Bridges community 9 → community 11_
+  git → git  _Bridges community 10 → community 9_
 - `1a3144d build(f4): presupuesto público 5 pasos + seguimiento + arte global (F4-07..17)` --PARENT_OF--> `de540bd docs(f4): marcar F4-01..17 verificadas y corregir índice F3=26/26 (87/108)`  [EXTRACTED]
-  git → git  _Bridges community 9 → community 18_
+  git → git  _Bridges community 10 → community 18_
 - `1d4fccf fix(public-orders): validate and transact quote requests` --ON_BRANCH--> `master`  [EXTRACTED]
-  git → git  _Bridges community 18 → community 11_
+  git → git  _Bridges community 18 → community 9_
 - `3c6071d feat: complete AH Sports product and public flows` --ON_BRANCH--> `master`  [EXTRACTED]
-  git → git  _Bridges community 10 → community 11_
+  git → git  _Bridges community 11 → community 9_
 - `7a06139 chore: commit inicial AH Sports OS (F0-F3 completas + F4 parcial) con repo conectado` --ON_BRANCH--> `master`  [EXTRACTED]
-  git → git  _Bridges community 0 → community 11_
+  git → git  _Bridges community 0 → community 9_
 
 ## Communities
 
@@ -84,16 +84,16 @@ Cohesion: 0.11
 Nodes (13): DesactivarButton(), EstadoButton(), kindLabel, stageLabel, statusLabel, labelGarmentType(), ProveedorForm(), SupplierInitial (+5 more)
 
 ### Community 9 - "Landing pública y tablero Kanban"
-Cohesion: 0.12
-Nodes (12): metadata, Step1Form(), metadata, Step2Form(), metadata, parseSizes(), PresupuestoStep3(), Step3Form() (+4 more)
+Cohesion: 0.15
+Nodes (20): master, 01f49b8 feat(config): hub con 5 secciones y updateSetting, F5-07/08 verificadas, 077d51a docs(progress): F5 4/16 pagos verificados, total 91/108, 334561f docs: update guide QA render, 5e59af6 feat(payments): cancellable payments with audit events and shared block gate, 7b28303 chore: ignore tsc buildinfo noise, 82e22c8 feat(caja): saldos por organización y cuenta corriente, F5-01/02 verificadas, 835cf60 docs(progress): reconcile consolidated table F3=26/26 F4=17/22 (+12 more)
 
 ### Community 10 - "Historial de commits del proyecto"
 Cohesion: 0.12
-Nodes (9): metadata, 3c6071d feat: complete AH Sports product and public flows, navigation, PublicShell(), LoginForm(), product_taxonomy_nodes, services, sizes (+1 more)
+Nodes (12): metadata, Step1Form(), metadata, Step2Form(), metadata, parseSizes(), PresupuestoStep3(), Step3Form() (+4 more)
 
 ### Community 11 - "Authentication and Sessions"
-Cohesion: 0.16
-Nodes (19): master, 01f49b8 feat(config): hub con 5 secciones y updateSetting, F5-07/08 verificadas, 077d51a docs(progress): F5 4/16 pagos verificados, total 91/108, 334561f docs: update guide QA render, 5e59af6 feat(payments): cancellable payments with audit events and shared block gate, 7b28303 chore: ignore tsc buildinfo noise, 82e22c8 feat(caja): saldos por organización y cuenta corriente, F5-01/02 verificadas, 835cf60 docs(progress): reconcile consolidated table F3=26/26 F4=17/22 (+11 more)
+Cohesion: 0.12
+Nodes (9): metadata, 3c6071d feat: complete AH Sports product and public flows, navigation, PublicShell(), LoginForm(), product_taxonomy_nodes, services, sizes (+1 more)
 
 ### Community 12 - "Recipes and Role Authorization"
 Cohesion: 0.14
@@ -232,9 +232,11 @@ Nodes (2): bom_recipes, sizes
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `db` connect `Payments and Cash Register` to `Landing pública y tablero Kanban`, `Artwork and Attachments Management`, `Attachments and Organization Library`, `Admin Detail Pages`, `Admin Layout and Database Client`, `Public Upload Step and Wizard`, `Payment Cancellation Audit Schema`, `Techniques and Applications API`, `Database Schema and Settings`, `Organizations and Creation Forms`, `Product Taxonomy Nodes Route`, `Pricing Rule API Route`, `Products and Item Stages`, `Recipes and Role Authorization`, `Admin Dashboard and Formatting`, `Public Upload Sessions`, `Presupuesto público paso 2`, `Public Order Submission`, `Production Planilla Table`, `API Routes and Validators`, `Community 39`, `Material Form Constants`, `Blocked Orders and Insumos`, `Garment Family Bundles Migration`?**
-  _High betweenness centrality (0.038) - this node is a cross-community bridge._
+- **Why does `db` connect `Payments and Cash Register` to `Historial de commits del proyecto`, `Artwork and Attachments Management`, `Attachments and Organization Library`, `Admin Detail Pages`, `Admin Layout and Database Client`, `Public Upload Step and Wizard`, `Payment Cancellation Audit Schema`, `Techniques and Applications API`, `Database Schema and Settings`, `Organizations and Creation Forms`, `Product Taxonomy Nodes Route`, `Pricing Rule API Route`, `Products and Item Stages`, `Recipes and Role Authorization`, `Admin Dashboard and Formatting`, `Public Upload Sessions`, `Presupuesto público paso 2`, `Public Order Submission`, `Production Planilla Table`, `API Routes and Validators`, `Community 39`, `Material Form Constants`, `Blocked Orders and Insumos`, `Garment Family Bundles Migration`?**
+  _High betweenness centrality (0.037) - this node is a cross-community bridge._
 - **Why does `orders` connect `Payments and Cash Register` to `Attachments and Organization Library`, `Admin Detail Pages`, `Public Upload Step and Wizard`, `Techniques and Applications API`, `Order Creation Forms`, `Database Schema and Settings`, `Products and Item Stages`, `API Routes and Validators`, `Garment Family Bundles Migration`?**
+  _High betweenness centrality (0.009) - this node is a cross-community bridge._
+- **Why does `Button()` connect `Products and Item Stages` to `Order Quoting Actions`, `Database Seed Script`, `Artwork and Attachments Management`, `Attachments and Organization Library`, `Payments and Cash Register`, `Database Seed and Admin`, `Payment Cancellation Audit Schema`, `Admin Detail Pages`, `Database Schema and Settings`, `Authentication and Sessions`, `Admin Layout and Database Client`, `Public Order Submission`, `API Routes and Validators`, `Workshop Settings Service`, `Admin Dashboard and Formatting`?**
   _High betweenness centrality (0.009) - this node is a cross-community bridge._
 - **What connects `HERE`, `REPO_ROOT`, `REAPPLY` to the rest of the system?**
   _225 weakly-connected nodes found - possible documentation gaps or missing edges._
@@ -244,5 +246,3 @@ _Questions this graph is uniquely positioned to answer:_
   _Cohesion score 0.053544494720965306 - nodes in this community are weakly interconnected._
 - **Should `API Routes and Validators` be split into smaller, more focused modules?**
   _Cohesion score 0.08350951374207188 - nodes in this community are weakly interconnected._
-- **Should `Order Creation Forms` be split into smaller, more focused modules?**
-  _Cohesion score 0.05555555555555555 - nodes in this community are weakly interconnected._

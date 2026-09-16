@@ -81,6 +81,7 @@ for (const f of readdirSync(DIR)) {
 const hits = [];
 const misses = [];
 let learned = 0;
+let synthesized = 0;
 
 for (const node of nodes) {
   if (cache[node.id]) {
@@ -90,6 +91,13 @@ for (const node of nodes) {
     cache[node.id] = node.description;
     hits.push([node.id, node.description]);
     learned += 1;
+  } else if (node.id.startsWith("commit:")) {
+    // Git commit nodes churn on every commit, so never route them to an
+    // assistant. Their label already IS the commit subject.
+    const description = `Git commit ${node.label}.`;
+    cache[node.id] = description;
+    hits.push([node.id, description]);
+    synthesized += 1;
   } else {
     misses.push(node.id);
   }
@@ -107,13 +115,15 @@ for (let i = 0; i < hits.length; i += BATCH_SIZE) {
 }
 
 // Persist anything newly absorbed so the tracked cache keeps improving.
-if (learned > 0) {
+if (learned > 0 || synthesized > 0) {
   writeFileSync(PRIMARY_CACHE, `${JSON.stringify(cache, null, 2)}\n`, "utf-8");
 }
 
 console.log(
   `[reapply] ${hits.length} description(s) → ${batch} batch file(s); ` +
-    `${misses.length} uncached${learned > 0 ? `; ${learned} absorbed into the cache` : ""}.`,
+    `${misses.length} uncached` +
+    `${learned > 0 ? `; ${learned} absorbed` : ""}` +
+    `${synthesized > 0 ? `; ${synthesized} git commit(s) auto-described` : ""}.`,
 );
 if (misses.length > 0) {
   console.log("[reapply] nodes needing a fresh description from an assistant:");
