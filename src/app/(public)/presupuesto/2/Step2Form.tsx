@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
+import { formatCurrency } from "@/lib/utils";
 
 interface CatalogProduct {
   id: string;
   name: string;
   description: string | null;
+  imageUrl: string | null;
   basePrice: string;
   minOrder: number;
   sizes: { id: string; label: string }[];
@@ -17,10 +19,11 @@ interface CatalogProduct {
 /**
  * F4-09 — Paso 2 form: elegir producto + cantidades por talle.
  * Estado se propaga a /presupuesto/3 via search params (sizeQuantities=S:2,M:3).
+ * `initialProductId` preselecciona el producto cuando se llega desde /catalogo.
  */
-export function Step2Form({ catalog }: { catalog: CatalogProduct[] }) {
+export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProduct[]; initialProductId?: string }) {
   const router = useRouter();
-  const [productId, setProductId] = useState(catalog[0]?.id ?? "");
+  const [productId, setProductId] = useState(initialProductId ?? catalog[0]?.id ?? "");
   const product = catalog.find((p) => p.id === productId);
 
   const [qty, setQty] = useState<Record<string, number>>({});
@@ -68,9 +71,16 @@ export function Step2Form({ catalog }: { catalog: CatalogProduct[] }) {
 
       {product && (
         <>
+          {product.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={product.imageUrl} alt={product.name} className="h-40 w-full rounded-xl border border-outline-variant object-cover" />
+          )}
           {product.description && <p className="text-sm text-on-surface-variant">{product.description}</p>}
           {product.minOrder > 1 && (
-            <p className="text-xs text-amber-400">Pedido mínimo: {product.minOrder} unidades</p>
+            <p className="text-xs text-status-warning">Pedido mínimo: {product.minOrder} unidades</p>
+          )}
+          {Number(product.basePrice) > 0 && (
+            <p className="text-sm text-on-surface-variant">Precio de referencia: <span className="font-semibold text-on-surface">{formatCurrency(product.basePrice)}</span></p>
           )}
 
           <div className="rounded-2xl border border-outline-variant bg-surface-container p-4 sm:p-5">

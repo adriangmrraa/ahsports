@@ -2,6 +2,7 @@ import Link from "next/link";
 
 const navigation = [
   { href: "/", label: "Inicio" },
+  { href: "/catalogo", label: "Catálogo" },
   { href: "/presupuesto", label: "Presupuesto" },
   { href: "/seguimiento", label: "Seguimiento" },
 ];
@@ -26,7 +27,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="min-w-0 flex-1">{children}</main>
+      <main className="min-w-0 flex-1 animate-fade">{children}</main>
       <footer className="border-t border-outline-variant bg-surface-container-low">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-6 text-xs text-on-surface-variant sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>AH Sports · Indumentaria deportiva</span>

@@ -5,8 +5,8 @@ import { eq } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
-import { formatCurrency } from "@/lib/utils";
 import { ProductoForm } from "../nuevo/ProductoForm";
+import { ProductImageCard } from "./ProductImageCard";
 import { asc } from "drizzle-orm";
 import { labelGarmentFamily, labelGarmentType } from "@/lib/garments";
 import { labelProductTaxonomy } from "@/lib/product-taxonomy";
@@ -39,17 +39,20 @@ export default async function ProductoDetallePage({ params }: { params: Promise<
           <ProductoForm initial={{ ...product, zones: product.zones as string[], bundleItems: bundleItems.map((item) => ({ componentProductId: item.componentProductId, quantity: item.quantity, sizeMode: item.sizeMode, componentSizeId: item.componentSizeId })) }} molds={molds} componentProducts={componentProducts} taxonomy={taxonomy} />
         </Card>
 
-        <Card title="Zonas válidas">
-          <div className="flex flex-wrap gap-2">
-            {Array.isArray(product.zones) && (product.zones as string[]).length > 0 ? (
-              (product.zones as string[]).map((z: string) => (
-                <span key={z} className="px-2.5 py-1 rounded border border-primary/40 bg-primary/15 text-primary text-xs">{z}</span>
-              ))
-            ) : (
-              <p className="text-sm text-on-surface-variant">Sin zonas configuradas.</p>
-            )}
-          </div>
-        </Card>
+        <div className="space-y-4">
+          <ProductImageCard productId={product.id} imageUrl={product.imageUrl} name={product.name} />
+          <Card title="Zonas válidas">
+            <div className="flex flex-wrap gap-2">
+              {Array.isArray(product.zones) && (product.zones as string[]).length > 0 ? (
+                (product.zones as string[]).map((z: string) => (
+                  <span key={z} className="px-2.5 py-1 rounded border border-primary/40 bg-primary/15 text-primary text-xs">{z}</span>
+                ))
+              ) : (
+                <p className="text-sm text-on-surface-variant">Sin zonas configuradas.</p>
+              )}
+            </div>
+          </Card>
+        </div>
       </div>
 
       {product.productKind === "bundle" && (

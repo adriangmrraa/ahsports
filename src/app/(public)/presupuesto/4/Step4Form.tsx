@@ -111,7 +111,7 @@ export function Step4Form({ initialParams }: { initialParams: Record<string, str
               <button
                 type="button"
                 onClick={() => setUploads((all) => all.filter((x) => x.id !== u.id))}
-                className="min-h-11 rounded-md px-3 text-left text-sm text-red-400 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:text-center"
+                className="min-h-11 rounded-md px-3 text-left text-sm text-error hover:text-error/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:text-center"
               >
                 Quitar
               </button>
@@ -130,7 +130,7 @@ export function Step4Form({ initialParams }: { initialParams: Record<string, str
         </div>
       )}
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p className="text-sm text-error">{error}</p>}
       <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button type="button" onClick={() => router.back()} className="text-sm text-on-surface-variant hover:text-on-surface">
           ← Volver

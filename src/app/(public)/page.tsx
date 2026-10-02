@@ -23,7 +23,7 @@ export default function PublicLanding() {
     <>
       <section className="border-b border-outline-variant">
         <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
-          <div>
+          <div className="animate-rise">
             <p className="label-caps mb-5 text-primary">Indumentaria deportiva · Formosa</p>
             <h1 className="max-w-3xl text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
               Equipos que se ven bien. <span className="text-primary">Pedidos que avanzan.</span>
@@ -32,8 +32,8 @@ export default function PublicLanding() {
               Diseñamos y producimos indumentaria para clubes, colegios y organizaciones. Te ayudamos a ordenar cada detalle sin perder de vista lo importante: salir a jugar.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <LinkButton href="/presupuesto" size="lg">Pedir presupuesto →</LinkButton>
-              <LinkButton href="/seguimiento" variant="secondary" size="lg">Seguir un pedido</LinkButton>
+              <LinkButton href="/catalogo" size="lg">Ver catálogo →</LinkButton>
+              <LinkButton href="/presupuesto" variant="secondary" size="lg">Pedir presupuesto</LinkButton>
             </div>
           </div>
           <div className="border-l-2 border-primary pl-5 text-sm leading-6 text-on-surface-variant lg:mb-2">

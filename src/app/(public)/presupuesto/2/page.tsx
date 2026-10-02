@@ -10,10 +10,15 @@ export const metadata = { title: "Presupuesto · Paso 2 · AH Sports" };
  * F4-09 — Paso 2: seleccionar producto + talles + cantidades.
  * Server component carga productods activos y sus talles reales (no inventa).
  */
-export default async function PresupuestoStep2() {
+export default async function PresupuestoStep2({
+  searchParams,
+}: {
+  searchParams: Promise<{ productId?: string }>;
+}) {
+  const sp = await searchParams;
   const [productRows, sizeRows] = await Promise.all([
     // Keep the public catalog compatible while the additive product-classification migration is pending.
-    db.select({ id: products.id, name: products.name, description: products.description, basePrice: products.basePrice, minOrder: products.minOrder }).from(products).where(eq(products.active, true)).orderBy(products.name),
+    db.select({ id: products.id, name: products.name, description: products.description, imageUrl: products.imageUrl, basePrice: products.basePrice, minOrder: products.minOrder }).from(products).where(eq(products.active, true)).orderBy(products.name),
     db
       .select({ id: sizes.id, productId: sizes.productId, label: sizes.label, order: sizes.order })
       .from(sizes)
@@ -31,16 +36,18 @@ export default async function PresupuestoStep2() {
     id: p.id,
     name: p.name,
     description: p.description,
+    imageUrl: p.imageUrl,
     basePrice: p.basePrice,
     minOrder: p.minOrder,
     sizes: sizesByProduct.get(p.id) ?? [],
   }));
+  const initialProductId = catalog.some((p) => p.id === sp.productId) ? sp.productId : undefined;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <StepIndicator current={2} />
       <h1 className="mb-6 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Elegí el producto y los talles</h1>
-      <Step2Form catalog={catalog} />
+      <Step2Form catalog={catalog} initialProductId={initialProductId} />
     </div>
   );
 }

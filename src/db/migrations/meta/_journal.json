@@ -57,6 +57,13 @@
       "when": 1786396800005,
       "tag": "0008_product_taxonomy_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786396800006,
+      "tag": "0009_product_image",
+      "breakpoints": true
     }
   ]
 }

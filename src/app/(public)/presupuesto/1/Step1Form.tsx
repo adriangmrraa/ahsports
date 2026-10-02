@@ -26,7 +26,8 @@ export function Step1Form({ existing }: { existing?: { name?: string; email?: st
 
   function goNext(e: React.FormEvent) {
     e.preventDefault();
-    const params = new URLSearchParams();
+    // Propaga params entrantes (p.ej. productId desde /catalogo).
+    const params = new URLSearchParams(window.location.search);
     params.set("type", type);
     if (form.name) params.set("name", form.name);
     if (form.email) params.set("email", form.email);

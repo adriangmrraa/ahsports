@@ -175,6 +175,7 @@ export const products = pgTable("products", {
   garmentFamily: garmentFamily("garment_family"),
   garmentType: garmentType("garment_type"),
   moldId: varchar("mold_id", { length: 36 }).references(() => garmentMolds.id, { onDelete: "set null" }),
+  imageUrl: text("image_url"),
   basePrice: numeric("base_price", { precision: 12, scale: 2 }).notNull().default("0"),
   minOrder: integer("min_order").notNull().default(1),
   zones: jsonb("zones").$type<string[]>().notNull().default(sql`'[]'::jsonb`),

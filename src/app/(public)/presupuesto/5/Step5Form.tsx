@@ -91,7 +91,7 @@ export function Step5Form({ productName, items, total, sizeQuantities, contactIn
         </ul>
       </div>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p className="text-sm text-error">{error}</p>}
       <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link href={backHref} className="flex min-h-11 items-center justify-center rounded-md px-3 text-sm text-on-surface-variant hover:text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:justify-start">
           ← Volver
