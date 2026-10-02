@@ -79,7 +79,7 @@ export function StatCard({
 
 export function PageHeader({ title, subtitle, action }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode }) {
   return (
-    <header className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6 pb-4 border-b border-outline-variant">
+    <header className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6 pb-4 border-b border-outline-variant animate-rise">
       <div>
         <h2 className="font-headline text-2xl md:text-3xl text-on-surface">{title}</h2>
         {subtitle && <p className="data-mono text-on-surface-variant mt-1">{subtitle}</p>}

@@ -78,7 +78,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
       </aside>
 
-      <main className="relative min-h-screen min-w-0 flex-1 p-4 md:p-6 lg:p-8">
+      <main className="relative min-h-screen min-w-0 flex-1 p-4 md:p-6 lg:p-8 animate-fade">
         <AdminMobileNav items={navItems} user={{ name: user.name, role: user.role }} />
         {children}
       </main>

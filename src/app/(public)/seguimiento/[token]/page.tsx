@@ -63,7 +63,7 @@ export default async function SeguimientoPage({ params }: { params: Promise<{ to
           Solicitado el {new Date(order.createdAt).toLocaleDateString("es-AR")}
         </p>
         {order.status === "bloqueado_pago" && (
-          <p className="mt-3 rounded-lg bg-amber-500/15 px-3 py-2 text-sm text-amber-300">⚠️ Falta el pago de la seña para iniciar la producción.</p>
+          <p className="mt-3 rounded-lg bg-status-warning/15 px-3 py-2 text-sm text-status-warning">⚠️ Falta el pago de la seña para iniciar la producción.</p>
         )}
       </div>
 

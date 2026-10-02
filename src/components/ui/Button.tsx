@@ -30,7 +30,7 @@ export function Button({
     <button
       {...props}
       className={cn(
-        "rounded-md label-caps transition-colors duration-150 flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2",
+        "rounded-md label-caps transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2",
         variants[variant],
         sizes[size],
         className,
@@ -54,7 +54,7 @@ export function LinkButton({
       href={href}
       {...props}
       className={cn(
-        "rounded-md label-caps transition-colors duration-150 flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2",
+        "rounded-md label-caps transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2",
         variants[variant],
         sizes[size],
         className,
