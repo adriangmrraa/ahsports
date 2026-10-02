@@ -273,7 +273,7 @@ export function RecetasEditor({
                         {recipeItems.length === 0 ? (
                           <p className="text-sm text-on-surface-variant">Sin items en esta receta.</p>
                         ) : (
-                          <Table>
+                          <Table responsive>
                             <THead>
                               <tr>
                                 <TH>Material</TH>
@@ -293,13 +293,13 @@ export function RecetasEditor({
                                       {material?.name ?? "Material eliminado"}
                                       {material && <span className="block text-xs text-on-surface-variant">{material.unit}</span>}
                                     </TD>
-                                    <TD align="right">
+                                    <TD align="right" label="Consumo">
                                       {item.consumptionMode === "yield"
                                         ? `1 ${material ? consumptionUnit(material.unit) : "unidad"} / ${item.unitsPerConsumptionUnit} prendas`
                                         : `${item.directQuantity ?? item.quantity} ${material ? consumptionUnit(material.unit) : "unidad"} / prenda`}
                                     </TD>
-                                    <TD align="right" className="text-xs">{item.consumptionMode === "yield" ? "Rendimiento" : "Directo"}</TD>
-                                    <TD align="right">{item.wastePercent}%</TD>
+                                    <TD align="right" className="text-xs" label="Método">{item.consumptionMode === "yield" ? "Rendimiento" : "Directo"}</TD>
+                                    <TD align="right" label="Merma %">{item.wastePercent}%</TD>
                                     <TD align="right">
                                       <Button variant="ghost" size="sm" disabled={pending} onClick={() => {
                                         if (isEditing) {

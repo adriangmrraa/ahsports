@@ -6774,17 +6774,6 @@
       "norm_label": "eslint-config-next"
     },
     {
-      "label": "tailwindcss",
-      "file_type": "code",
-      "source_file": "package.json",
-      "source_location": "L37",
-      "_origin": "ast",
-      "id": "package_devdependencies_tailwindcss",
-      "community": 18,
-      "community_name": "devDependencies",
-      "norm_label": "tailwindcss"
-    },
-    {
       "label": "@tailwindcss/postcss",
       "file_type": "code",
       "source_file": "package.json",
@@ -6827,6 +6816,17 @@
       "community": 18,
       "community_name": "devDependencies",
       "norm_label": "@types/react"
+    },
+    {
+      "label": "@types/react-dom",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L33",
+      "_origin": "ast",
+      "id": "package_devdependencies_types_react_dom",
+      "community": 18,
+      "community_name": "devDependencies",
+      "norm_label": "@types/react-dom"
     },
     {
       "label": "typescript",
@@ -6873,17 +6873,6 @@
       "norm_label": "eslint-config-next"
     },
     {
-      "label": "tailwindcss",
-      "file_type": "concept",
-      "source_file": "package.json",
-      "source_location": "L37",
-      "_origin": "ast",
-      "id": "tailwindcss",
-      "community": 18,
-      "community_name": "devDependencies",
-      "norm_label": "tailwindcss"
-    },
-    {
       "label": "@tailwindcss/postcss",
       "file_type": "concept",
       "source_file": "package.json",
@@ -6926,6 +6915,17 @@
       "community": 18,
       "community_name": "devDependencies",
       "norm_label": "@types/react"
+    },
+    {
+      "label": "@types/react-dom",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L33",
+      "_origin": "ast",
+      "id": "types_react_dom",
+      "community": 18,
+      "community_name": "devDependencies",
+      "norm_label": "@types/react-dom"
     },
     {
       "label": "typescript",
@@ -14342,26 +14342,26 @@
       "norm_label": "graphify.js"
     },
     {
-      "label": "@types/react-dom",
+      "label": "tailwindcss",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L33",
+      "source_location": "L37",
       "_origin": "ast",
-      "id": "package_devdependencies_types_react_dom",
+      "id": "package_devdependencies_tailwindcss",
       "community": 88,
-      "community_name": "@types/react-dom",
-      "norm_label": "@types/react-dom"
+      "community_name": "tailwindcss",
+      "norm_label": "tailwindcss"
     },
     {
-      "label": "@types/react-dom",
+      "label": "tailwindcss",
       "file_type": "concept",
       "source_file": "package.json",
-      "source_location": "L33",
+      "source_location": "L37",
       "_origin": "ast",
-      "id": "types_react_dom",
+      "id": "tailwindcss",
       "community": 88,
-      "community_name": "@types/react-dom",
-      "norm_label": "@types/react-dom"
+      "community_name": "tailwindcss",
+      "norm_label": "tailwindcss"
     },
     {
       "label": "postcss.config.mjs",
@@ -17613,7 +17613,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/ui/Table.tsx",
-      "source_location": "L50",
+      "source_location": "L48",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_ui_table_td",
@@ -48060,5 +48060,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "be226014fa1e203efa162a815db42f7d7f29c566"
+  "built_at_commit": "b0846c76af294e419b12462ed939fccc719be793"
 }

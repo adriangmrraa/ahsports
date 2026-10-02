@@ -138,7 +138,7 @@ export function PricingRulesManager({ initial }: { initial: Row[] }) {
 
       {error && !showForm && <p className="text-sm text-error">{error}</p>}
 
-      <Table>
+      <Table responsive>
         <THead>
           <tr>
             <TH>Regla</TH>
@@ -154,11 +154,11 @@ export function PricingRulesManager({ initial }: { initial: Row[] }) {
           {initial.map((r) => (
             <TR key={r.id} className={r.active ? undefined : "opacity-60"}>
               <TD className="text-on-surface">{r.name}</TD>
-              <TD align="right">{r.marginPercent}%</TD>
-              <TD align="right">{r.urgentSurcharge}%</TD>
-              <TD align="right">{r.minAdvancePercent}%</TD>
-              <TD align="right">{r.rounding}</TD>
-              <TD>
+              <TD align="right" label="Margen %">{r.marginPercent}%</TD>
+              <TD align="right" label="Urgente %">{r.urgentSurcharge}%</TD>
+              <TD align="right" label="Seña mín %">{r.minAdvancePercent}%</TD>
+              <TD align="right" label="Redondeo">{r.rounding}</TD>
+              <TD label="Estado">
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${r.active ? "bg-primary/10 border-primary/40 text-primary" : "border-outline-variant text-on-surface-variant"}`}>
                   {r.active ? "ACTIVA" : "INACTIVA"}
                 </span>

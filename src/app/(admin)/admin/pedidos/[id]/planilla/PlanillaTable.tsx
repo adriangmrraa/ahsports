@@ -84,7 +84,7 @@ export function PlanillaTable({ orderId, lines, items }: { orderId: string; line
             }
           >
             {line.notes && <p className="text-xs text-on-surface-variant mb-3">{line.notes}</p>}
-            <div className="overflow-x-auto scrollbar-thin -mx-1 px-1">
+            <div className="overflow-x-auto scrollbar-thin -mx-1 px-1 table-cards">
               <table className="w-full text-left border-collapse min-w-[560px]">
                 <thead className="bg-surface-container text-on-surface-variant border-b border-outline-variant">
                   <tr>

@@ -26,7 +26,7 @@ export default async function ProveedoresPage() {
         </Card>
       ) : (
         <Card>
-          <Table>
+          <Table responsive>
             <THead>
               <tr>
                 <TH>Nombre</TH>
@@ -44,10 +44,10 @@ export default async function ProveedoresPage() {
                     {s.name}
                     {s.contactName && <span className="block text-xs text-on-surface-variant">{s.contactName}</span>}
                   </TD>
-                  <TD>{s.contactName ?? "—"}</TD>
-                  <TD className="data-mono">{s.phone ?? "—"}</TD>
-                  <TD>{s.email ?? "—"}</TD>
-                  <TD>
+                  <TD label="Contacto">{s.contactName ?? "—"}</TD>
+                  <TD className="data-mono" label="Teléfono">{s.phone ?? "—"}</TD>
+                  <TD label="Email">{s.email ?? "—"}</TD>
+                  <TD label="Estado">
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${s.active ? "bg-primary/10 border-primary/40 text-primary" : "border-outline-variant text-on-surface-variant"}`}>
                       {s.active ? "activo" : "inactivo"}
                     </span>

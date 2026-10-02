@@ -55,7 +55,7 @@ export default async function SeguimientoPage({ params }: { params: Promise<{ to
       <p className="mb-6 text-sm text-on-surface-variant">Pedido #{order.number}</p>
 
       {/* Estado actual */}
-      <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container p-4 sm:p-5">
+      <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container p-4 sm:p-5 animate-rise">
         <span className="inline-block rounded-full bg-primary/20 px-3 py-1 text-sm font-semibold text-primary">
           {STATUS_LABEL[order.status] ?? order.status}
         </span>
@@ -70,10 +70,10 @@ export default async function SeguimientoPage({ params }: { params: Promise<{ to
       {/* Timeline */}
       <ol className="mb-6 grid grid-cols-5 gap-1">
         {TIMELINE.map((label, i) => (
-          <li key={label} className="flex min-w-0 flex-col items-center gap-1 text-center">
+          <li key={label} className="flex min-w-0 flex-col items-center gap-1 text-center animate-rise" style={{ animationDelay: `${i * 60}ms` }}>
             <span
-              className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs ${
-                i <= stage ? "border-primary bg-primary text-on-primary" : "border-outline-variant bg-surface-container"
+              className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs transition-transform ${
+                i <= stage ? "border-primary bg-primary text-on-primary scale-110" : "border-outline-variant bg-surface-container"
               }`}
             >
               {i < stage ? "✓" : i + 1}

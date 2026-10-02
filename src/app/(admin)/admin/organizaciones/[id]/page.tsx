@@ -137,7 +137,7 @@ export default async function OrganizacionPerfilPage({ params }: { params: Promi
         {orgOrders.length === 0 ? (
           <p className="text-sm text-on-surface-variant text-center py-4">Sin pedidos para esta organización.</p>
         ) : (
-          <Table>
+          <Table responsive>
             <THead>
               <tr>
                 <TH>#</TH>
@@ -151,13 +151,13 @@ export default async function OrganizacionPerfilPage({ params }: { params: Promi
               {orgOrders.map((o) => (
                 <TR key={o.id}>
                   <TD className="text-primary">#{o.number}</TD>
-                  <TD>
+                  <TD label="Estado">
                     <Badge tone={o.status === "bloqueado_pago" ? "error" : o.status === "entregado" ? "success" : "muted"}>
                       {statusLabel[o.status] ?? o.status}
                     </Badge>
                   </TD>
-                  <TD align="right">{formatCurrency(o.totalQuoted)}</TD>
-                  <TD className="text-on-surface-variant">{formatDate(o.createdAt)}</TD>
+                  <TD align="right" label="Total">{formatCurrency(o.totalQuoted)}</TD>
+                  <TD className="text-on-surface-variant" label="Fecha">{formatDate(o.createdAt)}</TD>
                   <TD align="right">
                     <Link href={`/admin/pedidos/${o.id}`} className="text-primary hover:underline label-caps">
                       Abrir →

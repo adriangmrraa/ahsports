@@ -61,7 +61,7 @@ export function InsumosTable({ rows }: { rows: Row[] }) {
       {filtered.length === 0 ? (
         <p className="text-sm text-on-surface-variant py-6 text-center">Sin resultados para los filtros aplicados.</p>
       ) : (
-        <Table>
+        <Table responsive>
           <THead>
             <tr>
               <TH>Material</TH>
@@ -77,11 +77,11 @@ export function InsumosTable({ rows }: { rows: Row[] }) {
             {filtered.map((m) => (
               <TR key={m.id} className={m.active ? undefined : "opacity-60"}>
                 <TD className="text-on-surface">{m.name}</TD>
-                <TD className="text-on-surface-variant">{m.category}</TD>
-                <TD className="data-mono">{m.unit}</TD>
-                <TD align="right">{formatCurrency(m.unitPrice)}</TD>
-                <TD className="text-on-surface-variant">{m.supplierName ?? m.supplier ?? "—"}</TD>
-                <TD>
+                <TD className="text-on-surface-variant" label="Categoría">{m.category}</TD>
+                <TD className="data-mono" label="Unidad">{m.unit}</TD>
+                <TD align="right" label="Precio">{formatCurrency(m.unitPrice)}</TD>
+                <TD className="text-on-surface-variant" label="Proveedor">{m.supplierName ?? m.supplier ?? "—"}</TD>
+                <TD label="Estado">
                   <Link href={`/admin/insumos/${m.id}`} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${m.active ? "bg-primary/10 border-primary/40 text-primary" : "border-outline-variant text-on-surface-variant"}`}>
                     {m.active ? "ACTIVO" : "INACTIVO"}
                   </Link>

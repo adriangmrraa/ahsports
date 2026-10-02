@@ -9,9 +9,9 @@ const tableVariants: Record<TableVariant, { container: string; table: string }> 
   plain: { container: "bg-transparent", table: "" },
 };
 
-export function Table({ children, className, variant = "default" }: { children: ReactNode; className?: string; variant?: TableVariant }) {
+export function Table({ children, className, variant = "default", responsive = false }: { children: ReactNode; className?: string; variant?: TableVariant; responsive?: boolean }) {
   return (
-    <div className={cn("max-w-full overflow-hidden", tableVariants[variant].container, className)}>
+    <div className={cn("max-w-full overflow-hidden", tableVariants[variant].container, responsive && "table-cards", className)}>
       <div className="overflow-x-auto scrollbar-thin">
         <table className={cn("w-full min-w-[640px] text-left border-collapse", tableVariants[variant].table)}>{children}</table>
       </div>
@@ -43,9 +43,12 @@ export function TR({ children, className, href }: { children: ReactNode; classNa
   return <tr className={classes}>{children}</tr>;
 }
 
-export function TD({ children, className, align = "left" }: { children: ReactNode; className?: string; align?: "left" | "right" | "center" }) {
+export function TD({ children, className, align = "left", label }: { children: ReactNode; className?: string; align?: "left" | "right" | "center"; label?: string }) {
   return (
-    <td className={cn("px-3 py-2.5 data-mono text-on-surface", align === "right" && "text-right", align === "center" && "text-center", className)}>
+    <td
+      data-label={label}
+      className={cn("px-3 py-2.5 data-mono text-on-surface", align === "right" && "text-right", align === "center" && "text-center", className)}
+    >
       {children}
     </td>
   );

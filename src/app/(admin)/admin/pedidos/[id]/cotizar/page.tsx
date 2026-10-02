@@ -192,7 +192,7 @@ export default async function CotizarPage({ params }: { params: Promise<{ id: st
           </span>
         }
       >
-        <Table>
+        <Table responsive>
           <THead>
             <tr>
               <TH>Producto</TH>
@@ -217,13 +217,13 @@ export default async function CotizarPage({ params }: { params: Promise<{ id: st
                     {sku && <div className="text-xs text-on-surface-variant data-mono">{sku}</div>}
                     {sizeSummary && <div className="text-xs text-on-surface-variant">{sizeSummary}</div>}
                   </TD>
-                  <TD align="center">{l.quantity}</TD>
-                  <TD align="right">{formatCurrency(l.unitCost)}</TD>
-                  <TD align="right">{formatCurrency(l.unitPrice)}</TD>
-                  <TD align="right" className="text-on-surface font-bold">
+                  <TD align="center" label="Cant.">{l.quantity}</TD>
+                  <TD align="right" label="Costo unit.">{formatCurrency(l.unitCost)}</TD>
+                  <TD align="right" label="Precio unit.">{formatCurrency(l.unitPrice)}</TD>
+                  <TD align="right" className="text-on-surface font-bold" label="Subtotal">
                     {formatCurrency(l.subtotal)}
                   </TD>
-                  <TD>
+                  <TD label="Materiales">
                     {l.materials.length === 0 ? (
                       <span className="text-xs text-on-surface-variant">—</span>
                     ) : (

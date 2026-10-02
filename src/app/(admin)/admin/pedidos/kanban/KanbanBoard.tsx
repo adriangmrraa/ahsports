@@ -76,7 +76,7 @@ export function KanbanBoard({ initialOrders }: { initialOrders: OrderRow[] }) {
                 const id = e.dataTransfer.getData("orderId");
                 if (id) onDrop(col.key, id);
               }}
-              className="glass-panel rounded-lg p-3 min-h-[60vh]"
+              className="glass-panel rounded-lg p-3 md:min-h-[60vh]"
             >
               <div className="flex justify-between items-center mb-3 pb-2 border-b border-outline-variant">
                 <span className="label-caps text-on-surface-variant">{col.label}</span>
@@ -99,10 +99,22 @@ export function KanbanBoard({ initialOrders }: { initialOrders: OrderRow[] }) {
                       {o.urgent && <Badge tone="error">Urgente</Badge>}
                     </div>
                     <p className="text-xs text-on-surface line-clamp-2 mb-2">{o.notes || "Sin notas"}</p>
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center gap-2">
                       <span className="data-mono text-on-surface-variant">{formatCurrency(o.totalQuoted)}</span>
                       <Link href={`/admin/pedidos/${o.id}`} className="text-[10px] label-caps text-primary hover:underline">Abrir</Link>
                     </div>
+                    {/* Drag&drop no funciona en touch: selector de etapa solo en mobile. */}
+                    <select
+                      aria-label="Mover a etapa"
+                      className="mt-2 w-full rounded-md border border-outline-variant bg-surface-container-low px-2 py-1.5 text-xs text-on-surface md:hidden"
+                      value={columnOf(o.status)}
+                      disabled={pending}
+                      onChange={(e) => onDrop(e.target.value, o.id)}
+                    >
+                      {columns.map((c) => (
+                        <option key={c.key} value={c.key}>{c.label}</option>
+                      ))}
+                    </select>
                   </div>
                 ))}
                 {items.length === 0 && (

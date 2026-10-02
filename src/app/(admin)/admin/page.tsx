@@ -77,7 +77,7 @@ export default async function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
           label="Pedidos activos"
           value={activeOrders?.count ?? 0}
@@ -118,13 +118,13 @@ export default async function DashboardPage() {
               const colors = ["bg-primary/80", "bg-secondary/80", "bg-tertiary/80", "bg-success/80"];
               return (
                 <div key={stage} className="flex items-center gap-3">
-                  <div className="w-32 label-caps text-on-surface-variant text-right">{statusLabel[stage]} ({count})</div>
+                  <div className="w-20 sm:w-32 label-caps text-on-surface-variant text-right">{statusLabel[stage]} ({count})</div>
                   <div className="flex-1 h-9 bg-surface-container-highest rounded-full overflow-hidden border border-outline-variant">
                     <div
                       className={`h-full ${colors[idx]} flex items-center px-3 transition-all duration-1000`}
                       style={{ width: `${pct}%` }}
                     >
-                      <span className="data-mono text-on-primary-fixed">En proceso</span>
+                      <span className="data-mono text-on-primary-fixed hidden sm:inline">En proceso</span>
                     </div>
                   </div>
                 </div>

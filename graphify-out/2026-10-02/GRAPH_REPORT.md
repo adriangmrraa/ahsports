@@ -1,7 +1,7 @@
 # Graph Report - zander  (2026-10-02)
 
 ## Corpus Check
-- 206 files · ~116,704 words
+- 206 files · ~116,546 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `be226014`
+- Built from commit: `b0846c76`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -102,7 +102,7 @@
 - NEON-MIGRATION-BASELINE.md
 - next
 - next-env.d.ts
-- @types/react-dom
+- tailwindcss
 - postcss.config.mjs
 - 0001_public_upload_sessions.sql
 - 0003_suppliers.sql
@@ -212,7 +212,7 @@ Nodes (19): clsx, dotenv, drizzle-orm, lucide-react, @neondatabase/serverless, d
 
 ### Community 18 - "devDependencies"
 Cohesion: 0.11
-Nodes (19): drizzle-kit, eslint, eslint-config-next, devDependencies, drizzle-kit, eslint, eslint-config-next, tailwindcss (+11 more)
+Nodes (19): drizzle-kit, eslint, eslint-config-next, devDependencies, drizzle-kit, eslint, eslint-config-next, @tailwindcss/postcss (+11 more)
 
 ### Community 19 - "client.ts"
 Cohesion: 0.18

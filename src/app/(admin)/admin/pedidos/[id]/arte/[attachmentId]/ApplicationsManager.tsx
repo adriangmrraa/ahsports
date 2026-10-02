@@ -111,7 +111,7 @@ export function ApplicationsManager({
         {initial.length === 0 ? (
           <p className="text-sm text-on-surface-variant text-center py-4">Sin aplicaciones. Agregá la primera abajo.</p>
         ) : (
-          <Table>
+          <Table responsive>
             <THead>
               <tr>
                 <TH>Zona</TH>
@@ -134,11 +134,11 @@ export function ApplicationsManager({
                 return (
                   <TR key={a.id}>
                     <TD className="text-on-surface">{a.zone}</TD>
-                    <TD>{a.view}</TD>
-                    <TD>{a.techniqueName ?? "-"}</TD>
-                    <TD align="right">{w && h ? `${w}×${h} cm` : "-"}</TD>
-                    <TD align="center">{a.quantity}</TD>
-                    <TD align="right">{est != null ? formatCurrency(est) : "-"}</TD>
+                    <TD label="Vista">{a.view}</TD>
+                    <TD label="Técnica">{a.techniqueName ?? "-"}</TD>
+                    <TD align="right" label="Medidas">{w && h ? `${w}×${h} cm` : "-"}</TD>
+                    <TD align="center" label="Cant.">{a.quantity}</TD>
+                    <TD align="right" label="Costo est.">{est != null ? formatCurrency(est) : "-"}</TD>
                     <TD align="right">
                       <Button variant="ghost" size="sm" disabled={pending} onClick={() => remove(a.id)}>
                         Eliminar

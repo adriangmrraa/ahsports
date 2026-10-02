@@ -185,7 +185,7 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
         {lines.length === 0 ? (
           <p className="text-sm text-on-surface-variant text-center py-6">Sin líneas. Agregá la primera para poder cotizar.</p>
         ) : (
-          <Table>
+          <Table responsive>
             <THead>
               <tr>
                 <TH>Producto</TH>
@@ -205,11 +205,11 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
                       <div className="text-on-surface">{l.productName ?? l.productId}</div>
                       <div className="text-xs text-on-surface-variant data-mono">{l.productSku}</div>
                     </TD>
-                    <TD align="center">{l.quantity}</TD>
-                    <TD align="right">{formatCurrency(l.unitCost)}</TD>
-                    <TD align="right">{formatCurrency(l.unitPrice)}</TD>
-                    <TD align="right" className="text-on-surface font-bold">{formatCurrency(Number(l.unitPrice) * l.quantity)}</TD>
-                    <TD>
+                    <TD align="center" label="Cantidad">{l.quantity}</TD>
+                    <TD align="right" label="Costo unit.">{formatCurrency(l.unitCost)}</TD>
+                    <TD align="right" label="Precio unit.">{formatCurrency(l.unitPrice)}</TD>
+                    <TD align="right" className="text-on-surface font-bold" label="Subtotal">{formatCurrency(Number(l.unitPrice) * l.quantity)}</TD>
+                    <TD label="Planilla">
                       <span className="data-mono text-on-surface-variant">{its.length} prendas</span>{" "}
                       <Link href={`/admin/pedidos/${order.id}/planilla`} className="text-[11px] label-caps text-primary hover:underline">
                         Ver

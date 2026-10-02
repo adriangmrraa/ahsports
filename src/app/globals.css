@@ -20,6 +20,8 @@
   --color-on-primary: #f7f5f1;
   --color-primary-container: #35322d;
   --color-on-primary-container: #f6f4f0;
+  --color-primary-fixed: #35322d;
+  --color-on-primary-fixed: #f6f4f0;
   --color-secondary: #8a6b52;
   --color-on-secondary: #faf7f3;
   --color-tertiary: #5e6f60;
@@ -60,6 +62,8 @@
     min-height: 100vh;
     min-width: 320px;
     overflow-x: hidden;
+    /* Textura de grano sutil sobre el fondo papel (una sola pasada de pintura). */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.032'/%3E%3C/svg%3E");
   }
   * {
     border-color: var(--color-border-default);
@@ -146,6 +150,56 @@
   }
   .animate-fade {
     animation: fade-in 0.45s ease both;
+  }
+
+  /* Tablas → tarjetas en mobile (< md). El markup no cambia:
+     thead se oculta, cada tr se vuelve una card, cada td rotula con data-label. */
+  @media (max-width: 767px) {
+    .table-cards table { min-width: 0 !important; }
+    .table-cards thead { display: none; }
+    .table-cards tbody { display: flex; flex-direction: column; gap: 0.625rem; padding: 0.625rem; }
+    .table-cards tr {
+      display: block;
+      border: 1px solid var(--color-outline-variant);
+      border-radius: 0.75rem;
+      padding: 0.625rem 0.875rem;
+      background: var(--color-surface-container);
+      animation: rise 0.4s cubic-bezier(0.21, 0.86, 0.36, 1) both;
+    }
+    .table-cards tbody tr:nth-child(2) { animation-delay: 30ms; }
+    .table-cards tbody tr:nth-child(3) { animation-delay: 60ms; }
+    .table-cards tbody tr:nth-child(4) { animation-delay: 90ms; }
+    .table-cards tbody tr:nth-child(5) { animation-delay: 120ms; }
+    .table-cards tbody tr:nth-child(6) { animation-delay: 150ms; }
+    .table-cards tbody tr:nth-child(7) { animation-delay: 180ms; }
+    .table-cards tbody tr:nth-child(n+8) { animation-delay: 210ms; }
+    .table-cards td {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.75rem;
+      padding: 0.3rem 0;
+      text-align: right;
+    }
+    .table-cards td[data-label]::before {
+      content: attr(data-label);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--color-on-surface-variant);
+      text-align: left;
+      flex-shrink: 0;
+    }
+    .table-cards td:not([data-label]) { display: block; text-align: left; }
+    .table-cards td:not([data-label]):first-child {
+      font-weight: 600;
+      color: var(--color-on-surface);
+      padding-bottom: 0.5rem;
+      margin-bottom: 0.125rem;
+      border-bottom: 1px solid var(--color-outline-variant);
+    }
+    .table-cards td:not([data-label]):last-child { text-align: right; }
   }
   @media (prefers-reduced-motion: reduce) {
     .animate-rise, .animate-fade { animation: none; }

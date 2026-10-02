@@ -104,7 +104,7 @@ export default async function PedidosPage({ searchParams }: { searchParams: Prom
           </div>
         </Card>
       ) : (
-        <Table>
+        <Table responsive>
           <THead>
             <tr>
               <TH>#</TH>
@@ -126,13 +126,13 @@ export default async function PedidosPage({ searchParams }: { searchParams: Prom
               return (
                 <TR key={o.id}>
                   <TD className="text-primary">#{o.number}</TD>
-                  <TD>
+                  <TD label="Cliente">
                     <div className="text-on-surface">{o.orgName ?? "Particular"}</div>
                     {o.contactName && <div className="text-xs text-on-surface-variant">{o.contactName}</div>}
                   </TD>
-                  <TD><Badge tone={tone as never}>{statusLabel[o.status]}</Badge></TD>
-                  <TD align="right" className="text-on-surface">{formatCurrency(o.totalQuoted)}</TD>
-                  <TD className="text-on-surface-variant">{formatDate(o.createdAt)}</TD>
+                  <TD label="Estado"><Badge tone={tone as never}>{statusLabel[o.status]}</Badge></TD>
+                  <TD align="right" className="text-on-surface" label="Total">{formatCurrency(o.totalQuoted)}</TD>
+                  <TD className="text-on-surface-variant" label="Fecha">{formatDate(o.createdAt)}</TD>
                   <TD align="right">
                     <Link href={`/admin/pedidos/${o.id}`} className="text-primary hover:underline label-caps">Abrir →</Link>
                   </TD>

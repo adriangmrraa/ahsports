@@ -74,14 +74,14 @@ export default async function ProductoDetallePage({ params }: { params: Promise<
         {productSizes.length === 0 ? (
           <p className="text-sm text-on-surface-variant">Sin talles definidos.</p>
         ) : (
-          <Table>
+          <Table responsive>
             <THead><tr><TH>Orden</TH><TH>Talle</TH><TH>Medidas (cm)</TH></tr></THead>
             <tbody>
               {productSizes.map((s) => (
                 <TR key={s.id}>
                   <TD>{s.order}</TD>
-                  <TD className="text-on-surface">{s.label}</TD>
-                  <TD className="text-xs">{Object.entries(s.measurements as Record<string, number>).map(([k, v]) => `${k}: ${v}`).join(" · ") || "—"}</TD>
+                  <TD className="text-on-surface" label="Talle">{s.label}</TD>
+                  <TD className="text-xs" label="Medidas (cm)">{Object.entries(s.measurements as Record<string, number>).map(([k, v]) => `${k}: ${v}`).join(" · ") || "—"}</TD>
                 </TR>
               ))}
             </tbody>

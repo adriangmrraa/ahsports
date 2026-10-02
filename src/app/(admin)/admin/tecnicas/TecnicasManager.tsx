@@ -103,7 +103,7 @@ export function TecnicasManager({ initial }: { initial: Row[] }) {
         </form>
       </Card>
 
-      <Table>
+      <Table responsive>
         <THead>
           <tr>
             <TH>Técnica</TH>
@@ -118,10 +118,10 @@ export function TecnicasManager({ initial }: { initial: Row[] }) {
           {initial.map((t) => (
             <TR key={t.id} className={t.active ? undefined : "opacity-60"}>
               <TD className="text-on-surface">{t.name}</TD>
-              <TD align="right">{formatCurrency(t.costPerUnit)}</TD>
-              <TD align="right">{formatCurrency(t.costPerSquareMeter)}</TD>
-              <TD align="right">{formatCurrency(t.setupCost)}</TD>
-              <TD>
+              <TD align="right" label="Por unidad">{formatCurrency(t.costPerUnit)}</TD>
+              <TD align="right" label="Por m²">{formatCurrency(t.costPerSquareMeter)}</TD>
+              <TD align="right" label="Setup">{formatCurrency(t.setupCost)}</TD>
+              <TD label="Estado">
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${t.active ? "bg-primary/10 border-primary/40 text-primary" : "border-outline-variant text-on-surface-variant"}`}>
                   {t.active ? "ACTIVA" : "INACTIVA"}
                 </span>

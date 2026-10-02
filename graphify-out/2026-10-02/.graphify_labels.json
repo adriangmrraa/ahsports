@@ -87,7 +87,7 @@
   "85": "next",
   "86": "next-env.d.ts",
   "87": "graphify.js",
-  "88": "@types/react-dom",
+  "88": "tailwindcss",
   "89": "postcss.config.mjs",
   "90": "presupuesto/page.tsx",
   "91": "seguimiento/page.tsx",

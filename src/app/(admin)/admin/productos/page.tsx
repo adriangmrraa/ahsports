@@ -29,7 +29,7 @@ export default async function ProductosPage() {
           </div>
         </Card>
       ) : (
-        <Table>
+        <Table responsive>
           <THead>
             <tr>
               <TH>SKU</TH>
@@ -45,11 +45,11 @@ export default async function ProductosPage() {
             {rows.map((p) => (
               <TR key={p.id}>
                 <TD className="text-primary">{p.sku}</TD>
-                <TD className="text-on-surface">{p.name}</TD>
-                <TD className="text-xs text-on-surface-variant">{labelProductTaxonomy(p.productCategory)} · {labelProductTaxonomy(p.productSubcategory)}</TD>
-                <TD className="text-xs text-on-surface-variant">{labelProductTaxonomy(p.productType)}{p.productKind === "bundle" ? " · conjunto" : p.garmentFamily ? ` · ${labelGarmentFamily(p.garmentFamily)}${p.garmentType ? ` · ${labelGarmentType(p.garmentType)}` : ""}` : ""}</TD>
-                <TD align="right">{formatCurrency(p.basePrice)}</TD>
-                <TD className="text-xs text-on-surface-variant">
+                <TD className="text-on-surface" label="Nombre">{p.name}</TD>
+                <TD className="text-xs text-on-surface-variant" label="Categoría">{labelProductTaxonomy(p.productCategory)} · {labelProductTaxonomy(p.productSubcategory)}</TD>
+                <TD className="text-xs text-on-surface-variant" label="Familia / tipo">{labelProductTaxonomy(p.productType)}{p.productKind === "bundle" ? " · conjunto" : p.garmentFamily ? ` · ${labelGarmentFamily(p.garmentFamily)}${p.garmentType ? ` · ${labelGarmentType(p.garmentType)}` : ""}` : ""}</TD>
+                <TD align="right" label="Precio base">{formatCurrency(p.basePrice)}</TD>
+                <TD className="text-xs text-on-surface-variant" label="Zonas">
                   {Array.isArray(p.zones) ? (p.zones as string[]).join(", ") : "—"}
                 </TD>
                 <TD align="right">

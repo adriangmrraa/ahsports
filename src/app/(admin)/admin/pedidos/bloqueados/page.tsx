@@ -52,7 +52,7 @@ export default async function PedidosBloqueadosPage() {
         />
       ) : (
         <Card>
-          <Table>
+          <Table responsive>
             <THead>
               <tr>
                 <TH>#</TH>
@@ -67,15 +67,15 @@ export default async function PedidosBloqueadosPage() {
               {rows.map((o) => (
                 <TR key={o.id}>
                   <TD className="text-primary">#{o.number}</TD>
-                  <TD>
+                  <TD label="Cliente">
                     <div className="text-on-surface">{o.orgName ?? "Particular"}</div>
                     {o.contactName && <div className="text-xs text-on-surface-variant">{o.contactName}</div>}
                   </TD>
-                  <TD>
+                  <TD label="Estado">
                     <Badge tone="error">Bloqueado (pago)</Badge>
                   </TD>
-                  <TD align="right" className="text-on-surface">{formatCurrency(o.totalQuoted)}</TD>
-                  <TD className="text-on-surface-variant">{formatDate(o.createdAt)}</TD>
+                  <TD align="right" className="text-on-surface" label="Total">{formatCurrency(o.totalQuoted)}</TD>
+                  <TD className="text-on-surface-variant" label="Fecha">{formatDate(o.createdAt)}</TD>
                   <TD align="right">
                     <span className="flex justify-end gap-3">
                       <Link href={`/admin/pedidos/${o.id}`} className="text-primary hover:underline label-caps">

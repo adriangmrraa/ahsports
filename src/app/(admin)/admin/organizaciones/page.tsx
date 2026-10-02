@@ -108,7 +108,7 @@ export default async function OrganizacionesPage({
           </div>
         </Card>
       ) : (
-        <Table>
+        <Table responsive>
           <THead>
             <tr>
               <TH>Nombre</TH>
@@ -122,9 +122,9 @@ export default async function OrganizacionesPage({
             {rows.map((o) => (
               <TR key={o.id}>
                 <TD className="text-on-surface">{o.name}</TD>
-                <TD className="text-on-surface-variant">{kindLabel[o.kind] ?? o.kind}</TD>
-                <TD align="center">{Number(o.contactCount)}</TD>
-                <TD className="text-on-surface-variant">{formatDate(o.createdAt)}</TD>
+                <TD className="text-on-surface-variant" label="Tipo">{kindLabel[o.kind] ?? o.kind}</TD>
+                <TD align="center" label="Contactos">{Number(o.contactCount)}</TD>
+                <TD className="text-on-surface-variant" label="Alta">{formatDate(o.createdAt)}</TD>
                 <TD align="right">
                   <Link href={`/admin/organizaciones/${o.id}`} className="text-primary hover:underline label-caps">
                     Abrir →
