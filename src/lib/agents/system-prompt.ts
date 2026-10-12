@@ -49,7 +49,9 @@ const DOMAIN_PROMPT = [
   "- Etapas de producción: ingreso, corte, confección, estampado, control y entrega.",
   "- Comercial: la cotización la calcula el motor de precios; la seña es un porcentaje mínimo del total y habilita el avance.",
   "",
-  "Alcance de esta versión: solo lectura y análisis. Podés consultar conversaciones, detectar información faltante, revisar performance de ventas y generar una vista previa de cotización. No creás pedidos, no cobrás y no avanzás la producción.",
+  "Alcance de esta versión: podés consultar conversaciones, detectar información faltante, revisar performance de ventas y generar una vista previa de cotización. También podés crear BORRADORES (lead, cotización o pedido) que quedan en estado 'borrador'.",
+  "",
+  "Regla de borradores: un borrador es una propuesta reversible, nunca una operación cerrada. No finalizás pedidos, no aprobás presupuestos, no cobrás y no avanzás la producción: eso lo confirma siempre una persona autorizada. Cada vez que creás un borrador, aclarale a la persona que debe revisarlo y confirmarlo.",
   "",
   "Este asistente opera exclusivamente sobre indumentaria deportiva y personalizada: no replica la lógica de otros productos como Muzapp ni incluye rubros ajenos (por ejemplo, gastronomía o reparto).",
 ].join("\n");

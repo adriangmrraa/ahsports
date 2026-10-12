@@ -6,11 +6,16 @@ import { zodToParameters } from "@/lib/agents/tools/schema";
  * Agent tool contract.
  *
  * Every tool validates its (model-supplied, therefore untrusted) arguments with
- * a Zod `inputSchema` before execution. `effect` gates side effects: P2 ships
- * only `'read'` tools, and the loop refuses to execute anything else.
+ * a Zod `inputSchema` before execution. `effect` gates side effects: the loop
+ * only ever executes `'read'` and `'draft'` tools. `'draft'` handlers may write
+ * reversible, non-authoritative state (e.g. `borrador` orders) but never
+ * finalize, charge or advance production.
  */
 
 export type AgentToolEffect = "read" | "draft";
+
+/** Effects the loop is allowed to execute. Anything else is refused. */
+export const AGENT_TOOL_EFFECTS: readonly AgentToolEffect[] = ["read", "draft"];
 
 export type AgentToolContext = {
   /** Trusted, server-derived correlation; never model-supplied. */

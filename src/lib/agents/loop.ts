@@ -1,6 +1,6 @@
 import { ChatProviderError, type ChatMessage, type ChatProvider } from "@/lib/ai/provider";
 import { detectInjectionAttempt } from "@/lib/agents/injection-guard";
-import { toToolSpec, type AgentTool, type AgentToolContext } from "@/lib/agents/tools/types";
+import { AGENT_TOOL_EFFECTS, toToolSpec, type AgentTool, type AgentToolContext } from "@/lib/agents/tools/types";
 
 /**
  * Tool-calling agent loop.
@@ -9,7 +9,9 @@ import { toToolSpec, type AgentTool, type AgentToolContext } from "@/lib/agents/
  * appended as a delimited `user` message — never as a system message and never
  * as instructions. Tool arguments come from the model (which is reading that
  * untrusted content), so each one is validated with the tool's Zod
- * `inputSchema` before execution, and only `effect: 'read'` tools are ever run.
+ * `inputSchema` before execution, and only `'read'` and `'draft'` tools are ever
+ * run. `'draft'` tools persist reversible, non-authoritative state only and
+ * report to the model that human confirmation is required.
  */
 
 const MAX_CONTENT_CHARS = 20000;
@@ -112,7 +114,7 @@ export async function runAgentLoop(input: AgentLoopInput): Promise<AgentLoopResu
         messages.push(toolMessage(call.id, call.name, { error: "unknown_tool" }));
         continue;
       }
-      if (tool.effect !== "read") {
+      if (!AGENT_TOOL_EFFECTS.includes(tool.effect)) {
         trace.push({ id: call.id, name: call.name, effect: tool.effect, ok: false, error: "effect_not_allowed" });
         messages.push(toolMessage(call.id, tool.id, { error: "effect_not_allowed" }));
         continue;
