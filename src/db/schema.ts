@@ -67,6 +67,17 @@ export const productKind = pgEnum("product_kind", ["garment", "bundle"]);
 export const bundleSizeMode = pgEnum("bundle_size_mode", ["same_label", "fixed"]);
 export const productTaxonomyNodeKind = pgEnum("product_taxonomy_node_kind", ["category", "subcategory", "type"]);
 
+// Agent platform enums (P0 — see migration 0010_agent_platform.sql).
+export const channel = pgEnum("channel", ["telegram", "whatsapp"]);
+export const messageDirection = pgEnum("message_direction", ["inbound", "outbound"]);
+export const messageSenderKind = pgEnum("message_sender_kind", ["customer", "agent", "operator"]);
+export const messageContentType = pgEnum("message_content_type", ["text", "image", "document", "system"]);
+export const messageDeliveryState = pgEnum("message_delivery_state", ["received", "queued", "sent", "failed", "imported"]);
+export const conversationStatus = pgEnum("conversation_status", ["open", "closed"]);
+export const agentKind = pgEnum("agent_kind", ["customer", "operator"]);
+export const agentMemoryScope = pgEnum("agent_memory_scope", ["customer", "operator", "global"]);
+export const auditActorKind = pgEnum("audit_actor_kind", ["system", "user", "agent", "channel"]);
+
 export const users = pgTable("users", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email", { length: 255 }).notNull().unique(),
@@ -617,4 +628,178 @@ export const paymentsRelations = relations(payments, ({ one, many }) => ({
 export const paymentEventsRelations = relations(paymentEvents, ({ one }) => ({
   payment: one(payments, { fields: [paymentEvents.paymentId], references: [payments.id] }),
   order: one(orders, { fields: [paymentEvents.orderId], references: [orders.id] }),
+}));
+
+// ─── Agent platform (P0) ────────────────────────────────────────────────────
+// Canonical omnichannel conversation record, agent configuration, session and
+// memory state, idempotency and audit. Every message is persisted as a DB fact;
+// the idempotency anchor is unique(channel, platform_message_id).
+
+/** Tool identifiers enabled for the agent, resolved from config at runtime. */
+export type AgentEnabledTools = string[];
+
+export type AuditPayload = {
+  before?: unknown;
+  after?: unknown;
+  error?: string;
+  issues?: string[];
+};
+
+export type AgentRawPayload = Record<string, unknown>;
+
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    customerId: varchar("customer_id", { length: 36 }).references(() => contacts.id, { onDelete: "set null" }),
+    organizationId: varchar("organization_id", { length: 36 }).references(() => organizations.id, { onDelete: "set null" }),
+    channel: channel("channel").notNull(),
+    externalThreadId: varchar("external_thread_id", { length: 255 }).notNull(),
+    status: conversationStatus("status").notNull().default("open"),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+    unreadCount: integer("unread_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    threadUnique: uniqueIndex("conversations_channel_thread_unique_idx").on(t.channel, t.externalThreadId),
+  }),
+);
+
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    conversationId: varchar("conversation_id", { length: 36 }).notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    channel: channel("channel").notNull(),
+    platformMessageId: varchar("platform_message_id", { length: 255 }).notNull(),
+    direction: messageDirection("direction").notNull(),
+    senderKind: messageSenderKind("sender_kind").notNull(),
+    senderRef: text("sender_ref"),
+    contentType: messageContentType("content_type").notNull().default("text"),
+    content: text("content").notNull().default(""),
+    rawPayload: jsonb("raw_payload").$type<AgentRawPayload>(),
+    deliveryState: messageDeliveryState("delivery_state").notNull().default("received"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    // Idempotency anchor: duplicate provider deliveries never create new facts.
+    platformUnique: uniqueIndex("chat_messages_platform_unique_idx").on(t.channel, t.platformMessageId),
+    conversationIdx: index("chat_messages_conversation_idx").on(t.conversationId, t.createdAt),
+  }),
+);
+
+export const agentSessionStates = pgTable("agent_session_states", {
+  conversationId: varchar("conversation_id", { length: 36 }).primaryKey().references(() => conversations.id, { onDelete: "cascade" }),
+  kind: agentKind("kind").notNull(),
+  summary: text("summary"),
+  state: jsonb("state").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const agentSessionEvents = pgTable(
+  "agent_session_events",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    conversationId: varchar("conversation_id", { length: 36 }).notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    eventType: varchar("event_type", { length: 64 }).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    conversationIdx: index("agent_session_events_conversation_idx").on(t.conversationId, t.createdAt),
+  }),
+);
+
+export const agentMemories = pgTable(
+  "agent_memories",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    scope: agentMemoryScope("scope").notNull(),
+    key: varchar("key", { length: 255 }).notNull(),
+    value: jsonb("value").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    scopeKeyUnique: uniqueIndex("agent_memories_scope_key_unique_idx").on(t.scope, t.key),
+  }),
+);
+
+export const idempotencyKeys = pgTable(
+  "idempotency_keys",
+  {
+    key: text("key").primaryKey(),
+    scope: varchar("scope", { length: 64 }).notNull(),
+    response: jsonb("response").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+  },
+  (t) => ({
+    expiresIdx: index("idempotency_keys_expires_idx").on(t.expiresAt),
+  }),
+);
+
+/**
+ * Immutable audit trail for agent activity. Rows are insert-only: no
+ * update/delete path exists in the application (mirrors payment_events).
+ */
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    actorKind: auditActorKind("actor_kind").notNull().default("system"),
+    actorRef: text("actor_ref"),
+    action: varchar("action", { length: 128 }).notNull(),
+    entityType: varchar("entity_type", { length: 64 }),
+    entityId: varchar("entity_id", { length: 64 }),
+    correlationId: varchar("correlation_id", { length: 64 }),
+    payload: jsonb("payload").$type<AuditPayload>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    actionIdx: index("audit_events_action_idx").on(t.action, t.createdAt),
+    correlationIdx: index("audit_events_correlation_idx").on(t.correlationId),
+  }),
+);
+
+/**
+ * Singleton agent configuration (id = 1). Secrets are stored AES-256-GCM
+ * encrypted (see src/lib/crypto/secret-box.ts) and are never returned. No
+ * provider or model is hardcoded: both are DB-resolved.
+ */
+export const agentConfig = pgTable("agent_config", {
+  id: integer("id").primaryKey().default(1),
+  provider: text("provider"),
+  model: text("model"),
+  systemPrompt: text("system_prompt"),
+  enabledTools: jsonb("enabled_tools").$type<AgentEnabledTools>().notNull().default(sql`'[]'::jsonb`),
+  botTokenEnc: text("bot_token_enc"),
+  providerKeyEnc: text("provider_key_enc"),
+  webhookSecretEnc: text("webhook_secret_enc"),
+  updatedById: varchar("updated_by_id", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  customer: one(contacts, { fields: [conversations.customerId], references: [contacts.id] }),
+  organization: one(organizations, { fields: [conversations.organizationId], references: [organizations.id] }),
+  messages: many(chatMessages),
+  sessionState: one(agentSessionStates, { fields: [conversations.id], references: [agentSessionStates.conversationId] }),
+  events: many(agentSessionEvents),
+}));
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+  conversation: one(conversations, { fields: [chatMessages.conversationId], references: [conversations.id] }),
+}));
+
+export const agentSessionStatesRelations = relations(agentSessionStates, ({ one }) => ({
+  conversation: one(conversations, { fields: [agentSessionStates.conversationId], references: [conversations.id] }),
+}));
+
+export const agentSessionEventsRelations = relations(agentSessionEvents, ({ one }) => ({
+  conversation: one(conversations, { fields: [agentSessionEvents.conversationId], references: [conversations.id] }),
+}));
+
+export const agentConfigRelations = relations(agentConfig, ({ one }) => ({
+  updatedBy: one(users, { fields: [agentConfig.updatedById], references: [users.id] }),
 }));
