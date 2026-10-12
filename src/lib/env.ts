@@ -17,6 +17,10 @@ export const serverEnvSchema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
   SESSION_SECRET: secretString("SESSION_SECRET"),
   SECRET_ENCRYPTION_KEY: secretString("SECRET_ENCRYPTION_KEY"),
+  // WhatsApp import (P6) is opt-in: only the routes that use these read them,
+  // so they are optional here but must be strong when present. No migration.
+  WHATSAPP_APP_SECRET: secretString("WHATSAPP_APP_SECRET").optional(),
+  WHATSAPP_VERIFY_TOKEN: secretString("WHATSAPP_VERIFY_TOKEN").optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -27,6 +31,8 @@ export function loadServerEnv(source: NodeJS.ProcessEnv = process.env) {
     DATABASE_URL: source.DATABASE_URL,
     SESSION_SECRET: source.SESSION_SECRET,
     SECRET_ENCRYPTION_KEY: source.SECRET_ENCRYPTION_KEY,
+    WHATSAPP_APP_SECRET: source.WHATSAPP_APP_SECRET,
+    WHATSAPP_VERIFY_TOKEN: source.WHATSAPP_VERIFY_TOKEN,
   });
 }
 
