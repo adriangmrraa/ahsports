@@ -9,6 +9,34 @@ quotes). Nothing is finalized, nothing is charged, production never advances, an
 draft result explicitly states that human confirmation is required. No admin UI, no jobs
 and no WhatsApp provider were built.
 
+## Repair after review (blocking defect) — P3
+Review BLOCKED `bb40f37` on ONE defect: `draftLeadTool.inputSchema` was built with
+`z.object().refine(...)`, i.e. a `ZodEffects` (no `.shape`). `toToolSpec`
+(`src/lib/agents/tools/types.ts`) cast it to `z.ZodObject` and
+`schema.ts`'s `objectSchema`/`zodToParameters` read `schema.shape` → `undefined`,
+so `Object.entries(undefined)` threw `Cannot convert undefined or null to object`
+the moment `buildToolSpecs`/`runAgentLoop` ran (`src/lib/agents/loop.ts:82`).
+
+Fixed both ways:
+- **`src/lib/agents/tools/schema.ts`** — `unwrap()` now peels transparent wrappers
+  by `_def.typeName` (`ZodEffects` via `_def.schema`; plus `ZodCatch`/`ZodReadonly`/
+  `ZodBranded`/`ZodPipeline`). `zodToParameters` accepts `z.ZodTypeAny`, unwraps
+  first, and degrades to an empty object schema (same non-throwing contract as
+  `toJsonSchema`) instead of crashing. Fixes the whole class, not just `draftLead`.
+- **`src/lib/agents/tools/types.ts`** — dropped the unsafe `as z.ZodObject` cast in
+  `toToolSpec`; the projection now accepts any `ZodTypeAny`.
+- **`src/lib/agents/tools/draft.ts`** — `draftLeadInput` is a plain `z.object` again;
+  the "at least one email or phone" rule moved into the handler, returning the same
+  semantics as a structured `{ ok:false, error:'invalid_input', ... }` result (same
+  message, no DB write). A comment documents why it must not be `.refine`d.
+- **Regression guard** — `scripts/check-agent-tools.mts` (`npm run check:agent-tools`)
+  is a committed, DB-free check that asserts `toToolSpec`/`buildToolSpecs` succeeds for
+  **every** registered tool (read + draft), plus the `draftLead` handler rule. This is
+  the durable check that catches this class of crash going forward (the P3 check was a
+  throwaway temp script).
+- Non-blocking findings deliberately NOT touched (deferred): `contactId` existence
+  check, `audit_events` emission, `error.message` leak, `role` free-text.
+
 ## Delivery
 - Change: `ai-telegram-sales-agent` · Strict TDD: `false` (standard mode)
 - Strategy: `auto-chain` / `feature-branch-chain`
@@ -77,6 +105,7 @@ and no WhatsApp provider were built.
 | `npm run lint` | 0 errors / 12 warnings — identical to baseline (0 new; `diff` empty) |
 | `npm run build` | **PRE-EXISTING ENVIRONMENTAL BASELINE FAILURE** — `DATABASE_URL is required in production` (`src/db/client.ts:8`) at "Collecting page data"; identical message/stage reproduced on the pre-change HEAD. The specific pre-existing route that trips first varies run-to-run (baseline `[id]/applications`, P3 run `[id]`) — same message, same `db/client` chunk, no new failure mode. No P3 module is imported by any route. |
 | DB-free behavior check (temp `tsx`, removed) | PASS (50 assertions) — registry closed set + effect allowlist; loop EXECUTES `'draft'` but REFUSES an unknown effect and still rejects unknown tool / invalid JSON / Zod-invalid args; draft Zod rejects empty/negative/zero/non-integer quantities and bad contact/order data, and strips client-supplied prices; `toCents`/`fromCents` round-trip and reject malformed money; static scan proves no payment/production call and only reversible statuses (`borrador`/`nuevo`) are written, and that `requiresHumanConfirmation` is declared |
+| Regression guard `npm run check:agent-tools` (`scripts/check-agent-tools.mts`) | PASS (25 assertions) — DB-free, committed. Asserts `toToolSpec` + `buildToolSpecs` succeed for **every** registered tool (6 read + 3 draft), each projecting an object parameter schema with its own id; `draftLead` projects name/email/phone with `name` required; the handler rejects a lead with neither email nor phone as a structured `invalid_input` without a DB write |
 
 ## Decisions / notes
 - **Extraction over duplication**: the `createPublicOrder` transactional core moved to

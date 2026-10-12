@@ -39,6 +39,24 @@ function unwrap(schema: AnySchema): { inner: AnySchema; optional: boolean; nulla
         nullable = true;
         inner = (inner as z.ZodNullable<AnySchema>).unwrap();
         continue;
+      // Transparent wrappers. A `.refine(...)`/`.transform(...)` (or `.catch`,
+      // `.brand`, `.readonly`, `.pipe`) turns a `ZodObject` into a wrapper whose
+      // `.shape` is undefined; without unwrapping, `objectSchema` would crash on
+      // `Object.entries(undefined)`. Peeling to the wrapped schema keeps the
+      // projection working for any decorated object schema.
+      case "ZodEffects":
+        inner = (inner as { _def: { schema: AnySchema } })._def.schema;
+        continue;
+      case "ZodCatch":
+      case "ZodReadonly":
+        inner = (inner as { _def: { innerType: AnySchema } })._def.innerType;
+        continue;
+      case "ZodBranded":
+        inner = (inner as { _def: { type: AnySchema } })._def.type;
+        continue;
+      case "ZodPipeline":
+        inner = (inner as { _def: { in: AnySchema } })._def.in;
+        continue;
       default:
         return { inner, optional, nullable };
     }
@@ -90,6 +108,12 @@ function objectSchema(schema: z.ZodObject<z.ZodRawShape>): JsonSchema {
   return { type: "object", properties, required, additionalProperties: false };
 }
 
-export function zodToParameters(schema: z.ZodObject<z.ZodRawShape>): ToolParameterSchema {
-  return objectSchema(schema) as ToolParameterSchema;
+export function zodToParameters(schema: z.ZodTypeAny): ToolParameterSchema {
+  const { inner } = unwrap(schema);
+  if (kindOf(inner) !== "ZodObject") {
+    // Degrade rather than throw (same contract as `toJsonSchema`): a tool whose
+    // root is not an object still projects to a valid, unconstrained spec.
+    return { type: "object", properties: {}, additionalProperties: false };
+  }
+  return objectSchema(inner as z.ZodObject<z.ZodRawShape>) as ToolParameterSchema;
 }

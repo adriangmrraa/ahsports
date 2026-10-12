@@ -38,6 +38,6 @@ export function toToolSpec(tool: AgentTool): ToolSpec {
   return {
     name: tool.id,
     description: tool.description,
-    parameters: zodToParameters(tool.inputSchema as z.ZodObject<z.ZodRawShape>),
+    parameters: zodToParameters(tool.inputSchema),
   };
 }

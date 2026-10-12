@@ -41,19 +41,18 @@ const HUMAN_CONFIRMATION_REQUIRED = true as const;
 
 // ── draftLead ───────────────────────────────────────────────────────────────
 
-const draftLeadInput = z
-  .object({
-    name: z.string().trim().min(1).max(255),
-    email: z.string().trim().email().max(255).nullish(),
-    phone: z.string().trim().min(3).max(64).nullish(),
-    organizationName: z.string().trim().min(1).max(255).nullish(),
-    role: z.string().trim().max(128).nullish(),
-    notes: z.string().trim().max(4000).nullish(),
-  })
-  .refine((value) => Boolean(value.email) || Boolean(value.phone), {
-    message: "Indicá al menos un email o un teléfono de contacto",
-    path: ["email"],
-  });
+// NOTE: keep this a plain `z.object`. A `.refine(...)` would turn it into a
+// `ZodEffects` (no `.shape`), which the registry's Zod→JSON projection cannot
+// walk. The "at least one contact method" rule is enforced in the handler below
+// instead, with the same message.
+const draftLeadInput = z.object({
+  name: z.string().trim().min(1).max(255),
+  email: z.string().trim().email().max(255).nullish(),
+  phone: z.string().trim().min(3).max(64).nullish(),
+  organizationName: z.string().trim().min(1).max(255).nullish(),
+  role: z.string().trim().max(128).nullish(),
+  notes: z.string().trim().max(4000).nullish(),
+});
 
 export const draftLeadTool: AgentTool<z.infer<typeof draftLeadInput>> = {
   id: "draftLead",
@@ -62,6 +61,16 @@ export const draftLeadTool: AgentTool<z.infer<typeof draftLeadInput>> = {
   effect: "draft",
   inputSchema: draftLeadInput,
   async handler(input) {
+    if (!input.email && !input.phone) {
+      return {
+        ok: false as const,
+        draft: false as const,
+        error: "invalid_input" as const,
+        message: "Indicá al menos un email o un teléfono de contacto. No se guardó nada.",
+        requiresHumanConfirmation: HUMAN_CONFIRMATION_REQUIRED,
+      };
+    }
+
     const result = await runInTransaction(async (tx) => {
       let organizationId: string | null = null;
       if (input.organizationName) {
