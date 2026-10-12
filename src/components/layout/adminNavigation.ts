@@ -1,14 +1,17 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Bot,
   Box,
   Factory,
   HardHat,
   Image as ImageIcon,
   Layers,
   LayoutDashboard,
+  MessagesSquare,
   Package,
   Receipt,
   Ruler,
+  Send,
   Settings,
   ShoppingCart,
   Truck,
@@ -32,6 +35,9 @@ export type AdminNavIcon =
   | "art"
   | "cash"
   | "payments"
+  | "ai"
+  | "messages"
+  | "telegram"
   | "settings";
 
 export type AdminNavItem = {
@@ -57,6 +63,9 @@ const navigation: Array<Omit<AdminNavItem, "badge">> = [
   { href: "/admin/arte", label: "Arte & adjuntos", icon: "art" },
   { href: "/admin/caja", label: "Caja & saldos", icon: "cash" },
   { href: "/admin/pagos", label: "Pagos", icon: "payments" },
+  { href: "/admin/agent", label: "Agente IA", icon: "ai" },
+  { href: "/admin/agent/inbox", label: "Conversaciones", icon: "messages" },
+  { href: "/admin/agent/telegram", label: "Telegram", icon: "telegram" },
   { href: "/admin/configuracion", label: "Configuración", icon: "settings" },
 ];
 
@@ -75,6 +84,9 @@ export const ADMIN_NAV_ICONS: Record<AdminNavIcon, LucideIcon> = {
   art: ImageIcon,
   cash: Warehouse,
   payments: Receipt,
+  ai: Bot,
+  messages: MessagesSquare,
+  telegram: Send,
   settings: Settings,
 };
 
