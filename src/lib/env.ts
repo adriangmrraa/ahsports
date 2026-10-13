@@ -21,6 +21,12 @@ export const serverEnvSchema = z.object({
   // so they are optional here but must be strong when present. No migration.
   WHATSAPP_APP_SECRET: secretString("WHATSAPP_APP_SECRET").optional(),
   WHATSAPP_VERIFY_TOKEN: secretString("WHATSAPP_VERIFY_TOKEN").optional(),
+  // WhatsApp send (G1, YCloud) is opt-in: the send path is config-gated by the
+  // API key + sender number, so they are optional here too. When either is
+  // missing no message is ever sent (`not_configured`).
+  YCLOUD_API_KEY: secretString("YCLOUD_API_KEY").optional(),
+  WHATSAPP_PHONE_NUMBER: z.string().optional(),
+  YCLOUD_BASE_URL: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -33,6 +39,9 @@ export function loadServerEnv(source: NodeJS.ProcessEnv = process.env) {
     SECRET_ENCRYPTION_KEY: source.SECRET_ENCRYPTION_KEY,
     WHATSAPP_APP_SECRET: source.WHATSAPP_APP_SECRET,
     WHATSAPP_VERIFY_TOKEN: source.WHATSAPP_VERIFY_TOKEN,
+    YCLOUD_API_KEY: source.YCLOUD_API_KEY,
+    WHATSAPP_PHONE_NUMBER: source.WHATSAPP_PHONE_NUMBER,
+    YCLOUD_BASE_URL: source.YCLOUD_BASE_URL,
   });
 }
 

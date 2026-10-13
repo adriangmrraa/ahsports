@@ -1,24 +1,28 @@
 import { z } from "zod";
 
+import type { IntakeSuccess } from "@/lib/channels/intake";
 import type { MessageContentType } from "@/lib/channels/types";
 
 /**
- * WhatsApp Business (Cloud API) webhook import — OBSERVE ONLY.
+ * WhatsApp Business (Cloud API) webhook import.
  *
- * This module normalizes the operator-authored messages echoed by the WhatsApp
- * Business app (`smb_message_echoes`) into the canonical message shape and
- * persists them as `channel: 'whatsapp'`, `direction: 'outbound'`,
- * `senderKind: 'operator'`, `deliveryState: 'imported'` facts. There is NO
- * outbound/send path here or anywhere downstream: the WhatsApp Business app is
- * the sender; we only record that the operator replied.
+ * This module normalizes a verified webhook into canonical facts. Operator
+ * messages echoed by the WhatsApp Business app (`smb_message_echoes`) are
+ * persisted as `channel: 'whatsapp'`, `direction: 'outbound'`,
+ * `senderKind: 'operator'`, `deliveryState: 'imported'` — an observed record of
+ * a reply the operator already sent elsewhere (never re-routed through the AI).
+ * Customer inbound messages (`value.messages`) are persisted as
+ * `direction: 'inbound'`, `senderKind: 'customer'`, `deliveryState: 'received'`
+ * and handed back (`pendingInbound`) so the caller can answer them through the
+ * AI loop. The outbound send path lives in `./send.ts`; nothing here sends.
  *
- * Inbound customer messages (`value.messages`) and delivery `statuses` are NOT
- * imported in this phase — Telegram is the inbound channel. Template status
- * callbacks carry no message content and are ignored.
+ * Delivery `statuses` and template-status callbacks carry no message content and
+ * are ignored.
  *
- * The pure schema + `normalizeWhatsAppWebhook` have no server-only/DB imports so
- * they can be exercised by a DB-free check; only `importWhatsAppWebhook` reaches
- * the persistence layer (lazy import) and therefore the database.
+ * The pure schema + normalizers (`normalizeWhatsAppWebhook`,
+ * `normalizeWhatsAppInbound`) have no server-only/DB imports so they can be
+ * exercised by a DB-free check; only `importWhatsAppWebhook` reaches the
+ * persistence layer (lazy import) and therefore the database.
  */
 
 const waId = z.union([z.number(), z.string()]).transform((value) => String(value));
@@ -193,29 +197,112 @@ export function normalizeWhatsAppWebhook(update: WhatsAppWebhook): NormalizedWha
   return normalized;
 }
 
+/** Normalized customer inbound message ready for canonical persistence + routing. */
+export type NormalizedWhatsAppCustomerMessage = {
+  channel: "whatsapp";
+  /** Counterpart wa_id (the customer) so this opens/attaches to the thread. */
+  externalThreadId: string;
+  /** Provider message id (`wamid...`) — the idempotency anchor per channel. */
+  platformMessageId: string;
+  direction: "inbound";
+  senderKind: "customer";
+  /** The customer wa_id that authored the message. */
+  senderRef: string;
+  contentType: MessageContentType;
+  content: string;
+  deliveryState: "received";
+  rawPayload: Record<string, unknown>;
+  waId: string;
+  businessNumber: string;
+};
+
+/**
+ * Reduces a verified WhatsApp webhook payload to the customer inbound messages
+ * worth importing. Messages without an id or sender are skipped, as are
+ * content-less events (e.g. an empty text body) that would only add noise and
+ * trigger a meaningless AI turn.
+ */
+export function normalizeWhatsAppInbound(update: WhatsAppWebhook): NormalizedWhatsAppCustomerMessage[] {
+  const normalized: NormalizedWhatsAppCustomerMessage[] = [];
+
+  for (const entry of update.entry) {
+    for (const change of entry.changes) {
+      const value = change.value;
+      const businessNumber =
+        value.metadata?.phone_number_id ?? value.metadata?.display_phone_number ?? "";
+
+      for (const message of value.messages ?? []) {
+        const counterpart = message.from ?? "";
+        if (!counterpart) continue;
+
+        const content = contentFor(message);
+        if (!content) continue;
+
+        normalized.push({
+          channel: "whatsapp",
+          externalThreadId: counterpart.slice(0, 255),
+          platformMessageId: message.id.slice(0, 255),
+          direction: "inbound",
+          senderKind: "customer",
+          senderRef: counterpart.slice(0, 255),
+          contentType: contentTypeFor(message),
+          content: content.slice(0, 20000),
+          deliveryState: "received",
+          rawPayload: message as unknown as Record<string, unknown>,
+          waId: counterpart,
+          businessNumber,
+        });
+      }
+    }
+  }
+
+  return normalized;
+}
+
+/** A customer inbound message that was newly persisted and still needs routing. */
+export type PendingInbound = {
+  message: NormalizedWhatsAppCustomerMessage;
+  persisted: IntakeSuccess;
+};
+
 export type WhatsAppImportOutcome =
-  | { ok: true; imported: number; duplicated: number }
+  | {
+      ok: true;
+      /** New operator outbound echoes imported. */
+      imported: number;
+      /** Duplicate operator outbound echoes ignored. */
+      duplicated: number;
+      /** New customer inbound messages persisted. */
+      inbound: number;
+      /** Newly persisted customer inbound messages awaiting an AI reply. */
+      pendingInbound: PendingInbound[];
+    }
   | { ok: false; error: "persistence_failed"; issues?: string[] };
 
 /**
  * Persists every operator outbound echo as a canonical WhatsApp fact via
- * `importOperatorOutbound`. Idempotent: a duplicate `wamid` resolves to a safe
- * success with no new fact. Purely observe-only — no WhatsApp client is used.
+ * `importOperatorOutbound`, and every customer inbound message via
+ * `persistCustomerInbound`. Idempotent: a duplicate `wamid` resolves to a safe
+ * success with no new fact. New customer inbound messages are returned in
+ * `pendingInbound` so the caller can route them (a duplicate was already
+ * answered, so it is not re-routed). No WhatsApp client is used here.
  */
 export async function importWhatsAppWebhook(update: WhatsAppWebhook): Promise<WhatsAppImportOutcome> {
-  const messages = normalizeWhatsAppWebhook(update);
-  if (messages.length === 0) {
-    return { ok: true, imported: 0, duplicated: 0 };
+  const operatorMessages = normalizeWhatsAppWebhook(update);
+  const inboundMessages = normalizeWhatsAppInbound(update);
+
+  if (operatorMessages.length === 0 && inboundMessages.length === 0) {
+    return { ok: true, imported: 0, duplicated: 0, inbound: 0, pendingInbound: [] };
   }
 
-  // Lazy so the pure normalizer stays importable without the server-only DB
+  // Lazy so the pure normalizers stay importable without the server-only DB
   // graph (see module header); the route and this path always run on the server.
-  const { importOperatorOutbound } = await import("@/lib/channels/intake");
+  const { importOperatorOutbound, persistCustomerInbound } = await import("@/lib/channels/intake");
 
   let imported = 0;
   let duplicated = 0;
 
-  for (const message of messages) {
+  for (const message of operatorMessages) {
     const result = await importOperatorOutbound({
       channel: message.channel,
       externalThreadId: message.externalThreadId,
@@ -236,5 +323,29 @@ export async function importWhatsAppWebhook(update: WhatsAppWebhook): Promise<Wh
     else imported += 1;
   }
 
-  return { ok: true, imported, duplicated };
+  let inbound = 0;
+  const pendingInbound: PendingInbound[] = [];
+
+  for (const message of inboundMessages) {
+    const result = await persistCustomerInbound({
+      channel: message.channel,
+      externalThreadId: message.externalThreadId,
+      platformMessageId: message.platformMessageId,
+      senderRef: message.senderRef,
+      contentType: message.contentType,
+      content: message.content,
+      deliveryState: message.deliveryState,
+      rawPayload: message.rawPayload,
+    });
+
+    if (!result.ok) {
+      return { ok: false, error: "persistence_failed", issues: result.issues };
+    }
+    if (!result.duplicate) {
+      inbound += 1;
+      pendingInbound.push({ message, persisted: result });
+    }
+  }
+
+  return { ok: true, imported, duplicated, inbound, pendingInbound };
 }
