@@ -3,7 +3,7 @@ services:
     name: ah-sports-os
     runtime: node
     plan: starter
-    buildCommand: npm install && npm run db:push && npm run build
+    buildCommand: npm install && npm run db:migrate && npm run build
     startCommand: npm start
     healthCheckPath: /
     envVars:
@@ -12,6 +12,8 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: SESSION_SECRET
+        generateValue: true
+      - key: SECRET_ENCRYPTION_KEY
         generateValue: true
       - key: NODE_ENV
         value: production

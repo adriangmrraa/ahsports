@@ -64,6 +64,13 @@
       "when": 1786396800006,
       "tag": "0009_product_image",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786396800007,
+      "tag": "0010_agent_platform",
+      "breakpoints": true
     }
   ]
 }

@@ -120,6 +120,24 @@
 |--------|------|------|-------------|
 | POST | `/api/settings` | admin | Upsert key-value |
 
+## L2. Agente IA (plataforma operativa, P1–P6)
+
+| Método | Path | Auth | Descripción |
+|--------|------|------|-------------|
+| POST | `/api/telegram/webhook/[token]` | secreto Telegram (`X-Telegram-Bot-Api-Secret-Token` + path token, constant-time) | Webhook Telegram. Verifica secreto → valida update con Zod → intake canónico; persiste la respuesta antes de entregarla y responde 2xx para handled/duplicate/ignored. `503` sin config, `403` secreto inválido, `400` update inválido. Sin sesión |
+| GET | `/api/whatsapp/webhook/[token]` | verify token Meta (constant-time) + path token | Handshake de verificación de Meta (`hub.mode=subscribe`, `hub.verify_token`); devuelve `hub.challenge` en `text/plain` solo si coincide, si no `403`; `503` si no está configurado |
+| POST | `/api/whatsapp/webhook/[token]` | firma Meta `X-Hub-Signature-256` sobre el body crudo + path token | WhatsApp Cloud API **observe-only**: verifica la firma, valida con Zod e importa los outbound del operador (`smb_message_echoes`) como hechos canónicos. **No existe path de envío de WhatsApp.** `503`/`403`/`400`, `2xx` para handled/dup/ignored |
+| GET, POST | `/api/agent/reconcile` | secreto cron (`x-cron-secret` o `Authorization: Bearer`, contra `CRON_SECRET` con fallback `AGENT_CRON_SECRET`) **o** sesión `admin`/`gerencia` | Job idempotente de mantenimiento: purga `idempotency_keys` vencidas, borra `agent_memories` vencidas, scrubea `raw_payload` (PII) fuera de ventana, reintenta envíos Telegram `failed` (claim `failed→queued`) y audita inbound sin respuesta. Nunca queda abierto (sin secreto válido cae a sesión; sin sesión `401`). `?batchSize=1..500` |
+
+Páginas admin (todas requieren sesión `admin` o `gerencia` vía `requireAgentAdmin`):
+
+| Tipo | Path | Descripción |
+|------|------|-------------|
+| page | `/admin/agent` | Configuración del agente (provider/model/system prompt/tools/secrets write-only: vacío = conservar, `CLEAR` = borrar) |
+| page | `/admin/agent/inbox` | Bandeja de conversaciones del agente |
+| page | `/admin/agent/inbox/[conversationId]` | Timeline de procedencia (provenance) de una conversación |
+| page | `/admin/agent/telegram` | Estado del binding/webhook de Telegram |
+
 ## M. Server actions (alternativa a API routes)
 
 Para mutaciones dentro de server components, usamos **server actions** en archivos del módulo:
@@ -133,9 +151,9 @@ Cada server action valida con Zod + verifica sesión + ejecuta la operación. So
 
 ## N. Resumen
 
-- Total endpoints API: ~30
+- Total endpoints API: ~30 (+ agente: 2 webhooks, 1 reconcile)
 - Server actions: ~20
-- Auth requerida en todos EXCEPT `/api/auth/login`, `/api/public/*`, `/presupuesto/*`, `/seguimiento/*`, `/login`, `/`
+- Auth requerida en todos EXCEPT `/api/auth/login`, `/api/public/*`, `/presupuesto/*`, `/seguimiento/*`, `/login`, `/`, y los webhooks con verificación propia `/api/telegram/webhook/*` y `/api/whatsapp/webhook/*` (secreto/firma, nunca sesión)
 
 ---
 

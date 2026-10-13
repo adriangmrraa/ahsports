@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { sessions, users } from "@/db/schema";
+import { getSessionSecret } from "@/lib/env";
 import { eq } from "drizzle-orm";
 
 const SESSION_COOKIE = "ah_session";
@@ -23,8 +24,8 @@ export function verifyPassword(password: string, stored: string) {
 }
 
 function sign(value: string) {
-  const secret = process.env.SESSION_SECRET || "dev-secret-please-change-in-production";
-  return createHmac("sha256", secret).update(value).digest("hex");
+  // Secret is validated by src/lib/env.ts; there is intentionally no fallback.
+  return createHmac("sha256", getSessionSecret()).update(value).digest("hex");
 }
 
 function verifySignature(value: string, signature: string) {

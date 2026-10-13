@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { randomBytes } from "node:crypto";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
-import { attachments, contacts, orderItems, orderLines, orders, organizations, products, sizes, uploadSessions } from "@/db/schema";
+import { attachments, uploadSessions } from "@/db/schema";
 import { withDbTransaction } from "@/lib/db-transaction";
+import { createOrderDraftTx, OrderDraftDomainError } from "@/lib/orders/draft-order";
 import { cleanupExpiredPublicUploads, createPublicUploadSession, getLivePublicUploadSession, matchesPublicUploadSecret } from "@/lib/public-upload-sessions";
 import { activeStorage, buildAttachmentPath, validateFile } from "@/lib/storage";
 import { createPublicOrderSchema, publicAttachmentUploadSchema } from "@/lib/validators";
@@ -76,81 +76,22 @@ export async function createPublicOrder(input: unknown): Promise<
       if (!uploadSession || uploadSession.expiresAt <= new Date() || !matchesPublicUploadSecret(uploadSession.secretHash, data.uploadSessionSecret)) {
         throw new PublicOrderDomainError("La sesión de carga venció o no corresponde a esta solicitud. Volvé a cargar los archivos.");
       }
-      const [product] = await tx.select({ id: products.id, minOrder: products.minOrder })
-        .from(products).where(and(eq(products.id, data.productId), eq(products.active, true))).limit(1);
-      if (!product) throw new PublicOrderDomainError("El producto seleccionado ya no está disponible");
 
-      const requestedSizeIds = data.sizeQuantities.flatMap((entry) => entry.sizeId ? [entry.sizeId] : []);
-      const productSizes = requestedSizeIds.length > 0
-        ? await tx.select({ id: sizes.id }).from(sizes)
-          .where(and(eq(sizes.productId, product.id), inArray(sizes.id, requestedSizeIds)))
-        : [];
-      if (productSizes.length !== requestedSizeIds.length) {
-        throw new PublicOrderDomainError("Uno o más talles no corresponden al producto seleccionado");
-      }
-
-      const expectedItems = data.sizeQuantities.reduce((sum, entry) => sum + entry.quantity, 0);
-      if (expectedItems < product.minOrder) throw new PublicOrderDomainError(`El pedido mínimo es de ${product.minOrder} prendas`);
-      if (expectedItems !== data.items.length) {
-        throw new PublicOrderDomainError("Las cantidades por talle no coinciden con las prendas personalizadas");
-      }
-      const itemCounts = new Map<string | null, number>();
-      for (const item of data.items) itemCounts.set(item.sizeId, (itemCounts.get(item.sizeId) ?? 0) + 1);
-      for (const entry of data.sizeQuantities) {
-        if (itemCounts.get(entry.sizeId) !== entry.quantity) {
-          throw new PublicOrderDomainError("Las prendas personalizadas no coinciden con las cantidades por talle");
-        }
-      }
-
-      let organizationId: string | null = null;
-      if (data.organizationName) {
-        const [existing] = await tx.select({ id: organizations.id }).from(organizations)
-          .where(eq(organizations.name, data.organizationName)).limit(1);
-        if (existing) organizationId = existing.id;
-        else {
-          const [created] = await tx.insert(organizations).values({
-            name: data.organizationName, kind: "club", notes: "Creada desde presupuesto público",
-          }).returning({ id: organizations.id });
-          if (!created) throw new PublicOrderDomainError("No se pudo crear la organización");
-          organizationId = created.id;
-        }
-      }
-
-      const [existingContact] = await tx.select({ id: contacts.id, organizationId: contacts.organizationId })
-        .from(contacts).where(or(eq(contacts.email, data.email), eq(contacts.phone, data.phone))).limit(1);
-      let contactId: string;
-      if (existingContact) {
-        if (organizationId && existingContact.organizationId && existingContact.organizationId !== organizationId) {
-          throw new PublicOrderDomainError("El contacto no pertenece a la organización indicada");
-        }
-        contactId = existingContact.id;
-        organizationId ??= existingContact.organizationId;
-      } else {
-        if (data.type === "returning") throw new PublicOrderDomainError("No encontramos ese cliente. Iniciá una solicitud como cliente nuevo");
-        const [created] = await tx.insert(contacts).values({
-          name: data.name, email: data.email, phone: data.phone, organizationId, role: "cliente", notes: data.notes,
-        }).returning({ id: contacts.id });
-        if (!created) throw new PublicOrderDomainError("No se pudo crear el contacto");
-        contactId = created.id;
-      }
-
-      const publicToken = randomBytes(24).toString("base64url");
-      const [order] = await tx.insert(orders).values({
-        publicToken, organizationId, contactId, status: "borrador", urgent: false, notes: data.notes ?? null,
-      }).returning({ id: orders.id, number: orders.number });
-      if (!order) throw new PublicOrderDomainError("No se pudo crear el pedido");
-      const [line] = await tx.insert(orderLines).values({
-        orderId: order.id, productId: product.id, quantity: expectedItems, unitPrice: "0", unitCost: "0",
-      }).returning({ id: orderLines.id });
-      if (!line) throw new PublicOrderDomainError("No se pudo crear la línea del pedido");
-
-      await tx.insert(orderItems).values(data.items.map((item) => ({
-        orderLineId: line.id, sizeId: item.sizeId,
-        individualName: item.individualName || null, individualNumber: item.individualNumber || null,
-      })));
+      const draft = await createOrderDraftTx(tx, {
+        type: data.type,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        organizationName: data.organizationName,
+        organizationNotes: "Creada desde presupuesto público",
+        notes: data.notes,
+        productId: data.productId,
+        sizeQuantities: data.sizeQuantities,
+        items: data.items,
+      });
 
       if (data.fileIds.length > 0) {
-        const claimed = await tx.update(attachments).set({ orderId: order.id, organizationId, expiresAt: null })
+        const claimed = await tx.update(attachments).set({ orderId: draft.orderId, organizationId: draft.organizationId, expiresAt: null })
           .where(and(inArray(attachments.id, data.fileIds), isNull(attachments.orderId), isNull(attachments.organizationId),
             eq(attachments.uploadSessionId, uploadSession.id), eq(attachments.status, "pendiente_revision"),
             eq(attachments.uploadedByRole, "cliente"), isNull(attachments.deletedAt)))
@@ -161,14 +102,14 @@ export async function createPublicOrder(input: unknown): Promise<
       }
       await tx.update(uploadSessions).set({ status: "consumed", consumedAt: new Date() })
         .where(and(eq(uploadSessions.id, uploadSession.id), eq(uploadSessions.status, "active")));
-      return { orderId: order.id, number: order.number, publicToken };
+      return { orderId: draft.orderId, number: draft.number, publicToken: draft.publicToken };
     });
     revalidatePath("/presupuesto/5");
     return { ok: true, ...result };
   } catch (error) {
-    if (error instanceof PublicOrderDomainError) return { ok: false, error: error.message };
+    if (error instanceof OrderDraftDomainError) return { ok: false, error: error.message };
     return { ok: false, error: "No se pudo guardar tu solicitud. Intentá nuevamente." };
   }
 }
 
-class PublicOrderDomainError extends Error {}
+class PublicOrderDomainError extends OrderDraftDomainError {}
