@@ -55,6 +55,10 @@ export type ReconcileSummary = {
   deliveriesSent: number;
   deliveriesFailed: number;
   inboundWithoutReply: number;
+  /**
+   * Total `audit_events` rows written by this run, including the terminal
+   * `agent.reconcile.completed` row. Computed from the live audit recorder.
+   */
   auditsWritten: number;
 };
 
@@ -73,17 +77,33 @@ type AuditInput = {
   payload?: AuditPayload;
 };
 
-async function writeAudit(entry: AuditInput, runId: string, now: Date): Promise<void> {
-  await db.insert(auditEvents).values({
-    action: entry.action,
-    actorKind: entry.actorKind ?? "system",
-    actorRef: entry.actorRef ?? null,
-    entityType: entry.entityType ?? null,
-    entityId: entry.entityId ?? null,
-    correlationId: entry.correlationId ?? runId,
-    payload: entry.payload ?? null,
-    createdAt: now,
-  });
+type AuditWriter = (entry: AuditInput) => Promise<void>;
+
+type AuditRecorder = { write: AuditWriter; written: number };
+
+/**
+ * Builds an insert-only audit writer bound to one reconcile run. `written`
+ * counts every row actually inserted, so the summary reports a true
+ * `auditsWritten` instead of a hardcoded value.
+ */
+function createAuditRecorder(runId: string, now: Date): AuditRecorder {
+  const recorder: AuditRecorder = {
+    written: 0,
+    async write(entry: AuditInput): Promise<void> {
+      await db.insert(auditEvents).values({
+        action: entry.action,
+        actorKind: entry.actorKind ?? "system",
+        actorRef: entry.actorRef ?? null,
+        entityType: entry.entityType ?? null,
+        entityId: entry.entityId ?? null,
+        correlationId: entry.correlationId ?? runId,
+        payload: entry.payload ?? null,
+        createdAt: now,
+      });
+      recorder.written += 1;
+    },
+  };
+  return recorder;
 }
 
 async function purgeExpiredIdempotencyKeys(now: Date, batchSize: number): Promise<number> {
@@ -146,7 +166,7 @@ type RetryOutcome = { retried: number; sent: number; failed: number };
  */
 async function retryFailedDeliveries(
   now: Date,
-  runId: string,
+  write: AuditWriter,
   batchSize: number,
 ): Promise<RetryOutcome> {
   const [config] = await db
@@ -156,11 +176,7 @@ async function retryFailedDeliveries(
     .limit(1);
   const botToken = decryptSecret(config?.botTokenEnc ?? "");
   if (!botToken) {
-    await writeAudit(
-      { action: "agent.reconcile.retry_skipped", payload: { error: "not_configured" } },
-      runId,
-      now,
-    );
+    await write({ action: "agent.reconcile.retry_skipped", payload: { error: "not_configured" } });
     return { retried: 0, sent: 0, failed: 0 };
   }
 
@@ -204,19 +220,15 @@ async function retryFailedDeliveries(
     else failedCount += 1;
 
     await db.update(chatMessages).set({ deliveryState: nextState }).where(eq(chatMessages.id, row.id));
-    await writeAudit(
-      {
-        action: result.ok ? "agent.message.retry_succeeded" : "agent.message.retry_failed",
-        actorKind: "channel",
-        actorRef: "telegram",
-        entityType: "chat_message",
-        entityId: row.id,
-        correlationId: row.platformMessageId,
-        payload: result.ok ? { after: { deliveryState: "sent" } } : { error: result.error },
-      },
-      runId,
-      now,
-    );
+    await write({
+      action: result.ok ? "agent.message.retry_succeeded" : "agent.message.retry_failed",
+      actorKind: "channel",
+      actorRef: "telegram",
+      entityType: "chat_message",
+      entityId: row.id,
+      correlationId: row.platformMessageId,
+      payload: result.ok ? { after: { deliveryState: "sent" } } : { error: result.error },
+    });
   }
 
   return { retried, sent, failed: failedCount };
@@ -224,7 +236,7 @@ async function retryFailedDeliveries(
 
 async function reconcileInboundWithoutReply(
   now: Date,
-  runId: string,
+  write: AuditWriter,
   batchSize: number,
 ): Promise<number> {
   const cutoff = new Date(now.getTime() - INBOUND_WITHOUT_REPLY_WINDOW_MS);
@@ -279,24 +291,20 @@ async function reconcileInboundWithoutReply(
     if (claim.length === 0) continue;
 
     emitted += 1;
-    await writeAudit(
-      {
-        action: "agent.message.inbound_without_reply",
-        actorKind: "system",
-        entityType: "conversation",
-        entityId: gap.conversationId,
-        payload: {
-          after: {
-            messageId: gap.messageId,
-            senderKind: gap.senderKind,
-            unansweredCount: gap.unansweredCount,
-            createdAt: gap.createdAt,
-          },
+    await write({
+      action: "agent.message.inbound_without_reply",
+      actorKind: "system",
+      entityType: "conversation",
+      entityId: gap.conversationId,
+      payload: {
+        after: {
+          messageId: gap.messageId,
+          senderKind: gap.senderKind,
+          unansweredCount: gap.unansweredCount,
+          createdAt: gap.createdAt,
         },
       },
-      runId,
-      now,
-    );
+    });
   }
 
   return emitted;
@@ -311,37 +319,32 @@ export async function runReconcile(options: ReconcileOptions = {}): Promise<Reco
   const now = options.now ?? new Date();
   const batchSize = options.batchSize ?? RECONCILE_DEFAULT_BATCH_SIZE;
   const correlationId = randomUUID();
+  const audit = createAuditRecorder(correlationId, now);
 
   try {
     const idempotencyKeysPurged = await purgeExpiredIdempotencyKeys(now, batchSize);
     if (idempotencyKeysPurged > 0) {
-      await writeAudit(
-        { action: "agent.reconcile.idempotency_purged", payload: { after: { count: idempotencyKeysPurged } } },
-        correlationId,
-        now,
-      );
+      await audit.write({
+        action: "agent.reconcile.idempotency_purged",
+        payload: { after: { count: idempotencyKeysPurged } },
+      });
     }
 
     const memoriesExpired = await deleteExpiredMemories(now, batchSize);
     if (memoriesExpired > 0) {
-      await writeAudit(
-        { action: "agent.memory.expired", payload: { after: { count: memoriesExpired } } },
-        correlationId,
-        now,
-      );
+      await audit.write({ action: "agent.memory.expired", payload: { after: { count: memoriesExpired } } });
     }
 
     const rawPayloadsScrubbed = await scrubRawPayloads(now, batchSize);
     if (rawPayloadsScrubbed > 0) {
-      await writeAudit(
-        { action: "agent.message.raw_payload_scrubbed", payload: { after: { count: rawPayloadsScrubbed } } },
-        correlationId,
-        now,
-      );
+      await audit.write({
+        action: "agent.message.raw_payload_scrubbed",
+        payload: { after: { count: rawPayloadsScrubbed } },
+      });
     }
 
-    const retry = await retryFailedDeliveries(now, correlationId, batchSize);
-    const inboundWithoutReply = await reconcileInboundWithoutReply(now, correlationId, batchSize);
+    const retry = await retryFailedDeliveries(now, audit.write, batchSize);
+    const inboundWithoutReply = await reconcileInboundWithoutReply(now, audit.write, batchSize);
 
     const summary: ReconcileSummary = {
       ranAt: now.toISOString(),
@@ -353,25 +356,18 @@ export async function runReconcile(options: ReconcileOptions = {}): Promise<Reco
       deliveriesSent: retry.sent,
       deliveriesFailed: retry.failed,
       inboundWithoutReply,
-      auditsWritten: 0,
+      // +1 counts the terminal `agent.reconcile.completed` row inserted below.
+      auditsWritten: audit.written + 1,
     };
 
-    await writeAudit(
-      { action: "agent.reconcile.completed", payload: { after: summary } },
-      correlationId,
-      now,
-    );
+    await audit.write({ action: "agent.reconcile.completed", payload: { after: summary } });
     return summary;
   } catch (error) {
     try {
-      await writeAudit(
-        {
-          action: "agent.reconcile.failed",
-          payload: { error: error instanceof Error ? error.message.slice(0, 500) : "unknown_error" },
-        },
-        correlationId,
-        now,
-      );
+      await audit.write({
+        action: "agent.reconcile.failed",
+        payload: { error: error instanceof Error ? error.message.slice(0, 500) : "unknown_error" },
+      });
     } catch {
       // Never mask the original failure with a best-effort audit failure.
     }

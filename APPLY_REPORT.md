@@ -1,98 +1,103 @@
-# APPLY REPORT — `ai-telegram-sales-agent` · P6 WhatsApp Import (observe-only)
+# APPLY REPORT — `ai-telegram-sales-agent` · P7 Hardening, migration reconciliation & docs (final)
 
 ## Summary
-Implemented Work Unit 7 / phase **P6 only**: the **WhatsApp Business import**
-path, strictly **observe-only**. We now verify Meta's webhook signature, answer
-the Meta verification handshake, and record WhatsApp Business operator outbound
-messages as canonical facts. **There is no send path.**
+Final phase **P7** on branch `adriangmrraa/apply-ai-telegram-sales-agent-p7`
+(base = P6 tip `c8ce11a`). Four accumulated hardening findings were fixed, the
+migration/journal bootstrap risk was verified and documented (no risky hand-written
+baseline), the agent-platform ADR and API-route inventory were added, and the
+graph-sync step was confirmed unavailable (script absent) and documented as skipped.
 
-1. **P6.1 — `src/lib/channels/signature.ts`**: constant-time verification of the
-   Meta header `X-Hub-Signature-256` (`sha256=<hex HMAC-SHA256 of the RAW body
-   with the app secret>`). Malformed/absent/mis-prefixed headers and wrong-length
-   digests are rejected; the comparison is `timingSafeEqual` over the decoded
-   bytes. Secret and raw body are never logged or returned.
-2. **P6.2 — `src/lib/channels/whatsapp/import.ts`**: Zod schema for the Cloud
-   API envelope + a pure `normalizeWhatsAppWebhook` that maps the operator's
-   self-sent **`smb_message_echoes`** into canonical messages, and
-   `importWhatsAppWebhook` which persists each via `importOperatorOutbound`
-   (`channel: 'whatsapp'`, `direction: 'outbound'`, `senderKind: 'operator'`,
-   `deliveryState: 'imported'`). **Import-only — no WhatsApp client, no send.**
-3. **P6.3 — `src/app/api/whatsapp/webhook/[token]/route.ts`**: config-gated.
-   `GET` handles the Meta handshake (`hub.mode=subscribe`, `hub.verify_token`,
-   `hub.challenge`) and echoes the challenge only on a constant-time token match
-   plus a derived path-token match. `POST` verifies `X-Hub-Signature-256` over the
-   RAW body, Zod-validates, then imports operator outbound echoes.
+No `db:push`, no `db:seed`, no merge/push/deploy.
 
-No migration was required: the secrets are **env vars** (`WHATSAPP_APP_SECRET`,
-`WHATSAPP_VERIFY_TOKEN`), wired through `src/lib/env.ts` (optional, min 16 chars
-when set) and documented in `.env.example`.
+## 1. Hardening fixes
 
-## Tasks completed (mark in tasks artifact)
-- [x] **P6.1** `src/lib/channels/signature.ts` — `X-Hub-Signature-256`
-  constant-time verify (`verifyWhatsAppSignature`, `computeWhatsAppSignature`,
-  `whatsappSignatureHeader`).
-- [x] **P6.2** `src/lib/channels/whatsapp/import.ts` — normalizer →
-  operator-outbound/imported, persisted via `importOperatorOutbound`.
-- [x] **P6.3** `src/app/api/whatsapp/webhook/[token]/route.ts` — config-gated GET
-  handshake + POST signature-verified import; **no send path**.
+1. **Sentinel breakout (P2 finding).** `wrapUntrustedContent` (`src/lib/agents/loop.ts`)
+   now neutralizes the delimiter token inside untrusted content before wrapping
+   (`neutralizeUntrustedSentinel`), case-insensitively. An inbound message that
+   contains the literal `<<<END_UNTRUSTED_CUSTOMER_MESSAGE>>>` can no longer forge
+   the closing sentinel and escape the delimited data block. Covered by a new
+   regression assertion in `scripts/check-agent-tools.mts`.
+2. **`error.message` leak (P3 finding).** The loop's generic tool `catch` no longer
+   forwards raw exception text/stack to the model — every thrown tool failure
+   (domain or unexpected) becomes a stable `{ error: "tool_error", message: <generic> }`
+   result. Domain failures surfaced as tool results were also hardened:
+   `draftOrder` (`src/lib/agents/tools/draft.ts`) maps `OrderDraftDomainError` to a
+   stable `reason` code via `orderDraftFailureReason` instead of echoing
+   `error.message`. `draftQuote` already returned stable reason codes.
+3. **`auditsWritten` hardcoded 0 (P5 finding).** `runReconcile`
+   (`src/lib/agents/reconcile.ts`) now writes audits through a
+   `createAuditRecorder` that counts every inserted row; the summary reports the
+   real count `audit.written + 1` (the `+1` is the terminal
+   `agent.reconcile.completed` row, documented in code). No more misleading metric.
+4. **`draftLead` role free-text (P3 finding).** `role` is now constrained to a
+   closed Zod enum (`DRAFT_LEAD_ROLES`: cliente, profesor, entrenador, encargado,
+   coordinador, administrativo) so a prompt-injected value cannot land arbitrary
+   text in `contacts.role`. Documented as the agent-side canonical vocabulary,
+   promotable to `src/lib/validators.ts` if the app adopts it globally.
 
-## Files
-- `src/lib/channels/signature.ts` (new) — pure (no `server-only`, no DB) so it is
-  exercisable by a DB-free check. `WHATSAPP_SIGNATURE_HEADER`/`_PREFIX` exported.
-- `src/lib/channels/whatsapp/import.ts` (new) — pure schema + normalizer; the
-  persistence path lazily imports `@/lib/channels/intake` (so the normalizer stays
-  importable without the `server-only` DB graph — same discipline as P5's
-  `retention.ts`). Exports `whatsAppWebhookSchema`, `normalizeWhatsAppWebhook`,
-  `importWhatsAppWebhook`, `NormalizedWhatsAppOperatorMessage`.
-- `src/app/api/whatsapp/webhook/[token]/route.ts` (new) — `runtime="nodejs"`,
-  `dynamic="force-dynamic"`. Reuses `deriveWebhookPathToken` /
-  `timingSafeEqualString` from the Telegram adapter (generic helpers).
-- `src/lib/env.ts` (modified) — optional `WHATSAPP_APP_SECRET` +
-  `WHATSAPP_VERIFY_TOKEN` (validated when present; no prod requirement so
-  deployments that do not use WhatsApp are unaffected).
-- `.env.example` (modified) — documents both secrets.
+## 2. Migration bootstrap + journal reconciliation (documented, not executed)
 
-## Security boundaries
-- **Never open**: missing config → `503`; bad signature / verify token / path
-  token → `403`; bad JSON / payload → `400`; handled/duplicate/ignored → `2xx`.
-  All secret comparisons are constant-time (`timingSafeEqual` / `timingSafeEqualString`).
-- **Signature over raw bytes**: the route reads `request.text()` and verifies
-  before `JSON.parse`, so the HMAC is computed over the exact received body.
-- **No send path**: `import.ts` and the route contain no `fetch`/WhatsApp send
-  endpoint (asserted by the DB-free check). The WhatsApp Business app is the
-  sender; we only record the fact.
-- **Zod on all input**; secrets and raw bodies are never logged or returned.
+- **Journal is internally consistent:** `meta/_journal.json` entries are `idx 0..8`
+  with tags `0001..0008` then `idx 8 = 0010_agent_platform`; monotonic, no
+  duplicate tags.
+- **Confirmed gap:** `0010_agent_platform.sql` declares FKs to `contacts`,
+  `organizations` and `users`, but **no migration in this repo creates those core
+  tables** (they came from an original `db:push`). A fresh DB running only
+  `db:migrate` will fail. Remediation documented in `docs/02-ARCHITECTURE.md`
+  (ADR-19): generate a `0000_core_baseline.sql` from a reference DB and chain it
+  before `0001`, or provision fresh DBs with `db:push` then `db:migrate`. No
+  hand-written giant baseline was produced (cannot be verified in this DB-less
+  worktree).
+- **Chain-merge reconciliation for `0009_product_image.sql`** (exists on
+  `master`, absent here): documented in ADR-19. On merge, `0009` must slot before
+  `0010` with its own journal `idx`, and `0010` must be re-indexed after it
+  (`idx 8 = 0009`, `idx 9 = 0010`), adjusting `when` to preserve order, then
+  validated with `npm run db:migrate` on a reference DB.
 
-## Gates
+## 3. Docs
+- `docs/02-ARCHITECTURE.md` — added decision row **D19** + full **ADR-19**
+  (provider-neutral runtime `provider → protocol → adapter` with model
+  pass-through; channel runtime; draft-only commerce tools; secrets-at-rest;
+  RBAC boundary; service-principal seam deferred to token auth; fresh-DB
+  migration bootstrap risk + merge reconciliation).
+- `docs/03-API-ROUTES.md` — added section **L2. Agente IA**: `POST
+  /api/telegram/webhook/[token]`, `GET|POST /api/whatsapp/webhook/[token]`,
+  `GET|POST /api/agent/reconcile`, and the admin pages `/admin/agent`,
+  `/admin/agent/inbox`, `/admin/agent/inbox/[conversationId]`,
+  `/admin/agent/telegram`; updated section N (auth exceptions + route counts).
+
+## 4. Graph sync (P7.2) — SKIPPED (script absent)
+`node .opencode/skills/graph-first/scripts/graphify-sync.mjs` does **not** exist
+in this repo: there is no `.opencode/` directory and no `graphify-sync.*` file
+anywhere outside `node_modules`. The graph-sync step is **skipped** — no script
+was invented.
+
+## 5. Files changed
+- `src/lib/agents/loop.ts` — sentinel neutralization + non-leaking tool-failure result.
+- `src/lib/agents/tools/draft.ts` — `DRAFT_LEAD_ROLES` enum on `draftLead.role`; `orderDraftFailureReason` for `draftOrder`.
+- `src/lib/agents/reconcile.ts` — `createAuditRecorder`; real `auditsWritten`.
+- `scripts/check-agent-tools.mts` — P7 regression assertions (role enum + sentinel).
+- `docs/02-ARCHITECTURE.md`, `docs/03-API-ROUTES.md` — docs (above).
+
+## 6. Gates
 | Gate | Result |
 |------|--------|
 | `npm run typecheck` (`tsc --noEmit`) | PASS (EXIT 0) |
 | `npm run lint` | 0 errors / 12 warnings — **identical to baseline** (0 new) |
-| `npm run build` | `✓ Compiled successfully` (new route compiled + lint/types valid). Then **PRE-EXISTING ENVIRONMENTAL BASELINE** — `DATABASE_URL is required in production` (`src/db/client.ts:7`) at "Collecting page data" for `/api/applications/[id]` (a pre-existing route that statically imports `@/db/client`); same message/stage as the documented P5 baseline. No new failure mode. |
-| DB-free behavior check (temp `tsx`, deleted) | PASS — **34 assertions**: signature accept/reject (tampered body, wrong secret, short hex, missing prefix, empty secret, uppercase hex), normalizer → whatsapp/outbound/operator/imported with thread = customer `to` and senderRef = business `from`, customer inbound ignored, GET challenge echo + 403s (bad verify token / path token / mode) + 503 unconfigured, POST 200/403/400/503 paths, and the static no-send assertions. |
+| `npm run check:agent-tools` | PASS (registry projection + new P7 role-enum/sentinel assertions) |
+| `npm run build` | `✓ Compiled successfully` (lint/types valid). Then **PRE-EXISTING ENVIRONMENTAL BASELINE**: `DATABASE_URL is required in production` (`src/db/client.ts:7`) at "Collecting page data" for `/api/applications/[id]` — a pre-existing route statically importing `@/db/client`; no `.env` in this worktree. Same message/stage as the documented P5/P6 baseline. **No new failure mode.** True `build EXIT 0` requires a real `DATABASE_URL`. |
 
-## Decisions / notes
-- **Secrets via env, no migration**: WhatsApp is opt-in/config-gated; the route
-  answers `503` until both vars are set. `env.ts` keeps them optional so the rest
-  of the deployment is unaffected.
-- **Path token reused**: the `[token]` segment is validated against
-  `deriveWebhookPathToken(verifyToken)` on both GET and POST — defense in depth,
-  consistent with the Telegram webhook route.
-- **Inbound `messages` and `statuses` are not imported**: P6 is operator-outbound
-  observe-only (Telegram is the inbound channel). Template-status callbacks carry
-  no content and are ignored.
-- **Lazy `intake` import** in `import.ts` keeps the pure normalizer DB-free-testable
-  without `server-only`; the route/real path always run server-side.
-
-## Excluded (unchanged, as required)
-- Any outbound/WhatsApp send, autonomous finalize/payment/production (none exist).
-- **P5.4** wiring the AI loop + `enabledTools` into the live webhook router (still
-  deferred).
-- P7 hardening/docs: graph sync, ADR (`docs/02-ARCHITECTURE.md`), routes
-  (`docs/03-API-ROUTES.md`), fresh-DB migration bootstrap, `CLEAR` sentinel,
-  inbox pagination, reconcile carry-forward items.
-- No `db:push`, no `db:seed`, no merge/push/deploy.
-
-## Next unit
-P7 — hardening & docs: graph sync, ADR + API routes docs, fresh-DB bootstrap,
-and the accumulated P5 carry-forward items.
+## 7. Deferred / remaining risks for the merge
+- **P5.4** — the AI loop + `enabledTools` are still a library; they are not wired
+  into the live webhook router. (Deliberately out of P7 scope.)
+- **P5 crash window** — a crash between the `failed→queued` retry claim and the
+  final write can leave a row stuck `queued`. Documented carry-forward.
+- **Reconcile audit** `correlationId` from `platform_messageId` (varchar 255) vs
+  `audit_events.correlation_id` (varchar 64) can overflow for long ids.
+- **`AGENT_MEMORY_DEFAULT_TTL_MS`** exported but unused.
+- **Migration order** must be reconciled at merge time (`0009` before `0010`, see
+  ADR-19) and a fresh-DB core baseline is required before `db:migrate` alone is
+  sufficient.
+- **WhatsApp inbound** `messages`/`statuses` still not imported (observe-only
+  operator outbound by design); non-image/document types coerce to `text`;
+  `whatsAppWebhookSchema` requires a non-empty `entry` array.

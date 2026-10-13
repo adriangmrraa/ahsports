@@ -98,6 +98,75 @@ App de gestion/
 | D16 | **Consumo explícito por item BOM (F6.1)** | `bom_items` conserva `quantity` para compatibilidad y agrega `consumption_mode`, `direct_quantity` y `units_per_consumption_unit`. `direct` usa cantidad por prenda; `yield` calcula `1 / unitsPerConsumptionUnit`. El motor no deriva consumos desde medidas terminadas sin datos geométricos explícitos |
 | D17 | **Familias, moldes y conjuntos (F6.2)** | `products` identifica `product_kind`, `garment_family`, `garment_type` y un `mold_id` opcional. `garment_molds` define el esquema de medidas reutilizable; cada producto conserva sus propios `sizes` y `bomRecipes`. Un `bundle` usa `product_bundles` + `product_bundle_items`; sus componentes siguen siendo productos individuales y el pricing deriva costo/precio sin mezclar recetas |
 | D18 | **Taxonomía general de productos (F6.3)** | `products.product_category`, `product_subcategory` y `product_type` clasifican cualquier artículo. Son textos con vocabulario inicial sugerido en `src/lib/product-taxonomy.ts`, para poder extender categorías sin migrar. `garment_family`, `garment_type` y `mold_id` quedan reservados para lógica específica de prendas y pueden ser nulos; recetas/BOM y pedidos sin talle siguen siendo válidos |
+| D19 | **Plataforma de agentes IA provider-neutral (agent-platform)** | Runtime de agente sobre un protocolo de chat genérico (`provider → protocol → adapter`; el modelo se pasa tal cual, NO se mapea a un adapter). Tools de comercio `draft-only` reversibles, secretos en reposo AES-256-GCM, RBAC admin/gerencia, canales Telegram/WhatsApp, y bootstrap de migración en DB fresca pendiente. Ver ADR-19 |
+
+### ADR-19 — Plataforma de agentes IA (provider-neutral, draft-only, multicanal)
+
+Contexto: el asistente de ventas operativo debe poder cambiar de proveedor de IA
+sin tocar código, operar sobre Telegram (entrada/salida) y WhatsApp Business
+(importación observe-only), y NUNCA cerrar una operación de comercio de forma
+autónoma. La plataforma se construyó en fases P0–P6 sobre este worktree.
+
+Decisiones:
+
+1. **Runtime provider-neutral (`provider → protocol → adapter`, modelo pass-through).**
+   `src/lib/ai/provider.ts` define el contrato `ChatProvider`; `src/lib/ai/config.ts`
+   resuelve el runtime desde `agent_config` (fila singleton `id = 1`);
+   `registry.ts` mapea **proveedor/protocolo → adapter** (p. ej. `chat-completions`)
+   y el **modelo se pasa tal cual** al adapter — no hay tabla `modelo → adapter`.
+   Cambiar de proveedor o modelo es un cambio de datos en la DB, no de código.
+2. **Runtime multicanal con registro canónico.** Cada mensaje entrante/saliente se
+   persiste como hecho canónico en `chat_messages` (unique
+   `(channel, platform_message_id)`), deduplicado vía intake
+   (`src/lib/channels/intake.ts` + `router.ts`). Telegram tiene webhook
+   verificado por secreto; WhatsApp Cloud API se consume **observe-only**
+   (importa los `smb_message_echoes` outbound del operador): **no existe path de
+   envío de WhatsApp**.
+3. **Tools draft-only, reversibles y con confirmación humana.** El loop solo
+   ejecuta efectos `read` y `draft`. Los tools `draft` (lead/cotización/pedido)
+   escriben únicamente estado no autoritativo y reversible
+   (`contacts.status='nuevo'`, `orders.status='borrador'`); nunca finalizan,
+   cobran ni avanzan producción. Todo argumento del modelo se valida con Zod
+   antes de ejecutar y los errores de tool se devuelven estructurados y sin
+   filtrar texto de excepción (`loop.ts`).
+4. **Secretos en reposo.** Bot token, provider key y webhook secret se guardan
+   cifrados AES-256-GCM (`src/lib/crypto/secret-box.ts`), write-only desde la UI
+   (vacío = conservar, `CLEAR` = borrar). Los secretos de WhatsApp
+   (`WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`) son config-gated por env.
+5. **Frontera RBAC.** Todas las páginas/acciones admin del agente (`/admin/agent*`)
+   exigen sesión `admin` o `gerencia` vía `requireAgentAdmin`/`authorizeAgentApi`
+   (`src/lib/agent/rbac.ts`).
+6. **Seam de service-principal diferido a auth por token.** Hoy el cron de
+   reconcile se autentica con secreto compartido constant-time
+   (`CRON_SECRET`/`AGENT_CRON_SECRET`) o sesión admin/gerencia. Un principal de
+   servicio dedicado (token propio, scopes) queda **diferido**; no se inventó uno.
+7. **Riesgo de bootstrap de migración en DB fresca (crítico).** `_journal.json`
+   es internamente consistente (`0001..0008`, luego `idx 8 = 0010`), PERO la
+   migración `0010_agent_platform.sql` referencia `contacts`, `organizations` y
+   `users`, y **ninguna migración crea esas tablas core** (vinieron de un
+   `db:push` original). En consecuencia, una DB nueva que corra solo
+   `db:migrate` **fallará**. Remediation documentada abajo; no se escribió a mano
+   un baseline gigante en este worktree sin DB.
+
+Remediation del bootstrap (documentar, no ejecutar acá): generar un baseline
+`0000_core_baseline.sql` desde el estado actual con `drizzle-kit` en una DB de
+referencia (o exportar el DDL de las tablas core) y encadenarlo antes de `0001`,
+con su propia entrada de journal. Hasta entonces, provisionar una DB fresca con
+`db:push` (schema dump) y luego `db:migrate` para los incrementales.
+
+**Reconciliación de la cadena al mergear (rama `master` vs esta rama):** la
+migración `0009_product_image.sql` existe en `master` pero NO en esta rama.
+Al mergear, `0009` debe quedar **antes** de `0010` con su propia entrada de
+journal, y `0010` debe re-indexarse **después**:
+
+1. `git merge master` (trae `0009_product_image.sql` y su entrada de `_journal.json`).
+2. Verificar que `_journal.json` quede con `idx 8 = 0009_product_image` y
+   `idx 9 = 0010_agent_platform` (monótono, sin tags duplicados).
+3. Si `0010` quedó con `idx 8` y `0009` con `idx 9`, reordenar: `0009` → `idx 8`,
+   `0010` → `idx 9`, ajustando también el campo `when` para mantener el orden
+   temporal.
+4. `npm run db:migrate` en una DB de referencia para validar el orden resultante
+   (idempotente; NO `db:push` en DB con datos).
 
 ## 5. Reglas de oro
 

@@ -39,6 +39,23 @@ function money(value: number): string {
 
 const HUMAN_CONFIRMATION_REQUIRED = true as const;
 
+/**
+ * Canonical contact-role vocabulary for a lead draft (agent-side closed set).
+ * `contacts.role` is a free-text column elsewhere in the app; the agent tool
+ * constrains it so a prompt-injected value cannot land arbitrary text in the DB.
+ * Promote this list to `src/lib/validators.ts` if the app adopts it globally.
+ */
+export const DRAFT_LEAD_ROLES = [
+  "cliente",
+  "profesor",
+  "entrenador",
+  "encargado",
+  "coordinador",
+  "administrativo",
+] as const;
+
+const draftLeadRole = z.enum(DRAFT_LEAD_ROLES);
+
 // ── draftLead ───────────────────────────────────────────────────────────────
 
 // NOTE: keep this a plain `z.object`. A `.refine(...)` would turn it into a
@@ -50,7 +67,7 @@ const draftLeadInput = z.object({
   email: z.string().trim().email().max(255).nullish(),
   phone: z.string().trim().min(3).max(64).nullish(),
   organizationName: z.string().trim().min(1).max(255).nullish(),
-  role: z.string().trim().max(128).nullish(),
+  role: draftLeadRole.nullish(),
   notes: z.string().trim().max(4000).nullish(),
 });
 
@@ -267,6 +284,23 @@ const draftOrderInput = z.object({
     .max(1000),
 });
 
+/**
+ * Maps an `OrderDraftDomainError` message to a stable reason code. Raw domain
+ * exception text is never surfaced to the model.
+ */
+function orderDraftFailureReason(message: string): string {
+  const text = message.toLowerCase();
+  if (text.includes("no pertenece")) return "contact_organization_mismatch";
+  if (text.includes("producto")) return "product_unavailable";
+  if (text.includes("talles")) return "size_mismatch";
+  if (text.includes("mínimo") || text.includes("minimo")) return "min_order";
+  if (text.includes("no encontramos")) return "contact_not_found";
+  if (text.includes("organización") || text.includes("organizacion")) return "organization_error";
+  if (text.includes("contacto")) return "contact_error";
+  if (text.includes("cantidad")) return "quantity_mismatch";
+  return "draft_rejected";
+}
+
 export const draftOrderTool: AgentTool<z.infer<typeof draftOrderInput>> = {
   id: "draftOrder",
   description:
@@ -313,7 +347,8 @@ export const draftOrderTool: AgentTool<z.infer<typeof draftOrderInput>> = {
           ok: false as const,
           draft: false as const,
           error: "draft_rejected" as const,
-          message: error.message,
+          reason: orderDraftFailureReason(error.message),
+          message: "No se pudo crear el borrador de pedido: los datos no cumplen las reglas del pedido. Corregí los datos y reintentá. No se guardó nada.",
           requiresHumanConfirmation: HUMAN_CONFIRMATION_REQUIRED,
         };
       }
