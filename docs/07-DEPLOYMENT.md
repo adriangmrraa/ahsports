@@ -19,22 +19,46 @@
 
 1. New + → Web Service → conectar repo
 2. **Runtime**: Node
-3. **Build Command**:
+3. **Build Command** (idéntico a `render.yaml`, la fuente autoritativa):
    ```
-   npm install && npm run db:push && npm run build
+   npm install && npm run db:migrate && npm run build
    ```
-   - `db:push` aplica el schema Drizzle directamente (sin migraciones). Aceptable para MVP.
-   - Si se prefiere migraciones versionadas: usar `npm run db:migrate` (requiere migraciones generadas con `db:generate`).
+   - `db:migrate` aplica las migraciones versionadas de `src/db/migrations/` (idempotentes, seguras de re-ejecutar).
+   - **No usar `db:push`** en una DB con datos: `db:push` sincroniza el schema directamente sin historial y puede descartar cambios.
 4. **Start Command**: `npm start`
 5. **Instance Type**: Free o Starter ($7/mes para mejor performance)
 
 ### Variables de entorno en Render
 
+Base (obligatorias):
+
 | Key | Value | Notas |
 |-----|-------|-------|
 | `DATABASE_URL` | (pegar de Neon) | **Secret** |
-| `SESSION_SECRET` | random 32+ chars | Generar con `openssl rand -base64 32` |
+| `SESSION_SECRET` | random 32+ chars | Fijo entre deploys; generarlo con `openssl rand -base64 32` |
+| `SECRET_ENCRYPTION_KEY` | random 32+ chars | **Secret** y **fijo**: clave AES-256-GCM que cifra en reposo los secretos del agente. Si cambia, los secretos cifrados existentes dejan de descifrarse |
 | `NODE_ENV` | `production` | Auto-set por Render |
+
+Canales del agente IA (opcionales; por nombre, nunca valores acá):
+
+| Key | Para qué |
+|-----|----------|
+| `AGENT_AI_API_KEY` / `AGENT_AI_BASE_URL` / `AGENT_AI_ENDPOINT_URL` / `AGENT_AI_ENDPOINT_PATH` | Runtime IA del agente (genéricos) |
+| `AGENT_AI_<PROVIDER>_API_KEY` / `_BASE_URL` / `_ENDPOINT_URL` | Overrides por proveedor (`<PROVIDER>` en MAYÚSCULAS, no alfanuméricos → `_`) |
+| `WHATSAPP_APP_SECRET` | Firma del webhook de WhatsApp (`X-Hub-Signature-256`) |
+| `WHATSAPP_VERIFY_TOKEN` | Handshake de verificación de Meta |
+| `YCLOUD_API_KEY` | Envío saliente por YCloud (`X-API-Key`) |
+| `WHATSAPP_PHONE_NUMBER` | Número emisor en YCloud |
+| `YCLOUD_BASE_URL` | Base URL de YCloud (default `https://api.ycloud.com`) |
+| `CRON_SECRET` | Autenticación del disparador del cron de reconciliación (fallback `AGENT_CRON_SECRET`) |
+
+> ⚠️ **Gap conocido:** `CRON_SECRET` / `AGENT_CRON_SECRET` se leen directo con
+> `process.env` en la ruta de reconciliación y **no** están en `.env.example` ni en
+> `src/lib/env.ts`. Si usás el cron, cargala en Render; conviene agregarla a
+> `.env.example` en un cambio de código aparte.
+
+> 📖 **Guía completa de los canales** (setup, webhooks, operadores, permisos, pruebas,
+> rollback y notas de privacidad): [`10-AGENT-CHANNELS-GUIDE.md`](./10-AGENT-CHANNELS-GUIDE.md).
 
 ### Build filters (opcional)
 
@@ -45,7 +69,7 @@
 1. Push a `main` (o la branch que Render esté mirando)
 2. Render hace build automático
 3. Si falla: revisar logs (panel de Render)
-4. Una vez vivo: `https://ah-sports-os.onrender.com/` debería responder 200
+4. Una vez vivo: la URL pública del servicio (`https://<tu-dominio-publico>/`) debería responder 200
 
 ## 5. Seed inicial (una sola vez)
 
@@ -85,11 +109,11 @@ Neon hace PITR (Point-in-Time Recovery) hasta 7 días en tier gratuito. Para pro
 
 | Síntoma | Causa probable | Fix |
 |---------|----------------|-----|
-| Build falla en `db:push` | `DATABASE_URL` no seteada o mal | Verificar env vars en Render |
+| Build falla en `db:migrate` | `DATABASE_URL` no seteada o mal | Verificar env vars en Render |
 | Build falla en `npm install` | Versión Node incompatible | Fijar Node 22 en `.nvmrc` o `package.json` engines |
 | Runtime: "cookies blocked" | Cookie `secure` en dev HTTP | Aceptable en prod (HTTPS). En dev usar `http://localhost` |
 | Login no funciona | `SESSION_SECRET` cambió entre deploys | Fijar valor estable en env vars |
-| 500 al cargar dashboard | DB no migrada | Re-correr `npm run db:push` en build command |
+| 500 al cargar dashboard | DB no migrada | Re-correr `npm run db:migrate` en build command |
 | Queries lentas | DB en region lejana | Elegir region Neon cercana a Render (US East) |
 
 ## 10. CI/CD

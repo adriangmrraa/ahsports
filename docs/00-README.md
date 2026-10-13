@@ -15,10 +15,12 @@ Documentación estructurada del proyecto **AH Sports OS**. Cada archivo cubre un
 | 06 | [`06-STANDARDS-BUILDING.md`](./06-STANDARDS-BUILDING.md) | Reglas de código, estilo, naming, convenciones |
 | 07 | [`07-DEPLOYMENT.md`](./07-DEPLOYMENT.md) | Deploy en Render + Neon, env vars, primer arranque |
 | 08 | [`08-ROADMAP.md`](./08-ROADMAP.md) | Roadmap post-MVP: WhatsApp bot, mockup 2D, inventario real |
+| 09 | [`09-MUZAPP-PARITY.md`](./09-MUZAPP-PARITY.md) | Paridad Muzapp vs AH Sports: exploración de features del agente |
+| 10 | [`10-AGENT-CHANNELS-GUIDE.md`](./10-AGENT-CHANNELS-GUIDE.md) | Guía de canales del agente: Telegram interno + WhatsApp/YCloud ventas |
 
 ## Estado del proyecto
 
-- **Fase actual**: F5 (Caja + Pagos + Deploy)
+- **Fases F0–F5**: completas (108/108) y desplegadas. La **plataforma de agentes IA** (canales Telegram + WhatsApp/YCloud) está mergeada y verificada **estáticamente**; la validación en vivo con proveedores reales está pendiente. Ver [`10-AGENT-CHANNELS-GUIDE.md`](./10-AGENT-CHANNELS-GUIDE.md).
 - **Build progress**: ver `BUILD_PROGRESS.md` (índice) + `BUILD_PROGRESS-F<N>.md` (fases individuales)
 - **Pendientes post-MVP**: ver `../PENDIENTES.md`
 
