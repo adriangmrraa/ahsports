@@ -1,22 +1,19 @@
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
-import { db } from "@/db/client";
-import { contacts, conversations, organizations } from "@/db/schema";
 import { requireAgentAdmin } from "@/lib/agent/rbac";
-import { formatDateTime } from "@/lib/utils";
-import { Badge, Card, PageHeader } from "@/components/ui/Card";
+import { queryConversationsPage } from "@/lib/agent/inbox";
+import { CHANNEL_LABEL } from "@/lib/agent/inbox-labels";
+import { Card, PageHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
-import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Search } from "lucide-react";
+import { ConversationTable } from "./ConversationTable";
 
 /**
  * P4.2 / P4 — /admin/agent/inbox: searchable canonical conversation list.
  *
  * Every conversation is a DB fact; this view is read-only. It is restricted to
- * admin/gerencia via `requireAgentAdmin()`.
+ * admin/gerencia via `requireAgentAdmin()`. Search + channel filtering run in
+ * SQL and the list is cursor-paginated (latest activity first) — see G3.
  */
-
-const CHANNEL_LABEL: Record<string, string> = { telegram: "Telegram", whatsapp: "WhatsApp" };
 
 export default async function AgentInboxPage({
   searchParams,
@@ -25,35 +22,10 @@ export default async function AgentInboxPage({
 }) {
   await requireAgentAdmin();
   const sp = await searchParams;
-  const q = sp.q?.trim().toLowerCase() || undefined;
+  const q = sp.q?.trim() || undefined;
   const channelFilter = sp.channel === "telegram" || sp.channel === "whatsapp" ? sp.channel : undefined;
 
-  const rows = await db
-    .select({
-      id: conversations.id,
-      channel: conversations.channel,
-      externalThreadId: conversations.externalThreadId,
-      status: conversations.status,
-      lastMessageAt: conversations.lastMessageAt,
-      unreadCount: conversations.unreadCount,
-      createdAt: conversations.createdAt,
-      customerName: contacts.name,
-      orgName: organizations.name,
-    })
-    .from(conversations)
-    .leftJoin(contacts, eq(conversations.customerId, contacts.id))
-    .leftJoin(organizations, eq(conversations.organizationId, organizations.id))
-    .orderBy(desc(conversations.lastMessageAt))
-    .limit(200);
-
-  const filtered = rows.filter((row) => {
-    if (channelFilter && row.channel !== channelFilter) return false;
-    if (q) {
-      const hay = `${row.externalThreadId} ${row.customerName ?? ""} ${row.orgName ?? ""} ${row.channel}`.toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
+  const firstPage = await queryConversationsPage({ q, channel: channelFilter });
 
   const channelLink = (channel: string | undefined) => {
     const params = new URLSearchParams();
@@ -67,7 +39,7 @@ export default async function AgentInboxPage({
     <>
       <PageHeader
         title="Conversaciones"
-        subtitle={channelFilter ? `Canal: ${CHANNEL_LABEL[channelFilter]}` : `${rows.length} conversaciones en el sistema`}
+        subtitle={channelFilter ? `Canal: ${CHANNEL_LABEL[channelFilter]}` : "Últimas conversaciones"}
       />
 
       <form method="get" className="flex gap-2 mb-4">
@@ -104,7 +76,7 @@ export default async function AgentInboxPage({
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {firstPage.items.length === 0 ? (
         <Card>
           <div className="text-center py-10">
             <p className="label-caps text-primary mb-2">Sin conversaciones</p>
@@ -114,52 +86,13 @@ export default async function AgentInboxPage({
           </div>
         </Card>
       ) : (
-        <Table>
-          <THead>
-            <tr>
-              <TH>Canal</TH>
-              <TH>Hilo</TH>
-              <TH>Cliente / Organización</TH>
-              <TH>Estado</TH>
-              <TH align="right">No leídos</TH>
-              <TH>Último mensaje</TH>
-              <TH align="right">Acciones</TH>
-            </tr>
-          </THead>
-          <tbody>
-            {filtered.map((row) => (
-              <TR key={row.id}>
-                <TD>
-                  <Badge tone={row.channel === "telegram" ? "primary" : "secondary"}>
-                    {CHANNEL_LABEL[row.channel] ?? row.channel}
-                  </Badge>
-                </TD>
-                <TD className="data-mono text-on-surface">{row.externalThreadId}</TD>
-                <TD>
-                  <div className="text-on-surface">{row.orgName ?? row.customerName ?? "Particular"}</div>
-                  {row.orgName && row.customerName && (
-                    <div className="text-xs text-on-surface-variant">{row.customerName}</div>
-                  )}
-                </TD>
-                <TD>
-                  <Badge tone={row.status === "open" ? "success" : "muted"}>
-                    {row.status === "open" ? "Abierta" : "Cerrada"}
-                  </Badge>
-                </TD>
-                <TD align="right">{row.unreadCount}</TD>
-                <TD className="text-on-surface-variant">{formatDateTime(row.lastMessageAt)}</TD>
-                <TD align="right">
-                  <Link
-                    href={`/admin/agent/inbox/${row.id}`}
-                    className="text-primary hover:underline label-caps"
-                  >
-                    Abrir →
-                  </Link>
-                </TD>
-              </TR>
-            ))}
-          </tbody>
-        </Table>
+        <ConversationTable
+          key={`${q ?? ""}|${channelFilter ?? ""}`}
+          initialItems={firstPage.items}
+          initialCursor={firstPage.nextCursor}
+          q={q}
+          channel={channelFilter}
+        />
       )}
     </>
   );
