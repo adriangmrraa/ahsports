@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   auditEvents,
@@ -75,7 +75,12 @@ export async function persistCanonicalMessage(input: unknown): Promise<IntakeOut
       const inserted = await insertMessage(tx, conversation.id, message, deliveryState, now);
 
       if (!inserted) {
-        const existing = await findMessage(tx, message.channel, message.platformMessageId);
+        const existing = await findMessage(
+          tx,
+          message.channel,
+          message.channelAccountId ?? null,
+          message.platformMessageId,
+        );
         await recordAudit(tx, {
           action: "channel.message.duplicate_ignored",
           actorKind: "channel",
@@ -163,11 +168,27 @@ async function upsertConversation(tx: DbTransaction, message: NormalizedMessage,
   const incrementUnread = message.direction === "inbound" && message.senderKind === "customer";
   const customerId = message.customerId ?? null;
   const organizationId = message.organizationId ?? null;
+  const channelAccountId = message.channelAccountId ?? null;
+
+  // Conversation identity is split by account scope: a provisioned account
+  // writes through its own partial unique index and never adopts a legacy
+  // NULL-account row; legacy rows dedup on (channel, external_thread_id).
+  // channelAccountId is set on INSERT only — a conflict update never rebinds.
+  const conflict = channelAccountId
+    ? {
+        target: [conversations.channel, conversations.channelAccountId, conversations.externalThreadId],
+        targetWhere: sql`${conversations.channelAccountId} is not null`,
+      }
+    : {
+        target: [conversations.channel, conversations.externalThreadId],
+        targetWhere: sql`${conversations.channelAccountId} is null`,
+      };
 
   const [conversation] = await tx
     .insert(conversations)
     .values({
       channel: message.channel,
+      channelAccountId,
       externalThreadId: message.externalThreadId,
       customerId,
       organizationId,
@@ -175,7 +196,7 @@ async function upsertConversation(tx: DbTransaction, message: NormalizedMessage,
       unreadCount: incrementUnread ? 1 : 0,
     })
     .onConflictDoUpdate({
-      target: [conversations.channel, conversations.externalThreadId],
+      ...conflict,
       set: {
         lastMessageAt: now,
         customerId: sql`coalesce(${conversations.customerId}, ${customerId})`,
@@ -205,6 +226,7 @@ async function insertMessage(
     .values({
       conversationId,
       channel: message.channel,
+      channelAccountId: message.channelAccountId ?? null,
       platformMessageId: message.platformMessageId,
       direction: message.direction,
       senderKind: message.senderKind,
@@ -215,17 +237,32 @@ async function insertMessage(
       deliveryState,
       createdAt: now,
     })
-    .onConflictDoNothing({ target: [chatMessages.channel, chatMessages.platformMessageId] })
+    // No arbiter needed: the two partial uniques partition dedup by account
+    // scope (bound rows vs. legacy NULL rows) and any violation is a dup.
+    .onConflictDoNothing()
     .returning({ id: chatMessages.id });
 
   return inserted ?? null;
 }
 
-async function findMessage(tx: DbTransaction, channel: Channel, platformMessageId: string) {
+async function findMessage(
+  tx: DbTransaction,
+  channel: Channel,
+  channelAccountId: string | null,
+  platformMessageId: string,
+) {
   const [row] = await tx
     .select({ id: chatMessages.id })
     .from(chatMessages)
-    .where(and(eq(chatMessages.channel, channel), eq(chatMessages.platformMessageId, platformMessageId)))
+    .where(
+      and(
+        eq(chatMessages.channel, channel),
+        channelAccountId === null
+          ? isNull(chatMessages.channelAccountId)
+          : eq(chatMessages.channelAccountId, channelAccountId),
+        eq(chatMessages.platformMessageId, platformMessageId),
+      ),
+    )
     .limit(1);
   return row ?? null;
 }

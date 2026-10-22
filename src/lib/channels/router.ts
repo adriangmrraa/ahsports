@@ -162,6 +162,10 @@ async function persistOutboundReply(
   const channel = message.channel;
   const outbound = await persistCanonicalMessage({
     channel,
+    // The reply rides the same account partition as its inbound: a bound
+    // thread's answer is authored by the bound account, a legacy thread's by
+    // the legacy env path.
+    channelAccountId: message.channelAccountId ?? null,
     externalThreadId: message.externalThreadId,
     platformMessageId: outboundPlatformId(persisted.messageId),
     direction: "outbound",

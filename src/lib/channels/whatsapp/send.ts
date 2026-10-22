@@ -90,7 +90,19 @@ export async function sendWhatsAppMessage(
 ): Promise<SendWhatsAppResult> {
   const config = resolveWhatsAppSendConfig(env);
   if (!config) return { ok: false, error: "not_configured" };
+  return sendWhatsAppMessageWithConfig(to, content, config);
+}
 
+/**
+ * Same send through an explicitly resolved config — e.g. a `channel_accounts`
+ * credential materialized by the account resolver. The env-based path above
+ * stays the default for unprovisioned installs; this variant never reads env.
+ */
+export async function sendWhatsAppMessageWithConfig(
+  to: string,
+  content: string | WhatsAppOutboundContent,
+  config: WhatsAppSendConfig,
+): Promise<SendWhatsAppResult> {
   const recipient = to.trim();
   if (!recipient) return { ok: false, error: "missing_recipient" };
 
