@@ -1,41 +1,50 @@
+import { createHash } from "node:crypto";
+
 import { NextResponse } from "next/server";
 
-import { updateMessageDelivery } from "@/lib/channels/intake";
-import { routeInboundMessage } from "@/lib/channels/router";
+import "@/lib/whatsapp/register";
+
 import { deriveWebhookPathToken, timingSafeEqualString } from "@/lib/channels/telegram";
-import {
-  importWhatsAppWebhook,
-  whatsAppWebhookSchema,
-  type NormalizedWhatsAppCustomerMessage,
-} from "@/lib/channels/whatsapp/import";
-import { sendWhatsAppMessage } from "@/lib/channels/whatsapp/send";
 import { verifyWhatsAppSignature, whatsappSignatureHeader } from "@/lib/channels/signature";
-import type { NormalizedMessage } from "@/lib/channels/types";
+import { whatsAppWebhookSchema, type WhatsAppMessage } from "@/lib/channels/whatsapp/import";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/infra/rate-limit";
+import { readBoundedBody } from "@/lib/infra/webhook-guard";
+import { MAX_WEBHOOK_EVENTS } from "@/lib/infra/webhook-guard";
+import { ChannelAccountResolutionError } from "@/lib/messaging/accounts";
+import { handleNormalizedEvent } from "@/lib/messaging/inbound-pipeline";
+import { resolveIngressContext } from "@/lib/messaging/ingress";
+import { providerForChannel } from "@/lib/messaging/registry";
+import { aggregateWebhookStatuses } from "@/lib/messaging/webhook-response";
+import type { NormalizedInboundEvent } from "@/lib/messaging/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * WhatsApp Business (Cloud API) webhook — TWO-WAY.
+ * WhatsApp Business (Cloud API) webhook — Meta envelope, thin delegate.
  *
- * Config-gated by `WHATSAPP_VERIFY_TOKEN` + `WHATSAPP_APP_SECRET` (env, no
- * migration). The send path (YCloud) is separately config-gated by
- * `YCLOUD_API_KEY` + `WHATSAPP_PHONE_NUMBER`: when either is missing the inbound
- * is still imported and answered in the DB, but the delivery is recorded as
- * `failed`, never faked as sent.
+ * This route ONLY unwraps Meta's entry/changes/value envelope into
+ * NormalizedInboundEvents and feeds the shared wave-1 inbound pipeline
+ * (`handleNormalizedEvent`) — no parallel import/routing/send path (the
+ * SocialCRM S12/S15 pattern). Signature verification stays Meta-specific
+ * (`X-Hub-Signature-256` over the raw body, constant time) because unified
+ * ingress signs per provider adapter; account resolution, dedup, debounce
+ * and the agent dispatch seam all live downstream.
  *
- * GET  — Meta verification handshake. Echoes `hub.challenge` only when
- *        `hub.mode=subscribe`, the `hub.verify_token` matches (constant time)
- *        and the URL path token is the derived fingerprint of that token.
- * POST — Verifies `X-Hub-Signature-256` over the RAW body (constant time),
- *        Zod-validates the payload, imports operator outbound echoes
- *        (observe-only, never re-routed) and customer inbound messages, then
- *        answers each new customer message through the AI loop and delivers the
- *        reply via YCloud, transitioning the delivery state on send.
+ * Importing `@/lib/whatsapp/register` installs the sales dispatcher on the
+ * pipeline for every whatsapp turn this route produces.
  *
- * Missing config → 503 · bad signature/token → 403 · bad payload → 400 ·
- * handled/duplicate/ignored → 2xx. Secrets and raw bodies are never logged.
+ * GET  — Meta verification handshake (unified ingress has no GET).
+ * POST — path token → per-IP rate limit → bounded body → signature → zod
+ *        envelope → per-event account resolution → pipeline.
+ *
+ * Missing config → 503 · bad token/signature → 403 · oversized → 413 ·
+ * bad payload → 400 · transient downstream failure → 503 (Meta retries).
+ * Secrets and raw bodies are never logged.
  */
+
+const WA_RATE_LIMIT = 120;
+const WA_RATE_BUCKET = 600;
 
 function whatsAppConfig(): { appSecret: string; verifyToken: string } | null {
   const appSecret = process.env.WHATSAPP_APP_SECRET ?? "";
@@ -48,19 +57,150 @@ function pathTokenMatches(token: string, verifyToken: string): boolean {
   return timingSafeEqualString(token, deriveWebhookPathToken(verifyToken));
 }
 
-function toNormalizedMessage(message: NormalizedWhatsAppCustomerMessage): NormalizedMessage {
+// ─── Meta envelope → NormalizedInboundEvent ──────────────────────────────────
+
+type MetaValue = {
+  metadata?: { phone_number_id?: string; display_phone_number?: string };
+  contacts?: { profile?: { name?: string }; wa_id?: string }[];
+  messages?: WhatsAppMessage[];
+  smb_message_echoes?: WhatsAppMessage[];
+  statuses?: { id?: string; status?: string; timestamp?: string; recipient_id?: string }[];
+};
+
+type EventType = NonNullable<NormalizedInboundEvent["type"]>;
+
+function mapMessageType(type: string | undefined): EventType {
+  switch (type) {
+    case "text":
+    case "image":
+    case "audio":
+    case "video":
+    case "document":
+    case "location":
+    case "interactive":
+    case "reaction":
+      return type;
+    default:
+      return "unknown";
+  }
+}
+
+function textFor(message: WhatsAppMessage): string {
+  if (message.text?.body) return message.text.body;
+  if (message.image?.caption) return message.image.caption;
+  if (message.image) return "[image]";
+  if (message.document?.caption) return message.document.caption;
+  if (message.document?.filename) return message.document.filename;
+  if (message.document) return "[document]";
+  if (message.template?.name) return `[template: ${message.template.name}]`;
+  return "";
+}
+
+function mediaRefsFor(message: WhatsAppMessage): NormalizedInboundEvent["mediaRefs"] {
+  const media = message.image ?? message.document;
+  if (!media?.id) return undefined;
+  return [{ id: media.id, mimeType: media.mime_type }];
+}
+
+/**
+ * Deterministic delivery id — Meta carries no event id, so the dedup anchor
+ * is synthesized from kind + platform message id (or a body hash for id-less
+ * status rows). Never empty.
+ */
+function metaDeliveryId(kind: string, key: string | undefined, seed: unknown): string {
+  if (key) return `meta:${kind}:${key}`;
+  const hash = createHash("sha256").update(JSON.stringify(seed)).digest("hex").slice(0, 24);
+  return `meta:${kind}:synth:${hash}`;
+}
+
+function contactNameFor(value: MetaValue, waId: string | undefined): string | undefined {
+  if (!waId) return undefined;
+  return value.contacts?.find((contact) => contact.wa_id === waId)?.profile?.name;
+}
+
+function metaMessageToEvent(
+  message: WhatsAppMessage,
+  value: MetaValue,
+  kind: "message.received" | "message.echo"
+): NormalizedInboundEvent {
+  const isEcho = kind === "message.echo";
+  const routingKey =
+    value.metadata?.phone_number_id ?? value.metadata?.display_phone_number ?? "";
   return {
-    channel: "whatsapp",
-    externalThreadId: message.externalThreadId,
-    platformMessageId: message.platformMessageId,
-    direction: "inbound",
-    senderKind: "customer",
-    senderRef: message.senderRef,
-    contentType: message.contentType,
-    content: message.content,
-    rawPayload: message.rawPayload,
+    provider: "ycloud", // whatsapp routing is ycloud-bound in v1
+    deliveryId: metaDeliveryId(isEcho ? "echo" : "inbound", message.id, message),
+    kind,
+    direction: isEcho ? "outbound" : "inbound",
+    providerAccountId: routingKey,
+    // Inbound: the provider thread is the customer wa_id. Echo: `to` is the
+    // customer (the pipeline keys echo conversations off it).
+    providerConversationId: isEcho ? message.to : message.from,
+    providerThreadId: isEcho ? message.to : message.from,
+    platformMessageId: message.id,
+    sender: isEcho
+      ? { phone: message.from ?? routingKey }
+      : { phone: message.from, name: contactNameFor(value, message.from) },
+    type: mapMessageType(message.type),
+    text: textFor(message),
+    mediaRefs: mediaRefsFor(message),
+    raw: {
+      // ycloud-shaped envelope: the pipeline's protocol-artifact and
+      // echo-extraction guards key off these field names.
+      type: isEcho
+        ? "whatsapp.smb.message.echoes"
+        : "whatsapp.inbound_message.received",
+      channel: "whatsapp",
+      ...(isEcho
+        ? { whatsappMessage: message }
+        : { whatsappInboundMessage: message }),
+    },
   };
 }
+
+function metaStatusToEvent(
+  status: NonNullable<MetaValue["statuses"]>[number],
+  value: MetaValue
+): NormalizedInboundEvent {
+  const routingKey =
+    value.metadata?.phone_number_id ?? value.metadata?.display_phone_number ?? "";
+  return {
+    provider: "ycloud",
+    deliveryId: metaDeliveryId("status", status.id, status),
+    kind: "message.status",
+    direction: "na",
+    providerAccountId: routingKey,
+    providerConversationId: status.recipient_id,
+    platformMessageId: status.id,
+    sender: { phone: status.recipient_id ?? routingKey },
+    type: "unknown",
+    raw: { type: "whatsapp.message.status", channel: "whatsapp", status },
+  };
+}
+
+/** Meta envelope → normalized events, preserving provider order. */
+export function metaEnvelopeToEvents(payload: unknown): NormalizedInboundEvent[] {
+  const parsed = whatsAppWebhookSchema.safeParse(payload);
+  if (!parsed.success) return [];
+
+  const events: NormalizedInboundEvent[] = [];
+  for (const entry of parsed.data.entry) {
+    for (const change of entry.changes) {
+      const value = change.value as MetaValue;
+      for (const message of value.messages ?? []) {
+        events.push(metaMessageToEvent(message, value, "message.received"));
+      }
+      for (const echo of value.smb_message_echoes ?? []) {
+        events.push(metaMessageToEvent(echo, value, "message.echo"));
+      }
+      for (const status of value.statuses ?? []) {
+        events.push(metaStatusToEvent(status, value));
+      }
+    }
+  }
+  return events;
+}
+
+// ─── Handlers ────────────────────────────────────────────────────────────────
 
 export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -102,8 +242,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
-  // The signature is over the exact bytes received: read text, verify, then parse.
-  const rawBody = await request.text();
+  const provider = providerForChannel("whatsapp");
+  if (!provider) {
+    return NextResponse.json({ ok: false, error: "no_provider" }, { status: 503 });
+  }
+
+  // Bound unauthenticated work before buffering: per-IP limit, then the
+  // declared/actual size guard (F8) — same shape as unified ingress.
+  const rate = await checkRateLimit(`webhook:whatsapp:${clientIpFromRequest(request)}`, {
+    bucket: "webhook:whatsapp",
+    limit: WA_RATE_LIMIT,
+    bucketLimit: WA_RATE_BUCKET,
+  });
+  if (!rate.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
+  const bounded = await readBoundedBody(request);
+  if (!bounded.ok) {
+    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+  }
+  const rawBody = bounded.rawBody;
+
+  // The signature is over the exact bytes received: verify, then parse.
   const signatureOk = verifyWhatsAppSignature({
     appSecret: config.appSecret,
     rawBody,
@@ -120,35 +281,54 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
 
+  // Non-whatsapp objects ack without work — Meta verifies the endpoint with
+  // other object types during setup.
+  if (
+    typeof json !== "object" ||
+    json === null ||
+    (json as { object?: string }).object !== "whatsapp_business_account"
+  ) {
+    return NextResponse.json({ ok: true }, { status: 200 });
+  }
+
   const parsed = whatsAppWebhookSchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "invalid_payload" }, { status: 400 });
   }
 
-  // Import persists operator echoes (observe-only) and customer inbound; only
-  // newly persisted inbound is returned for routing, so a duplicate delivery is
-  // never answered twice.
-  const outcome = await importWhatsAppWebhook(parsed.data);
-  if (!outcome.ok) {
-    return NextResponse.json({ ok: false, error: outcome.error }, { status: 500 });
+  const events = metaEnvelopeToEvents(parsed.data);
+  if (events.length === 0) {
+    return NextResponse.json({ ok: true, processed: 0 }, { status: 200 });
   }
 
-  let repliesSent = 0;
-
-  for (const pending of outcome.pendingInbound) {
-    const routed = await routeInboundMessage(toNormalizedMessage(pending.message), pending.persisted);
-    if (!routed.persisted.ok || !routed.replyText || !routed.replyMessageId) continue;
-
-    const sent = await sendWhatsAppMessage(pending.message.externalThreadId, routed.replyText);
-    await updateMessageDelivery(routed.replyMessageId, sent.ok ? "sent" : "failed");
-    if (sent.ok) repliesSent += 1;
+  const capped = events.slice(0, MAX_WEBHOOK_EVENTS);
+  if (capped.length < events.length) {
+    console.warn(
+      `[whatsapp/webhook] envelope carried ${events.length} events — capped at ${MAX_WEBHOOK_EVENTS}`
+    );
   }
 
-  return NextResponse.json({
-    ok: true,
-    imported: outcome.imported,
-    duplicated: outcome.duplicated,
-    inbound: outcome.inbound,
-    repliesSent,
-  });
+  const statuses: number[] = [];
+  for (const event of capped) {
+    let ctx;
+    try {
+      ctx = await resolveIngressContext(provider, event);
+    } catch (error) {
+      // Verified signature but account resolution is down — retryable so
+      // Meta redelivers instead of silently dropping the turn.
+      if (error instanceof ChannelAccountResolutionError) {
+        return NextResponse.json({ error: "account-resolution-failed" }, { status: 503 });
+      }
+      throw error;
+    }
+    if (!ctx) continue; // fail-closed — reason already logged in resolution
+    const response = await handleNormalizedEvent(event, ctx);
+    statuses.push(response.status);
+  }
+
+  const aggregate = aggregateWebhookStatuses(statuses);
+  return NextResponse.json(
+    { ok: aggregate.ok, processed: statuses.length },
+    { status: aggregate.status }
+  );
 }
