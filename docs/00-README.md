@@ -17,6 +17,7 @@ Documentación estructurada del proyecto **AH Sports OS**. Cada archivo cubre un
 | 08 | [`08-ROADMAP.md`](./08-ROADMAP.md) | Roadmap post-MVP: WhatsApp bot, mockup 2D, inventario real |
 | 09 | [`09-MUZAPP-PARITY.md`](./09-MUZAPP-PARITY.md) | Paridad Muzapp vs AH Sports: exploración de features del agente |
 | 10 | [`10-AGENT-CHANNELS-GUIDE.md`](./10-AGENT-CHANNELS-GUIDE.md) | Guía de canales del agente: Telegram interno + WhatsApp/YCloud ventas |
+| 11 | [`11-SOCIALCRM-PORT-REPORT.md`](./11-SOCIALCRM-PORT-REPORT.md) | Reporte final del port SocialCRM → AH Sports (olas, commits, grafo, diferidos) |
 
 ## Estado del proyecto
 
