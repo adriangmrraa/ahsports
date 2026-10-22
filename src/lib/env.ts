@@ -27,6 +27,26 @@ export const serverEnvSchema = z.object({
   YCLOUD_API_KEY: secretString("YCLOUD_API_KEY").optional(),
   WHATSAPP_PHONE_NUMBER: z.string().optional(),
   YCLOUD_BASE_URL: z.string().optional(),
+  // Unified webhook ingress (messaging providers): every provider path is
+  // opt-in — secrets stay optional at boot but the provider route fails
+  // closed (401) when its `<PROVIDER>_WEBHOOK_SECRET` is absent.
+  YCLOUD_WEBHOOK_SECRET: secretString("YCLOUD_WEBHOOK_SECRET").optional(),
+  // Routing key YCloud stamps on events (wabaId); without it the sender
+  // number is the account-resolution candidate.
+  YCLOUD_WABA_ID: z.string().optional(),
+  KAPSO_API_KEY: secretString("KAPSO_API_KEY").optional(),
+  KAPSO_PHONE_NUMBER_ID: z.string().optional(),
+  KAPSO_SENDER_ADDRESS: z.string().optional(),
+  KAPSO_WEBHOOK_SECRET: secretString("KAPSO_WEBHOOK_SECRET").optional(),
+  KAPSO_ACCESS_TOKEN: secretString("KAPSO_ACCESS_TOKEN").optional(),
+  ZERNIO_API_KEY: secretString("ZERNIO_API_KEY").optional(),
+  ZERNIO_ACCOUNT_ID: z.string().optional(),
+  // Channel a single env zernio account serves: instagram|facebook|...
+  ZERNIO_CHANNEL: z.string().optional(),
+  ZERNIO_SENDER_ADDRESS: z.string().optional(),
+  ZERNIO_PROFILE_ID: z.string().optional(),
+  ZERNIO_WEBHOOK_SECRET: secretString("ZERNIO_WEBHOOK_SECRET").optional(),
+  ZERNIO_ACCESS_TOKEN: secretString("ZERNIO_ACCESS_TOKEN").optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -42,6 +62,20 @@ export function loadServerEnv(source: NodeJS.ProcessEnv = process.env) {
     YCLOUD_API_KEY: source.YCLOUD_API_KEY,
     WHATSAPP_PHONE_NUMBER: source.WHATSAPP_PHONE_NUMBER,
     YCLOUD_BASE_URL: source.YCLOUD_BASE_URL,
+    YCLOUD_WEBHOOK_SECRET: source.YCLOUD_WEBHOOK_SECRET,
+    YCLOUD_WABA_ID: source.YCLOUD_WABA_ID,
+    KAPSO_API_KEY: source.KAPSO_API_KEY,
+    KAPSO_PHONE_NUMBER_ID: source.KAPSO_PHONE_NUMBER_ID,
+    KAPSO_SENDER_ADDRESS: source.KAPSO_SENDER_ADDRESS,
+    KAPSO_WEBHOOK_SECRET: source.KAPSO_WEBHOOK_SECRET,
+    KAPSO_ACCESS_TOKEN: source.KAPSO_ACCESS_TOKEN,
+    ZERNIO_API_KEY: source.ZERNIO_API_KEY,
+    ZERNIO_ACCOUNT_ID: source.ZERNIO_ACCOUNT_ID,
+    ZERNIO_CHANNEL: source.ZERNIO_CHANNEL,
+    ZERNIO_SENDER_ADDRESS: source.ZERNIO_SENDER_ADDRESS,
+    ZERNIO_PROFILE_ID: source.ZERNIO_PROFILE_ID,
+    ZERNIO_WEBHOOK_SECRET: source.ZERNIO_WEBHOOK_SECRET,
+    ZERNIO_ACCESS_TOKEN: source.ZERNIO_ACCESS_TOKEN,
   });
 }
 
