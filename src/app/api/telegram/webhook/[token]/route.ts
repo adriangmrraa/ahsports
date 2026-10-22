@@ -4,7 +4,6 @@ import { db } from "@/db/client";
 import { agentConfig } from "@/db/schema";
 import { decryptSecret } from "@/lib/crypto/secret-box";
 import { updateMessageDelivery } from "@/lib/channels/intake";
-import { routeInboundMessage } from "@/lib/channels/router";
 import {
   normalizeTelegramUpdate,
   sendTelegramMessage,
@@ -12,6 +11,7 @@ import {
   telegramUpdateSchema,
   verifyTelegramRequest,
 } from "@/lib/channels/telegram";
+import { handleTelegramOperatorUpdate } from "@/lib/telegram/bot";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +21,8 @@ export const dynamic = "force-dynamic";
  *
  * Telegram webhook. Verifies the secret-token header (constant time) against the
  * decrypted bot webhook secret before any side effect, validates the update with
- * Zod, then routes it through the canonical intake. Replies are persisted before
+ * Zod, then hands the normalized inbound to the operator-bot dispatch (wave 2),
+ * which rides the canonical intake from wave 1. Replies are persisted before
  * delivery so a failed send preserves the outbound fact and retries stay safe.
  * Secrets are never logged. Always answers 2xx for handled/duplicate/ignored
  * updates so Telegram stops retrying.
@@ -61,17 +62,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     return NextResponse.json({ ok: true, ignored: true });
   }
 
-  const result = await routeInboundMessage({
-    channel: "telegram",
-    externalThreadId: inbound.externalThreadId,
-    platformMessageId: inbound.platformMessageId,
-    direction: "inbound",
-    senderKind: "operator",
-    senderRef: inbound.senderRef,
-    contentType: inbound.contentType,
-    content: inbound.content,
-    rawPayload: inbound.rawPayload,
-  });
+  const result = await handleTelegramOperatorUpdate(inbound);
 
   if (!result.persisted.ok) {
     return NextResponse.json({ ok: false, error: result.persisted.error }, { status: 500 });
