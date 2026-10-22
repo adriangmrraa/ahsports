@@ -188,7 +188,7 @@ function metaStatusToEvent(
 }
 
 /** Meta envelope → normalized events, preserving provider order. */
-export function metaEnvelopeToEvents(payload: unknown): NormalizedInboundEvent[] {
+function metaEnvelopeToEvents(payload: unknown): NormalizedInboundEvent[] {
   const parsed = whatsAppWebhookSchema.safeParse(payload);
   if (!parsed.success) return [];
 

@@ -22,7 +22,7 @@
  * (used by `check:agent-tools` and provider tool specs) can walk them.
  */
 import { randomBytes } from "node:crypto";
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import {
