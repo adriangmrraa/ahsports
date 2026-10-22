@@ -12,23 +12,40 @@ import {
   verifyTelegramRequest,
 } from "@/lib/channels/telegram";
 import { handleTelegramOperatorUpdate } from "@/lib/telegram/bot";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/infra/rate-limit";
+import { readBoundedBody } from "@/lib/infra/webhook-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const TG_RATE_LIMIT = 120;
+const TG_RATE_BUCKET = 600;
+
 /**
  * POST /api/telegram/webhook/[token]
  *
- * Telegram webhook. Verifies the secret-token header (constant time) against the
- * decrypted bot webhook secret before any side effect, validates the update with
- * Zod, then hands the normalized inbound to the operator-bot dispatch (wave 2),
- * which rides the canonical intake from wave 1. Replies are persisted before
- * delivery so a failed send preserves the outbound fact and retries stay safe.
- * Secrets are never logged. Always answers 2xx for handled/duplicate/ignored
- * updates so Telegram stops retrying.
+ * Telegram webhook. Per-IP rate limit inside its own bucket bounds
+ * unauthenticated work before the config read (429 — never a 200-ack-drop, so
+ * Telegram redelivers), then verifies the secret-token header (constant time)
+ * against the decrypted bot webhook secret before any side effect, reads a
+ * bounded body, validates the update with Zod, then hands the normalized
+ * inbound to the operator-bot dispatch (wave 2), which rides the canonical
+ * intake from wave 1. Replies are persisted before delivery so a failed send
+ * preserves the outbound fact and retries stay safe. Secrets are never
+ * logged. Always answers 2xx for handled/duplicate/ignored updates so
+ * Telegram stops retrying.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+
+  const rate = await checkRateLimit(`webhook:telegram:${clientIpFromRequest(request)}`, {
+    bucket: "webhook:telegram",
+    limit: TG_RATE_LIMIT,
+    bucketLimit: TG_RATE_BUCKET,
+  });
+  if (!rate.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
 
   const [config] = await db
     .select({ botTokenEnc: agentConfig.botTokenEnc, webhookSecretEnc: agentConfig.webhookSecretEnc })
@@ -51,7 +68,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
-  const body = await request.json().catch(() => null);
+  const bounded = await readBoundedBody(request);
+  if (!bounded.ok) {
+    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+  }
+  let body: unknown;
+  try {
+    body = JSON.parse(bounded.rawBody);
+  } catch {
+    body = null;
+  }
   const parsed = telegramUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "invalid_update" }, { status: 400 });

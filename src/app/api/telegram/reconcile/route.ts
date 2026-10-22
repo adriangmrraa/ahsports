@@ -3,9 +3,13 @@ import { z } from "zod";
 import { authorizeAgentApi } from "@/lib/agent/rbac";
 import { timingSafeEqualString } from "@/lib/channels/telegram";
 import { runReconcileCandidates } from "@/lib/reconcile/runner";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/infra/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const CRON_RATE_LIMIT = 10;
+const CRON_RATE_BUCKET = 60;
 
 /**
  * GET/POST /api/telegram/reconcile — cron endpoint for the candidates-only
@@ -48,6 +52,17 @@ async function authorize(request: Request): Promise<AuthorizationResult> {
 }
 
 async function handle(request: Request): Promise<NextResponse> {
+  // Per-IP limit inside a dedicated bucket bounds unauthenticated auth-check
+  // work; a saturated bucket can never bleed into inbound processing.
+  const rate = await checkRateLimit(`cron:telegram-reconcile:${clientIpFromRequest(request)}`, {
+    bucket: "cron:telegram-reconcile",
+    limit: CRON_RATE_LIMIT,
+    bucketLimit: CRON_RATE_BUCKET,
+  });
+  if (!rate.success) {
+    return NextResponse.json({ ok: false, error: "too_many_requests" }, { status: 429 });
+  }
+
   const authorization = await authorize(request);
   if (!authorization.ok) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: authorization.status });

@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { attachments, uploadSessions } from "@/db/schema";
 import { withDbTransaction } from "@/lib/db-transaction";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/infra/rate-limit";
 import { createOrderDraftTx, OrderDraftDomainError } from "@/lib/orders/draft-order";
 import { cleanupExpiredPublicUploads, createPublicUploadSession, getLivePublicUploadSession, matchesPublicUploadSecret } from "@/lib/public-upload-sessions";
 import { activeStorage, buildAttachmentPath, validateFile } from "@/lib/storage";
@@ -12,8 +14,23 @@ import { createPublicOrderSchema, publicAttachmentUploadSchema } from "@/lib/val
 
 type PublicOrderFailure = { ok: false; error: string; issues?: unknown };
 
+const WIZARD_RATE_LIMITED = { ok: false as const, error: "Demasiados intentos. Esperá un momento." };
+
+// Per-IP limits inside one shared wizard bucket: the public presupuesto
+// actions are the only unauthenticated write surface, so a scripted flood
+// must never starve inbound message processing.
+async function wizardRateLimited(purpose: string, limit: number): Promise<boolean> {
+  const rate = await checkRateLimit(`public:wizard:${purpose}:${clientIpFromRequest({ headers: await headers() })}`, {
+    bucket: "public:wizard",
+    limit,
+    bucketLimit: 200,
+  });
+  return !rate.success;
+}
+
 /** Starts a short-lived, secret-backed browser upload session for wizard step 4. */
 export async function beginPublicUploadSession() {
+  if (await wizardRateLimited("session", 10)) return WIZARD_RATE_LIMITED;
   try {
     await cleanupExpiredPublicUploads();
     const session = await createPublicUploadSession();
@@ -25,6 +42,7 @@ export async function beginPublicUploadSession() {
 
 /** Stages a client asset; order ownership is claimed only at confirmation. */
 export async function uploadAttachmentFromPublic(formData: FormData, sessionInput: unknown) {
+  if (await wizardRateLimited("upload", 30)) return WIZARD_RATE_LIMITED;
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { ok: false as const, error: "Archivo requerido" };
   const sessionParsed = publicAttachmentUploadSchema.safeParse({
@@ -65,6 +83,7 @@ export async function uploadAttachmentFromPublic(formData: FormData, sessionInpu
 export async function createPublicOrder(input: unknown): Promise<
   { ok: true; orderId: string; publicToken: string; number: number } | PublicOrderFailure
 > {
+  if (await wizardRateLimited("order", 10)) return WIZARD_RATE_LIMITED;
   const parsed = createPublicOrderSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Revisá los datos de la solicitud", issues: parsed.error.flatten() };
   const data = parsed.data;

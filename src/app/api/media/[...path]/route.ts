@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { getCurrentUser } from "@/lib/auth";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/infra/rate-limit";
 import { privateUploadsDir } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -30,10 +31,24 @@ const MIME_MAP: Record<string, string> = {
   ".csv": "text/csv",
 };
 
+const MEDIA_RATE_LIMIT = 60;
+const MEDIA_RATE_BUCKET = 600;
+
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
+  // Per-IP limit bounds the unauthenticated session lookup below; a dedicated
+  // bucket keeps media flooding from starving inbound message processing.
+  const rate = await checkRateLimit(`media:${clientIpFromRequest(req)}`, {
+    bucket: "media",
+    limit: MEDIA_RATE_LIMIT,
+    bucketLimit: MEDIA_RATE_BUCKET,
+  });
+  if (!rate.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   // The private media dir only holds INBOUND customer media (voice notes,
   // photos, docs saved by saveMediaLocally / privateStorageAdapter). Nothing
   // here is meant to be public: require a session. getCurrentUser throwing

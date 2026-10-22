@@ -1,13 +1,28 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { attachments, orderItems, orderLines, orders, products } from "@/db/schema";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/infra/rate-limit";
 import { eq, inArray, sql } from "drizzle-orm";
+
+const PUBLIC_ORDER_RATE_LIMIT = 30;
+const PUBLIC_ORDER_RATE_BUCKET = 300;
 
 /**
  * F4-15 — GET /api/public/order/[token]: endpoint público seguro.
  * Expone SOLO lo que el cliente puede ver (no costos internos, no pagos, no notas).
+ * Per-IP limit inside its own bucket so public polling/token guessing can
+ * never starve inbound message processing.
  */
-export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
+  const rate = await checkRateLimit(`public:order:${clientIpFromRequest(req)}`, {
+    bucket: "public:order",
+    limit: PUBLIC_ORDER_RATE_LIMIT,
+    bucketLimit: PUBLIC_ORDER_RATE_BUCKET,
+  });
+  if (!rate.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const { token } = await params;
   const [order] = await db.select().from(orders).where(eq(orders.publicToken, token)).limit(1);
   if (!order) return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
