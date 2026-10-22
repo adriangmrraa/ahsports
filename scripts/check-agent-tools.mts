@@ -12,8 +12,31 @@
  * "Cannot convert undefined or null to object" the moment the loop built its
  * tool specs. Every registered tool (read + draft) MUST now project cleanly.
  *
+ * Wave 3: the registry now unions the wave-2 surfaces (OPERATOR_TOOLS,
+ * WHATSAPP_SALES_TOOLS, and the reconcile readers). Those modules carry
+ * `import "server-only"`, which throws under plain tsx — the registerHooks
+ * stub below resolves the specifier to an empty module for this check only.
+ *
  * Run: npm run check:agent-tools
  */
+
+import { registerHooks } from "node:module";
+
+// Wave-2 tool modules are marked server-only; this check must still import
+// them under tsx. Node >=22.15 redirects the specifier to the repo-local stub
+// (a real file URL — a data: URL dies inside tsx's CJS file pipeline); older
+// runtimes degrade to no stub and the dynamic import fails loudly.
+if (typeof registerHooks === "function") {
+  const stubUrl = new URL("./check-agent-tools.server-only-stub.cjs", import.meta.url).href;
+  registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (specifier === "server-only") {
+        return { url: stubUrl, shortCircuit: true };
+      }
+      return nextResolve(specifier, context);
+    },
+  });
+}
 
 process.env.DATABASE_URL ??= "postgresql://check:check@127.0.0.1:5432/check";
 process.env.SESSION_SECRET ??= "check-session-secret";
@@ -30,9 +53,36 @@ function check(condition: boolean, label: string): void {
   }
 }
 
-const { ALL_AGENT_TOOLS, buildToolSpecs } = await import("@/lib/agents/tools/registry");
+const { ALL_AGENT_TOOLS, buildToolSpecs, getAgentTool, resolveEnabledTools } = await import("@/lib/agents/tools/registry");
 const { toToolSpec, AGENT_TOOL_EFFECTS } = await import("@/lib/agents/tools/types");
 const { draftLeadTool } = await import("@/lib/agents/tools/draft");
+const { OPERATOR_TOOLS } = await import("@/lib/telegram/tools");
+const { WHATSAPP_SALES_TOOLS } = await import("@/lib/whatsapp/sales-tools");
+const { buildReconcileTools } = await import("@/lib/reconcile/tools");
+
+type CheckableTool = { id: string; effect: string; inputSchema: unknown; description: string };
+
+function checkToolSet(label: string, tools: readonly CheckableTool[]): void {
+  console.log(`\n${label}: ${tools.length} tools`);
+  check(tools.length > 0, `${label} is non-empty`);
+  check(
+    tools.every((tool) => AGENT_TOOL_EFFECTS.includes(tool.effect as never)),
+    `${label}: every tool effect is executable (${AGENT_TOOL_EFFECTS.join("|")})`,
+  );
+  const ids = tools.map((tool) => tool.id);
+  check(new Set(ids).size === ids.length, `${label}: tool ids are unique within the set`);
+  for (const tool of tools) {
+    let spec: { name: string; description: string; parameters: { type?: string } } | null = null;
+    try {
+      spec = toToolSpec(tool as never);
+    } catch (error) {
+      check(false, `${label}: toToolSpec(${tool.id}) does not throw — ${(error as Error).message}`);
+      continue;
+    }
+    check(spec !== null && spec.name === tool.id, `${label}: toToolSpec(${tool.id}) succeeds and keeps its id`);
+    check(spec?.parameters?.type === "object", `${label}: toToolSpec(${tool.id}) yields an object parameter schema`);
+  }
+}
 
 console.log(`\nRegistry: ${ALL_AGENT_TOOLS.length} tools`);
 
@@ -41,6 +91,11 @@ check(
   ALL_AGENT_TOOLS.every((tool) => AGENT_TOOL_EFFECTS.includes(tool.effect)),
   `every tool effect is executable (${AGENT_TOOL_EFFECTS.join("|")})`,
 );
+
+// The registry is a deduped union: duplicate ids would let `enabledTools`
+// resolve two specs to the same function name.
+const registeredIds = ALL_AGENT_TOOLS.map((tool) => tool.id);
+check(new Set(registeredIds).size === registeredIds.length, "registry tool ids are unique");
 
 // ── the regression guard: EVERY tool must project to a provider spec ─────────
 console.log("\nSpec projection (regression guard)");
@@ -63,6 +118,27 @@ try {
   check(false, `buildToolSpecs(all) does not throw — ${(error as Error).message}`);
 }
 check(bulk !== null && bulk.length === ALL_AGENT_TOOLS.length, "buildToolSpecs(all) succeeds for the whole registry");
+
+// ── wave-2 surfaces: each closed set projects + resolves ────────────────────
+const reconcileTools = buildReconcileTools([]);
+checkToolSet("OPERATOR_TOOLS", OPERATOR_TOOLS as readonly CheckableTool[]);
+checkToolSet("WHATSAPP_SALES_TOOLS", WHATSAPP_SALES_TOOLS as readonly CheckableTool[]);
+checkToolSet("reconcileTools", reconcileTools);
+
+// Every wave-2 tool id is addressable through the shared registry — except
+// `reportReconcileCandidate`, which stays run-bound by design (it is built
+// with a per-run reportedIds collector, never statically registered).
+const REGISTRY_EXEMPT_IDS = new Set(["reportReconcileCandidate"]);
+for (const tool of [...OPERATOR_TOOLS, ...WHATSAPP_SALES_TOOLS, ...reconcileTools]) {
+  if (REGISTRY_EXEMPT_IDS.has(tool.id)) continue;
+  check(getAgentTool(tool.id) !== undefined, `registry resolves wave-2 tool id '${tool.id}'`);
+}
+
+// Enabling a wave-2 id must resolve a tool; unknown ids resolve nothing.
+const operatorOnly = resolveEnabledTools(["getCajaStatus"]);
+check(operatorOnly.length === 1 && operatorOnly[0]?.id === "getCajaStatus", "resolveEnabledTools resolves a wave-2 tool by id");
+check(resolveEnabledTools(["__nope__"]).length === 0, "resolveEnabledTools ignores unknown ids");
+check(resolveEnabledTools([]).length === 0, "resolveEnabledTools returns [] on empty allowlist");
 
 // ── draftLead: plain ZodObject + handler-level email/phone rule ──────────────
 console.log("\ndraftLead schema + validation semantics");
