@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { assertMediaBytes, mimeKind } from "@/lib/media/signatures";
 
 /**
  * F4-01 — Contrato de almacenamiento conmutable (D11).
@@ -103,6 +104,77 @@ export const localStorageAdapter: StorageAdapter = {
     assertSafePath(rel);
     const target = path.resolve(UPLOADS_DIR, rel);
     if (target !== UPLOADS_DIR && !target.startsWith(UPLOADS_DIR + path.sep)) {
+      throw new Error("Ruta de archivo inválida");
+    }
+    try {
+      await fs.unlink(target);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException)?.code !== "ENOENT") throw e;
+    }
+  },
+};
+
+/**
+ * Media entrante de clientes (canales WhatsApp/Telegram): la allowlist de
+ * mimes declarados vive en `mimeKind` (src/lib/media/signatures.ts) — un mime
+ * sin kind reconocido se rechaza, y además cada buffer pasa por
+ * `assertMediaBytes`: el contenido real manda sobre el mime declarado.
+ * Sin SVG: servir SVG entrante sería un vector de XSS.
+ */
+
+/** Same 25MB ceiling as the transcription endpoint — one cap for the whole pipeline. */
+export const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Inbound customer media lives OUTSIDE `public/` — anything under public/ is
+ * served statically without auth and these are customer files. Default
+ * `<cwd>/private/uploads`; `MEDIA_UPLOADS_DIR` overrides it for deploys that
+ * mount persistent storage elsewhere. The /api/media/[...path] route is the
+ * only read path (session-gated).
+ */
+export function privateUploadsDir(): string {
+  const configured = process.env.MEDIA_UPLOADS_DIR;
+  return configured
+    ? path.resolve(configured)
+    : path.join(process.cwd(), "private", "uploads");
+}
+
+export const PRIVATE_MEDIA_URL_PREFIX = "/api/media/";
+
+function normalizeMime(mimeType: string): string {
+  return mimeType.toLowerCase().split(";")[0]?.trim() ?? "";
+}
+
+export const privateStorageAdapter: StorageAdapter = {
+  async upload(file: File | Buffer, relPath: string, mimeType: string) {
+    assertSafePath(relPath);
+    const normalized = normalizeMime(mimeType);
+    if (!normalized || !mimeKind(normalized)) {
+      throw new Error(`Tipo de archivo no permitido: ${mimeType || "desconocido"}`);
+    }
+    const buffer = Buffer.isBuffer(file) ? file : Buffer.from(await (file as File).arrayBuffer());
+    if (buffer.length > MAX_MEDIA_BYTES) {
+      throw new Error("El archivo supera los 25MB");
+    }
+    assertMediaBytes(buffer, normalized);
+    const uploadsDir = privateUploadsDir();
+    const dest = path.resolve(uploadsDir, relPath);
+    if (dest !== uploadsDir && !dest.startsWith(uploadsDir + path.sep)) {
+      throw new Error("Ruta de archivo inválida");
+    }
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.writeFile(dest, buffer);
+    const url = `${PRIVATE_MEDIA_URL_PREFIX}${relPath.split(path.sep).join("/")}`;
+    return { url, size: buffer.length };
+  },
+
+  async delete(url: string) {
+    if (!url.startsWith(PRIVATE_MEDIA_URL_PREFIX)) return;
+    const rel = url.slice(PRIVATE_MEDIA_URL_PREFIX.length);
+    assertSafePath(rel);
+    const uploadsDir = privateUploadsDir();
+    const target = path.resolve(uploadsDir, rel);
+    if (target !== uploadsDir && !target.startsWith(uploadsDir + path.sep)) {
       throw new Error("Ruta de archivo inválida");
     }
     try {
