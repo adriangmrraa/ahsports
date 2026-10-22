@@ -20,7 +20,7 @@
  * or media payloads.
  */
 import { and, eq, gt, like } from "drizzle-orm";
-import { db } from "@/db";
+import { db } from "@/db/client";
 import { agentConfig, agentMemories, auditEvents, idempotencyKeys } from "@/db/schema";
 import { providerForChannel } from "@/lib/messaging/registry";
 import type { ChannelKind } from "@/lib/messaging/types";

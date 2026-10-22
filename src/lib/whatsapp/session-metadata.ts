@@ -13,7 +13,7 @@
  * best-effort.
  */
 import { and, eq, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db } from "@/db/client";
 import { agentSessionStates } from "@/db/schema";
 
 export const METADATA_CAS_MAX_RETRIES = 4;

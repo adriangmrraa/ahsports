@@ -21,7 +21,7 @@
  * no automatic customer reply.
  */
 import { and, eq, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db } from "@/db/client";
 import { agentSessionEvents, agentSessionStates, idempotencyKeys } from "@/db/schema";
 import { withDbTransaction } from "@/lib/db-transaction";
 import {
