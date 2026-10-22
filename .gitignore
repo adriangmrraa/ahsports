@@ -40,3 +40,6 @@ out
 .opencode/**/.graphify/
 .agents/**/.graphify/
 .codex/**/.graphify/
+
+# media entrante de clientes — NUNCA se commitea; solo se sirve por /api/media
+private/uploads/
