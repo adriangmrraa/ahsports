@@ -6,9 +6,9 @@ import { loadConversations } from "@/app/actions/inbox";
 import { Badge } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
-import { CHANNEL_LABEL } from "@/lib/agent/inbox-labels";
 import { formatDateTime } from "@/lib/utils";
-import type { ConversationCursor, ConversationListItem } from "@/lib/agent/inbox";
+import type { ConversationCursor } from "@/lib/agent/inbox";
+import { channelBadgeTone, INBOX_CHANNEL_LABEL, type InboxConversationItem } from "./filters";
 
 /**
  * Paginated conversation list (G3). Receives the first server-rendered page and
@@ -19,11 +19,14 @@ export function ConversationTable({
   initialCursor,
   q,
   channel,
+  account,
 }: {
-  initialItems: ConversationListItem[];
+  initialItems: InboxConversationItem[];
   initialCursor: ConversationCursor | null;
   q?: string;
   channel?: string;
+  /** URL value: "all" | "unassigned" | channel_accounts UUID. */
+  account?: string;
 }) {
   const [items, setItems] = useState(initialItems);
   const [cursor, setCursor] = useState<ConversationCursor | null>(initialCursor);
@@ -35,7 +38,7 @@ export function ConversationTable({
     if (!hasMore || pending) return;
     startTransition(async () => {
       try {
-        const page = await loadConversations({ q, channel, cursor });
+        const page = await loadConversations({ q, channel, account, cursor });
         setItems((prev) => [...prev, ...page.items]);
         setCursor(page.nextCursor);
         setHasMore(page.nextCursor !== null);
@@ -64,9 +67,14 @@ export function ConversationTable({
           {items.map((row) => (
             <TR key={row.id}>
               <TD>
-                <Badge tone={row.channel === "telegram" ? "primary" : "secondary"}>
-                  {CHANNEL_LABEL[row.channel] ?? row.channel}
+                <Badge tone={channelBadgeTone(row.channel)}>
+                  {INBOX_CHANNEL_LABEL[row.channel] ?? row.channel}
                 </Badge>
+                {row.accountLabel && (
+                  <div className="mt-1 text-xs text-on-surface-variant truncate max-w-[10rem]">
+                    {row.accountLabel}
+                  </div>
+                )}
               </TD>
               <TD className="data-mono text-on-surface">{row.externalThreadId}</TD>
               <TD>

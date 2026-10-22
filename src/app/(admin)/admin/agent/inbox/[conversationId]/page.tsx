@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { contacts, conversations, organizations } from "@/db/schema";
+import { channelAccounts, contacts, conversations, organizations } from "@/db/schema";
 import { requireAgentAdmin } from "@/lib/agent/rbac";
 import { queryMessagesPage } from "@/lib/agent/inbox";
-import { CHANNEL_LABEL } from "@/lib/agent/inbox-labels";
+import { isSchemaNotReady } from "@/lib/channels/errors";
+import { INBOX_CHANNEL_LABEL } from "../filters";
 import { formatDateTime } from "@/lib/utils";
 import { Badge, Card, PageHeader } from "@/components/ui/Card";
 import { ArrowLeft } from "lucide-react";
@@ -28,22 +29,64 @@ export default async function ConversationTimelinePage({
   await requireAgentAdmin();
   const { conversationId } = await params;
 
-  const [conversation] = await db
-    .select({
-      id: conversations.id,
-      channel: conversations.channel,
-      externalThreadId: conversations.externalThreadId,
-      status: conversations.status,
-      lastMessageAt: conversations.lastMessageAt,
-      createdAt: conversations.createdAt,
-      customerName: contacts.name,
-      orgName: organizations.name,
-    })
-    .from(conversations)
-    .leftJoin(contacts, eq(conversations.customerId, contacts.id))
-    .leftJoin(organizations, eq(conversations.organizationId, organizations.id))
-    .where(eq(conversations.id, conversationId))
-    .limit(1);
+  let conversation: {
+    id: string;
+    channel: string;
+    externalThreadId: string;
+    status: string;
+    lastMessageAt: Date | null;
+    createdAt: Date;
+    customerName: string | null;
+    orgName: string | null;
+    accountLabel: string | null;
+    accountProvider: string | null;
+  } | undefined;
+
+  try {
+    [conversation] = await db
+      .select({
+        id: conversations.id,
+        channel: conversations.channel,
+        externalThreadId: conversations.externalThreadId,
+        status: conversations.status,
+        lastMessageAt: conversations.lastMessageAt,
+        createdAt: conversations.createdAt,
+        customerName: contacts.name,
+        orgName: organizations.name,
+        accountLabel: sql<
+          string | null
+        >`coalesce(${channelAccounts.displayName}, ${channelAccounts.senderAddress})`,
+        accountProvider: channelAccounts.provider,
+      })
+      .from(conversations)
+      .leftJoin(contacts, eq(conversations.customerId, contacts.id))
+      .leftJoin(organizations, eq(conversations.organizationId, organizations.id))
+      .leftJoin(channelAccounts, eq(conversations.channelAccountId, channelAccounts.id))
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
+  } catch (error) {
+    if (!isSchemaNotReady(error)) throw error;
+    // Un-migrated install: no account columns — read the legacy projection.
+    [conversation] = await db
+      .select({
+        id: conversations.id,
+        channel: conversations.channel,
+        externalThreadId: conversations.externalThreadId,
+        status: conversations.status,
+        lastMessageAt: conversations.lastMessageAt,
+        createdAt: conversations.createdAt,
+        customerName: contacts.name,
+        orgName: organizations.name,
+      })
+      .from(conversations)
+      .leftJoin(contacts, eq(conversations.customerId, contacts.id))
+      .leftJoin(organizations, eq(conversations.organizationId, organizations.id))
+      .where(eq(conversations.id, conversationId))
+      .limit(1)
+      .then((rows) =>
+        rows.map((row) => ({ ...row, accountLabel: null, accountProvider: null })),
+      );
+  }
 
   if (!conversation) notFound();
 
@@ -53,7 +96,7 @@ export default async function ConversationTimelinePage({
     <div className="p-6">
       <PageHeader
         title="Timeline de conversación"
-        subtitle={`${CHANNEL_LABEL[conversation.channel] ?? conversation.channel} · hilo ${conversation.externalThreadId}${
+        subtitle={`${INBOX_CHANNEL_LABEL[conversation.channel] ?? conversation.channel} · hilo ${conversation.externalThreadId}${
           conversation.customerName ? ` · ${conversation.customerName}` : ""
         }`}
         action={
@@ -84,6 +127,15 @@ export default async function ConversationTimelinePage({
             <div>
               <dt className="label-caps text-on-surface-variant">Creada</dt>
               <dd className="data-mono text-on-surface">{formatDateTime(conversation.createdAt)}</dd>
+            </div>
+            <div>
+              <dt className="label-caps text-on-surface-variant">Cuenta de canal</dt>
+              <dd className="data-mono text-on-surface">
+                {conversation.accountLabel ??
+                  (conversation.accountProvider
+                    ? `(${conversation.accountProvider})`
+                    : "Sin cuenta (legado)")}
+              </dd>
             </div>
           </dl>
         </Card>
