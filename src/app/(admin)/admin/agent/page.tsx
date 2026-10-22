@@ -1,37 +1,52 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { agentConfig, agentMemories, users } from "@/db/schema";
+import { agentMemories, users } from "@/db/schema";
 import { AGENT_ADMIN_ROLES, requireAgentAdmin, type AgentAdminRole } from "@/lib/agent/rbac";
 import { OPERATOR_BINDING_SCOPE } from "@/lib/agent/identity";
 import { ALL_AGENT_TOOLS } from "@/lib/agents/tools/registry";
-import { AGENT_CONFIG_ID } from "@/lib/ai/config";
+import {
+  findAgentConfigForScope,
+  listAgentConfigScopes,
+  parseScopeKey,
+  scopeKeyOf,
+} from "@/lib/channels/agent-config-scope";
 import { formatDateTime } from "@/lib/utils";
 import { Badge, Card, PageHeader } from "@/components/ui/Card";
 import { AgentConfigForm, type AgentToolOption } from "./AgentConfigForm";
 import { OperatorBindingForm } from "./OperatorBindingForm";
 
 /**
- * P4.1 / P4 — /admin/agent: agent configuration surface.
+ * P4.1 / P4 + S13 — /admin/agent: agent configuration surface.
  *
  * Server component guarded by `requireAgentAdmin()` (admin/gerencia only). It
- * loads the singleton config, the closed tool set, the authorized operator
- * users and the current sender bindings, then hands a plain, secret-free view
- * model to the client forms. Stored secrets are never sent to the client: only
- * a boolean "configured" status leaves the server.
+ * loads the config row for the `?scope=` key (`global` | `channel:<channel>` |
+ * `account:<uuid>` — exact-scope read via `findAgentConfigForScope`, never the
+ * resolved fallback), the selectable scopes, the closed tool set, the
+ * authorized operator users and the current sender bindings, then hands a
+ * plain, secret-free view model to the client forms. Stored secrets are never
+ * sent to the client: only a boolean "configured" status leaves the server.
+ * Scoped rows are created on first save (scopeExists=false renders blank).
  */
-export default async function AgentConfigPage() {
+export default async function AgentConfigPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ scope?: string }>;
+}) {
   await requireAgentAdmin();
+  const sp = await searchParams;
+  // Malformed keys degrade to the global editor; the save action re-validates.
+  const scope = parseScopeKey(sp.scope) ?? {};
+  const scopeKey = scopeKeyOf(scope);
 
-  const [configRows, bindingRows, userRows] = await Promise.all([
-    db.select().from(agentConfig).where(eq(agentConfig.id, AGENT_CONFIG_ID)).limit(1),
+  const [config, bindingRows, userRows, scopeOptions] = await Promise.all([
+    findAgentConfigForScope(scope),
     db.select().from(agentMemories).where(eq(agentMemories.scope, OPERATOR_BINDING_SCOPE)),
     db
       .select({ id: users.id, name: users.name, role: users.role, active: users.active })
       .from(users)
       .orderBy(asc(users.name)),
+    listAgentConfigScopes(),
   ]);
-
-  const config = configRows[0] ?? null;
   const operators = userRows.filter(
     (user) => user.active && AGENT_ADMIN_ROLES.includes(user.role as AgentAdminRole),
   );
@@ -66,6 +81,7 @@ export default async function AgentConfigPage() {
       <div className="flex flex-col gap-6">
         <Card title="Configuración del modelo">
           <AgentConfigForm
+            key={`${scopeKey}:${config?.updatedAt ? new Date(config.updatedAt).getTime() : "empty"}`}
             initial={{
               provider: config?.provider ?? "",
               model: config?.model ?? "",
@@ -74,6 +90,9 @@ export default async function AgentConfigPage() {
             }}
             tools={tools}
             secretStatus={secretStatus}
+            scopeKey={scopeKey}
+            scopeOptions={scopeOptions}
+            scopeExists={config != null}
           />
         </Card>
 
