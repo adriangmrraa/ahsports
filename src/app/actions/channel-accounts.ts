@@ -144,7 +144,7 @@ export async function createChannelAccount(input: unknown) {
       })
       .returning({ id: channelAccounts.id });
     invalidateAgentConfigScopeCache();
-    revalidatePath("/admin/channels");
+    revalidatePath("/admin/canales");
     return { ok: true as const, id: created.id };
   } catch (error) {
     if (isSchemaNotReady(error)) {
@@ -187,7 +187,7 @@ export async function updateChannelAccount(input: unknown) {
       .returning({ id: channelAccounts.id });
     if (!updated) return { ok: false as const, error: "La cuenta no existe." };
     invalidateAgentConfigScopeCache();
-    revalidatePath("/admin/channels");
+    revalidatePath("/admin/canales");
     return { ok: true as const, id: updated.id };
   } catch (error) {
     if (isSchemaNotReady(error)) {
@@ -214,7 +214,7 @@ export async function setChannelAccountStatus(input: unknown) {
       .returning({ id: channelAccounts.id });
     if (!updated) return { ok: false as const, error: "La cuenta no existe." };
     invalidateAgentConfigScopeCache();
-    revalidatePath("/admin/channels");
+    revalidatePath("/admin/canales");
     return { ok: true as const, id: updated.id };
   } catch (error) {
     if (isSchemaNotReady(error)) {

@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   MessagesSquare,
   Package,
+  Plug,
   Receipt,
   Ruler,
   Send,
@@ -37,6 +38,7 @@ export type AdminNavIcon =
   | "payments"
   | "ai"
   | "messages"
+  | "channels"
   | "telegram"
   | "settings";
 
@@ -65,6 +67,7 @@ const navigation: Array<Omit<AdminNavItem, "badge">> = [
   { href: "/admin/pagos", label: "Pagos", icon: "payments" },
   { href: "/admin/agent", label: "Agente IA", icon: "ai" },
   { href: "/admin/agent/inbox", label: "Conversaciones", icon: "messages" },
+  { href: "/admin/canales", label: "Canales", icon: "channels" },
   { href: "/admin/agent/telegram", label: "Telegram", icon: "telegram" },
   { href: "/admin/configuracion", label: "Configuración", icon: "settings" },
 ];
@@ -86,6 +89,7 @@ export const ADMIN_NAV_ICONS: Record<AdminNavIcon, LucideIcon> = {
   payments: Receipt,
   ai: Bot,
   messages: MessagesSquare,
+  channels: Plug,
   telegram: Send,
   settings: Settings,
 };
