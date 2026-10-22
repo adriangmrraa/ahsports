@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   index,
   primaryKey,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -68,7 +69,16 @@ export const bundleSizeMode = pgEnum("bundle_size_mode", ["same_label", "fixed"]
 export const productTaxonomyNodeKind = pgEnum("product_taxonomy_node_kind", ["category", "subcategory", "type"]);
 
 // Agent platform enums (P0 — see migration 0010_agent_platform.sql).
-export const channel = pgEnum("channel", ["telegram", "whatsapp"]);
+// Multichannel port (migration 0011): the enum gains instagram/facebook/sms/
+// reddit; telegram + whatsapp keep their leading positions.
+export const channel = pgEnum("channel", [
+  "telegram",
+  "whatsapp",
+  "instagram",
+  "facebook",
+  "sms",
+  "reddit",
+]);
 export const messageDirection = pgEnum("message_direction", ["inbound", "outbound"]);
 export const messageSenderKind = pgEnum("message_sender_kind", ["customer", "agent", "operator"]);
 export const messageContentType = pgEnum("message_content_type", ["text", "image", "document", "system"]);
@@ -546,8 +556,9 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   attachments: many(attachments),
 }));
 
-export const contactsRelations = relations(contacts, ({ one }) => ({
+export const contactsRelations = relations(contacts, ({ one, many }) => ({
   organization: one(organizations, { fields: [contacts.organizationId], references: [organizations.id] }),
+  leadIdentities: many(leadIdentities),
 }));
 
 export const suppliersRelations = relations(suppliers, ({ many }) => ({
@@ -655,6 +666,17 @@ export const conversations = pgTable(
     customerId: varchar("customer_id", { length: 36 }).references(() => contacts.id, { onDelete: "set null" }),
     organizationId: varchar("organization_id", { length: 36 }).references(() => organizations.id, { onDelete: "set null" }),
     channel: channel("channel").notNull(),
+    /**
+     * Bound channel account (nullable). NULL marks a legacy install-global
+     * thread. Identity is (channel, channel_account_id, external_thread_id)
+     * for bound rows and (channel, external_thread_id) for legacy rows: a
+     * provisioned account never adopts a legacy row and a conversation is
+     * never rebound between accounts.
+     */
+    channelAccountId: varchar("channel_account_id", { length: 36 }).references(
+      (): AnyPgColumn => channelAccounts.id,
+      { onDelete: "restrict" },
+    ),
     externalThreadId: varchar("external_thread_id", { length: 255 }).notNull(),
     status: conversationStatus("status").notNull().default("open"),
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
@@ -662,7 +684,13 @@ export const conversations = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    threadUnique: uniqueIndex("conversations_channel_thread_unique_idx").on(t.channel, t.externalThreadId),
+    accountThreadUnique: uniqueIndex("conversations_account_thread_uq")
+      .on(t.channel, t.channelAccountId, t.externalThreadId)
+      .where(sql`${t.channelAccountId} is not null`),
+    legacyThreadUnique: uniqueIndex("conversations_legacy_thread_uq")
+      .on(t.channel, t.externalThreadId)
+      .where(sql`${t.channelAccountId} is null`),
+    channelAccountIdx: index("conversations_channel_account_idx").on(t.channel, t.channelAccountId),
   }),
 );
 
@@ -672,6 +700,15 @@ export const chatMessages = pgTable(
     id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
     conversationId: varchar("conversation_id", { length: 36 }).notNull().references(() => conversations.id, { onDelete: "cascade" }),
     channel: channel("channel").notNull(),
+    /**
+     * Account that delivered/authored this message (nullable). Dedup is
+     * account-scoped: two provisioned accounts may carry the same platform
+     * message id; legacy NULL-account rows dedup in their own partition.
+     */
+    channelAccountId: varchar("channel_account_id", { length: 36 }).references(
+      (): AnyPgColumn => channelAccounts.id,
+      { onDelete: "restrict" },
+    ),
     platformMessageId: varchar("platform_message_id", { length: 255 }).notNull(),
     direction: messageDirection("direction").notNull(),
     senderKind: messageSenderKind("sender_kind").notNull(),
@@ -683,8 +720,15 @@ export const chatMessages = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    // Idempotency anchor: duplicate provider deliveries never create new facts.
-    platformUnique: uniqueIndex("chat_messages_platform_unique_idx").on(t.channel, t.platformMessageId),
+    // Idempotency anchor: duplicate provider deliveries never create new
+    // facts. Scoped per account — the same platform_message_id may arrive once
+    // per provisioned account; NULL-account rows keep the legacy partition.
+    accountPlatformUnique: uniqueIndex("chat_messages_account_platform_uq")
+      .on(t.channel, t.channelAccountId, t.platformMessageId)
+      .where(sql`${t.channelAccountId} is not null`),
+    legacyPlatformUnique: uniqueIndex("chat_messages_legacy_platform_uq")
+      .on(t.channel, t.platformMessageId)
+      .where(sql`${t.channelAccountId} is null`),
     conversationIdx: index("chat_messages_conversation_idx").on(t.conversationId, t.createdAt),
   }),
 );
@@ -768,22 +812,145 @@ export const auditEvents = pgTable(
  * encrypted (see src/lib/crypto/secret-box.ts) and are never returned. No
  * provider or model is hardcoded: both are DB-resolved.
  */
-export const agentConfig = pgTable("agent_config", {
-  id: integer("id").primaryKey().default(1),
-  provider: text("provider"),
-  model: text("model"),
-  systemPrompt: text("system_prompt"),
-  enabledTools: jsonb("enabled_tools").$type<AgentEnabledTools>().notNull().default(sql`'[]'::jsonb`),
-  botTokenEnc: text("bot_token_enc"),
-  providerKeyEnc: text("provider_key_enc"),
-  webhookSecretEnc: text("webhook_secret_enc"),
-  updatedById: varchar("updated_by_id", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const agentConfig = pgTable(
+  "agent_config",
+  {
+    // Scope-aware rows share the table: the global default stays id = 1,
+    // channel/account-scoped rows take ids from agent_config_id_seq.
+    id: integer("id").primaryKey().default(sql`nextval('agent_config_id_seq')`),
+    provider: text("provider"),
+    model: text("model"),
+    systemPrompt: text("system_prompt"),
+    enabledTools: jsonb("enabled_tools").$type<AgentEnabledTools>().notNull().default(sql`'[]'::jsonb`),
+    botTokenEnc: text("bot_token_enc"),
+    providerKeyEnc: text("provider_key_enc"),
+    webhookSecretEnc: text("webhook_secret_enc"),
+    /**
+     * Resolution scope (account → channel → global):
+     *   channel NULL + channelAccountId NULL → global default (id = 1)
+     *   channel set  + channelAccountId NULL → channel-scoped row
+     *   channelAccountId set                 → per-account row (channel
+     *                                          informative-only)
+     */
+    channel: channel("channel"),
+    channelAccountId: varchar("channel_account_id", { length: 36 }).references(
+      (): AnyPgColumn => channelAccounts.id,
+      { onDelete: "cascade" },
+    ),
+    updatedById: varchar("updated_by_id", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    channelAccountUq: uniqueIndex("agent_config_channel_account_uq")
+      .on(t.channelAccountId)
+      .where(sql`${t.channelAccountId} is not null`),
+    channelScopeUq: uniqueIndex("agent_config_channel_scope_uq")
+      .on(t.channel)
+      .where(sql`${t.channel} is not null and ${t.channelAccountId} is null`),
+  }),
+);
+
+// ─── Channel accounts, events & lead identities (multichannel port) ────────
+
+/**
+ * One row per connected provider account/sender: a WhatsApp Business number
+ * via YCloud, a social account via Zernio, a Telegram bot.
+ *
+ * `credentialsRef` stores WHERE the secrets live — `env:YCLOUD_*`-style
+ * prefixes, `agent_config`, or a future vault reference — never the secret
+ * itself. `tenantId` stays the constant "default": single install, no
+ * tenancy logic.
+ */
+export const channelAccounts = pgTable(
+  "channel_accounts",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: text("tenant_id").notNull().default("default"),
+    provider: text("provider").notNull(),
+    channel: channel("channel").notNull(),
+    /** Provider's own account id: ycloud E.164 sender · zernio account id · telegram bot id. */
+    providerAccountId: text("provider_account_id").notNull(),
+    /** E.164 number, @handle, or page id — the surface customers see. */
+    senderAddress: text("sender_address").notNull(),
+    displayName: text("display_name"),
+    credentialsRef: text("credentials_ref"),
+    /** Optional explicit binding to an agent_config row (resolved after the account-scope row). */
+    agentConfigId: integer("agent_config_id").references((): AnyPgColumn => agentConfig.id, { onDelete: "set null" }),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    providerAccountUq: uniqueIndex("channel_accounts_provider_account_uq").on(t.provider, t.providerAccountId),
+  }),
+);
+
+/**
+ * Durable, idempotent provider events that have no conversation/message row:
+ * status transitions, account lifecycle facts, other normalized envelopes.
+ * The raw envelope stays in `payload` for audit/replay.
+ */
+export const channelEvents = pgTable(
+  "channel_events",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: text("tenant_id").notNull().default("default"),
+    provider: text("provider").notNull(),
+    channel: channel("channel"),
+    channelAccountId: varchar("channel_account_id", { length: 36 }).references(
+      (): AnyPgColumn => channelAccounts.id,
+      { onDelete: "set null" },
+    ),
+    providerAccountId: text("provider_account_id"),
+    deliveryId: text("delivery_id").notNull(),
+    platformMessageId: text("platform_message_id"),
+    kind: text("kind").notNull(),
+    direction: text("direction").notNull(),
+    status: text("status"),
+    eventTimestamp: timestamp("event_timestamp", { withTimezone: true }),
+    payload: jsonb("payload").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    // Delivery-id uniqueness is per ACCOUNT: provider redeliveries fan out
+    // once per channel account; COALESCE keeps legacy NULL-account rows in
+    // their own partition.
+    providerDeliveryUq: uniqueIndex("channel_events_provider_delivery_uq")
+      .on(t.provider, sql`coalesce(${t.channelAccountId}, '')`, t.deliveryId),
+    providerPlatformUq: uniqueIndex("channel_events_provider_platform_uq")
+      .on(t.provider, t.platformMessageId, t.kind, t.status)
+      .where(sql`${t.platformMessageId} is not null and ${t.status} is not null`),
+    accountLookupIdx: index("channel_events_account_created_idx").on(t.channelAccountId, t.createdAt),
+    platformLookupIdx: index("channel_events_provider_platform_idx").on(t.provider, t.platformMessageId),
+  }),
+);
+
+/**
+ * One contact ↔ N channel identities. Social leads may have no phone: the
+ * identity lives here keyed by (channel, external_id), where external_id is
+ * the canonical per-channel identity key (digits-normalized for phone
+ * channels, the provider id verbatim for social channels).
+ */
+export const leadIdentities = pgTable(
+  "lead_identities",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: text("tenant_id").notNull().default("default"),
+    contactId: varchar("contact_id", { length: 36 }).notNull().references(() => contacts.id, { onDelete: "cascade" }),
+    channel: channel("channel").notNull(),
+    externalId: text("external_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    channelExternalUq: uniqueIndex("lead_identities_channel_external_uq").on(t.channel, t.externalId),
+    contactIdx: index("lead_identities_contact_idx").on(t.contactId),
+  }),
+);
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
   customer: one(contacts, { fields: [conversations.customerId], references: [contacts.id] }),
   organization: one(organizations, { fields: [conversations.organizationId], references: [organizations.id] }),
+  account: one(channelAccounts, { fields: [conversations.channelAccountId], references: [channelAccounts.id] }),
   messages: many(chatMessages),
   sessionState: one(agentSessionStates, { fields: [conversations.id], references: [agentSessionStates.conversationId] }),
   events: many(agentSessionEvents),
@@ -791,6 +958,7 @@ export const conversationsRelations = relations(conversations, ({ one, many }) =
 
 export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
   conversation: one(conversations, { fields: [chatMessages.conversationId], references: [conversations.id] }),
+  account: one(channelAccounts, { fields: [chatMessages.channelAccountId], references: [channelAccounts.id] }),
 }));
 
 export const agentSessionStatesRelations = relations(agentSessionStates, ({ one }) => ({
@@ -803,4 +971,21 @@ export const agentSessionEventsRelations = relations(agentSessionEvents, ({ one 
 
 export const agentConfigRelations = relations(agentConfig, ({ one }) => ({
   updatedBy: one(users, { fields: [agentConfig.updatedById], references: [users.id] }),
+  account: one(channelAccounts, { fields: [agentConfig.channelAccountId], references: [channelAccounts.id] }),
+}));
+
+export const channelAccountsRelations = relations(channelAccounts, ({ one, many }) => ({
+  agentConfig: one(agentConfig, { fields: [channelAccounts.agentConfigId], references: [agentConfig.id] }),
+  scopedConfigs: many(agentConfig),
+  conversations: many(conversations),
+  chatMessages: many(chatMessages),
+  channelEvents: many(channelEvents),
+}));
+
+export const channelEventsRelations = relations(channelEvents, ({ one }) => ({
+  account: one(channelAccounts, { fields: [channelEvents.channelAccountId], references: [channelAccounts.id] }),
+}));
+
+export const leadIdentitiesRelations = relations(leadIdentities, ({ one }) => ({
+  contact: one(contacts, { fields: [leadIdentities.contactId], references: [contacts.id] }),
 }));

@@ -78,6 +78,13 @@
       "when": 1786396800007,
       "tag": "0010_agent_platform",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786396800008,
+      "tag": "0011_channel_accounts",
+      "breakpoints": true
     }
   ]
 }
