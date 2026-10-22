@@ -4,13 +4,7 @@
   "source": "default-auto",
   "root": ".",
   "git_root": ".",
-  "head": "81c3c0ecc54441e13cadf5893a08e79c06d7f319",
-  "candidate_count": 225,
-  "included_count": 204,
-  "excluded_untracked_count": 0,
-  "excluded_ignored_count": 26322,
-  "excluded_sensitive_count": 0,
-  "missing_committed_count": 0,
-  "warnings": [],
-  "recommendation": "Use --scope all or graphify.yaml inputs.corpus for a knowledge-base folder."
+  "head": "9c3fe36ef2b26ffc9efaf426c9b80fa8c003a02b",
+  "node_count": 2871,
+  "generated_by": "graphify 0.9.46 -> graphify-out/, mirrored to .graphify/ by reapply-descriptions.mjs"
 }

@@ -5,8 +5,13 @@ description: "Use when answering ANY question about this codebase (architecture,
 
 # Graph First — consult, maintain, and rebuild the knowledge graph
 
-This repo has a graphify knowledge graph at `.graphify/graph.json`. It is the
-**entry point to the codebase**, not an optional aid.
+This repo has a graphify knowledge graph. **Installed CLI: graphify 0.9.46**
+(the `graphify.exe` binary in `~/.local/bin`, NOT npm `@sentropic/graphify`).
+Its state root is **`graphify-out/`** — every command defaults to
+`graphify-out/graph.json`. `.graphify/graph.json` is a committed **mirror** of
+the same graph, kept in sync by `scripts/reapply-descriptions.mjs`.
+
+It is the **entry point to the codebase**, not an optional aid.
 
 ## 1. Hard rule: graph first, code second
 
@@ -24,28 +29,30 @@ relationships, or the blast radius of a change:
 4. If the graph lacks the fact, **say so**. Never invent edges or behavior.
 
 Reading raw files before consulting the graph is a contract violation. Do not
-grep the whole repo to "get oriented" — that is what `graphify summary` is for.
+grep the whole repo to "get oriented" — that is what `graphify god-nodes` is for.
 
 ## 2. Command reference
 
-| Need | Command |
+| Need | Command (v0.9.46) |
 |---|---|
-| First-hop orientation: hubs, communities, density | `graphify summary` |
+| First-hop orientation: architectural hubs | `graphify god-nodes` |
 | "How does X work?" — broad BFS context | `graphify query "<question>"` |
 | Trace a specific chain | `graphify query "<question>" --dfs` |
-| Plain-language detail for one node | `graphify explain <node>` |
+| Plain-language detail for one node | `graphify explain "<node>"` |
 | Shortest path between two concepts | `graphify path "<A>" "<B>"` |
-| Dependency tree from a node | `graphify tree <node>` |
-| Blast radius of changed files | `graphify review-analysis --files <files>` |
-| Focused review context | `graphify review-delta --files <files>` |
-| CRG line-aware risk scoring | `graphify detect-changes --files <files>` |
-| GraphRAG answer pack (you synthesize the answer) | `graphify answer "<question>"` |
-| Execution flows derived from CALLS edges | `graphify flows` |
-| Is the graph stale? | `graphify check-update` |
-| Rebuild (one-shot, code + docs) | `graphify update .` |
+| Reverse impact traversal from a node | `graphify affected "<node>"` |
+| D3 collapsible-tree HTML of the graph | `graphify tree` |
+| Visual studio export | `graphify-out/graph.html` (already generated) |
 
-`GRAPH_REPORT.md` is for **broad architecture review only**. Never read it by
-default — it is large. `summary` + `query` replace it for almost everything.
+`graphify-out/GRAPH_REPORT.md` is for **broad architecture review only**. Never
+read it by default — it is large. `god-nodes` + `query` replace it for almost
+everything.
+
+Commands that existed in the 0.18 lineage but **do NOT exist in 0.9.46**:
+`summary`, `tree <node>` (0.9.46's `tree` is an HTML export, not a dep tree),
+`review-analysis`, `review-delta`, `detect-changes`, `answer`, `flows`,
+`state status`, `scope inspect`, `portable-check`, `hook-rebuild`,
+`migrate-state`, `wiki describe`. Do not run them — the binary errors.
 
 ### Query expansion (important)
 
@@ -58,15 +65,10 @@ first, then query with those tokens.
 
 The graph must always match the working tree.
 
-**Git hooks are installed and patched** (`post-commit`, `post-checkout`,
-`post-merge`, `post-rewrite`, plus a `.gitattributes` merge driver). They mark
-`.graphify/needs_update` and sync the graph **in the background** after each
-commit. They are advisory and never block git. Do not uninstall them.
-
-> The stock hooks call `graphify hook-rebuild`, which **wipes every node
-> description** (see §8). The installed hooks were patched to call
-> `graphify-sync.mjs` instead. Re-running `graphify hook install` restores the
-> stock hooks and undoes the patch — re-apply it afterwards.
+**Git hooks are NOT currently installed.** Sync is manual — run the canonical
+command at the end of a code session. Do NOT run `graphify hook install`: the
+stock hooks call `hook-rebuild`-equivalent rebuilds that do not re-apply
+descriptions.
 
 ### The canonical command
 
@@ -76,24 +78,28 @@ node .opencode/skills/graph-first/scripts/graphify-sync.mjs
 
 This is the **only** command you should use to refresh the graph. It:
 
-1. regenerates the answer files from the tracked description cache, then
-2. runs a single `graphify update .`, which rebuilds **and** re-ingests the
-   descriptions in the same pass.
+1. runs `graphify update .`, which rebuilds `graphify-out/graph.json` WITHOUT
+   descriptions, then
+2. runs `reapply-descriptions.mjs`, which writes the tracked description cache
+   DIRECTLY into `graphify-out/graph.json` (0.9.46 has no answer-file
+   ingestion — the script edits the JSON itself) and mirrors
+   `graph.json` + `GRAPH_REPORT.md` + `.graphify_labels.json` + `scope.json`
+   into `.graphify/`.
 
-Never call `graphify hook-rebuild` directly. Never call a bare
-`graphify update .` unless you accept losing all descriptions.
+One pass: rebuild then apply. An interrupted run can only leave the graph
+unrebuilt or unapplied — never rebuilt-but-committed-undescribed.
+
+Never call a bare `graphify update .` unless you accept losing all
+descriptions until the next reapply. There is no `hook-rebuild` in 0.9.46.
 
 Protocol:
 
-- **Stale marker present** → `.graphify/needs_update` exists. The graph is out
-  of date. Run the sync script before trusting it, and tell the user it was
-  stale.
-- **Explicit check** → `graphify check-update` reports pending refresh signals.
 - **End of a code session** → run the sync script so the graph ends in parity
   with the working tree. Do this before declaring work complete.
-- **After a commit** → the patched hook syncs automatically; verify with
-  `graphify state status` (shows the analyzed HEAD) and by checking the
-  described-node count (see §5).
+- **Freshness signal** → `graphify-out/graph.json` carries `built_at_commit`
+  with the analyzed HEAD; compare against `git rev-parse HEAD`.
+- **Staleness** → if `built_at_commit` lags HEAD and the diff touched source
+  files, run the sync before trusting the graph, and say it was stale.
 
 The graph is built from the **working tree, not from HEAD**. Uncommitted changes
 are included. That is intentional.
@@ -101,36 +107,31 @@ are included. That is intentional.
 Verify parity at any time:
 
 ```powershell
-node -e "const g=require('./.graphify/graph.json');console.log(g.nodes.filter(n=>n.description).length+'/'+g.nodes.length+' described')"
+node -e "const g=require('./graphify-out/graph.json');console.log(g.nodes.filter(n=>n.description).length+'/'+g.nodes.length+' described')"
+# .graphify/graph.json mirrors the same content
 ```
 
 ## 4. Full rebuild
 
 ```powershell
-graphify update .                 # code + docs, descriptions and labels on
-graphify update . --no-description --no-label   # structural only, fastest
+graphify update .                 # code + docs; writes graphify-out/graph.json
 graphify update . --force         # overwrite even if the rebuild has fewer nodes
+graphify update . --no-cluster    # structural only (raw extraction), fastest
 ```
 
-Scope resolution:
-
-```powershell
-graphify scope inspect            # what will be ingested
-graphify update . --scope all     # include untracked files too
-```
-
-Default scope is `committed`. Untracked files are excluded — if you need an
-untracked file in the graph, commit it or use `--scope all`.
+v0.9.46 has no `scope inspect` and no `--scope` flag on `update` — the corpus
+is the git-committed working tree. After any bare `update`, run
+`reapply-descriptions.mjs` (or `graphify-sync.mjs`, which does both).
 
 ## 5. Semantic enrichment (this is what makes the graph queryable)
 
-Node descriptions and community names are **not optional**. Without them,
-communities render as `Community N` and nodes have no natural-language
-description, so `query` degrades to filename matching.
+Node descriptions are **not optional**: without them `query` degrades to
+filename matching.
 
-**No API keys are configured on this machine.** Graphify therefore runs in
-`assistant` mode: instead of calling an LLM, it emits instruction files and
-waits for the host assistant to fill them.
+**No API keys are configured on this machine.** v0.9.46 has no assistant-mode
+batch ingestion and its LLM commands (`label`, `extract --backend`) need keys —
+so descriptions come from the tracked cache + helper scripts, applied directly
+into the JSON by `reapply-descriptions.mjs`.
 
 ### The description cache (read this before re-describing anything)
 
@@ -140,56 +141,43 @@ Descriptions are persisted in a **git-tracked cache**:
 .opencode/skills/graph-first/description-cache.json
 ```
 
-A JSON object mapping `node_id` → one-sentence description. It currently holds
-**528 descriptions**. Because it is tracked, the enrichment travels with the
-repo instead of dying with the gitignored `.graphify/`.
+A JSON object mapping `node_id` → one-sentence description. Because it is
+tracked, the enrichment travels with the repo.
 
-`reapply-descriptions.mjs` reads this cache, writes the `batch-NNN.json` answer
-files graphify expects, and absorbs any description it finds in `graph.json`
-that is missing from the cache (self-healing). **Never re-describe a node by
-hand if it is already in the cache.**
+`reapply-descriptions.mjs` reads this cache and writes `description` straight
+into `graphify-out/graph.json` nodes, absorbs any in-graph description missing
+from the cache (self-healing), mirrors to `.graphify/`, and reports uncached
+nodes. **Never re-describe a node by hand if it is already in the cache.**
 
 ### Only when genuinely new nodes appear
 
-The sync script reports uncached nodes:
+The reapply reports uncached nodes and emits
+`.graphify/description-instructions/batch-NNN.md` prompt files (id + file +
+line per node). Then:
 
-```
-[reapply] N uncached.
-[reapply] nodes needing a fresh description from an assistant:
-  - some_new_node_id
-```
-
-Only then does an assistant need to write descriptions. Procedure:
-
-1. Run the sync script. It emits `.graphify/description-instructions/batch-NNN.md`
-   for the nodes it could not resolve, and reports which ids are missing.
-2. Write the sibling `batch-NNN.json`: a **single JSON object** mapping
-   `node_id` → **one factual sentence in English**. No markdown fences, no
-   prose. Omit a node only when the context is genuinely insufficient.
-3. Run the sync script again — it absorbs the new descriptions into the tracked
-   cache and ingests them.
+1. Run `scripts/describe-new-nodes.mjs` — generates a mechanical baseline
+   `batch-NNN.json` per batch (declaration kind + docstring extracted from the
+   real source; document sections get 'Section "X" in file'). Honest and
+   factual; hand-edit cache entries afterwards for nodes that deserve better.
+2. OR write the sibling `batch-NNN.json` yourself: a **single JSON object**
+   mapping `node_id` → **one factual sentence in English**.
+3. Re-run `reapply-descriptions.mjs` (or `graphify-sync.mjs`) — it absorbs the
+   answer files into the tracked cache, applies them, deletes the consumed
+   files.
 
 ### Community names
 
-`.graphify/label-instructions/communities.md` lists communities with a
-`[lang=…]` marker. Write `communities.json` mapping the community id (`"0"`…)
-to a 2-5 word name.
-
-- **Known defect:** graphify misdetects Spanish content as Portuguese and emits
-  `[lang=pt]` for communities whose real source language is Spanish. Write those
-  names in **Spanish**, not Portuguese. Do not normalize everything to one
-  language.
-- Community names are persisted separately in `.graphify/.graphify_labels.json`
-  and therefore **survive rebuilds** — unlike descriptions.
+v0.9.46 names communities via LLM backends (`graphify label`); with no keys it
+falls back to file-derived names persisted in `graphify-out/.graphify_labels.json`
+(mirrored to `.graphify/`). To curate them by hand, edit that JSON and the
+per-node `community_name` fields — but prefer spending effort on node
+descriptions.
 
 ### Verifying coverage
 
 ```
-[graphify describe] coverage: 507/507 describable node(s) described
+node -e "const g=require('./graphify-out/graph.json');console.log(g.nodes.filter(n=>n.description).length+'/'+g.nodes.length)"
 ```
-
-A handful of entity nodes carry no grounding and are intentionally left without
-a description (anti-hallucination policy) — that is not a failure.
 
 ### Parallelizing new descriptions
 
@@ -201,33 +189,26 @@ Never let two workers touch the same file.
 
 ## 6. The graph IS versioned
 
-`.graphify/graph.json`, `GRAPH_REPORT.md`, `.graphify_labels.json` and
-`scope.json` are **committed**, so anyone who clones the repo gets a usable
-graph without rebuilding it.
+Committed so anyone who clones gets a usable graph without rebuilding:
 
-Only machine-bound artifacts are gitignored:
+- `graphify-out/`: `graph.json`, `GRAPH_REPORT.md`, `.graphify_labels.json`
+  (+`.sig`), `.graphify_root`, `graph.html`
+- `.graphify/` (mirror): `graph.json`, `GRAPH_REPORT.md`,
+  `.graphify_labels.json`, `scope.json`
+
+Only machine-bound/regenerable artifacts are gitignored:
 
 | Excluded | Why |
 |---|---|
-| `manifest.json` | stores absolute machine paths (`E:/Adrian OS/...`) |
-| `branch.json`, `worktree.json` | local HEAD and worktree |
-| `cache/`, `*-instructions/` | regenerable caches and prompts |
-| `.graphify_describe_pending` | transient marker |
+| `graphify-out/cache/` | AST + stat-index caches, rebuilt automatically |
+| `graphify-out/manifest.json` | per-file mtimes of this machine |
+| `graphify-out/20XX-*/` | per-run dated snapshots the CLI keeps |
+| `graphify-out/needs_update`, `memory/`, `reflections/` | runtime state |
+| `.graphify/description-instructions/` | assistant prompt/answer batches |
 | `.opencode/**/.graphify/`, `.agents/**/.graphify/`, `.codex/**/.graphify/` | stray state graphify writes when it runs from a nested cwd |
 
-**The committed graph is always ~1 commit behind by construction:** it contains
-git commit nodes, so it cannot contain its own commit. After every commit the
-hook rebuilds the graph and the working tree shows that difference as
-"modified". That is correct — the working-tree graph is *ahead* of the
-committed one, not behind.
-
-**Git commit nodes self-describe** from the commit subject (see
-`reapply-descriptions.mjs`), so they never need an assistant. Only genuinely
-new code nodes do.
-
-`graphify portable-check` is **not** a valid gate here: it reports ~237 issues,
-most of them URL route paths (`/admin/pedidos`) misclassified as filesystem
-absolute paths. The genuine problem is `manifest.json`, which is excluded.
+v0.9.46 emits **no git-commit nodes**, so the graph does not lag by
+construction — `built_at_commit` reflects the HEAD that was analyzed.
 
 ## 7. Agent integration
 
@@ -240,52 +221,48 @@ absolute paths. The genuine problem is `manifest.json`, which is excluded.
 
 To add another platform: `graphify <platform> install --project`.
 
-## 8. Known graphify defects (verified empirically)
-
-These were reproduced on graphify 0.18.0 and are the reason this skill ships
-helper scripts. Do not "fix" them by reverting to stock commands.
+## 8. Known graphify defects and version split (verified empirically)
 
 1. **Every rebuild wipes all node descriptions.**
-   `graphify update` and `graphify hook-rebuild` rebuild `graph.json` from
-   scratch without descriptions. Descriptions only come back by ingesting answer
-   files — and graphify **deletes both `batch-NNN.md` and `batch-NNN.json`** once
-   it has ingested them. So the next rebuild has nothing to ingest.
-   Community names survive (they are persisted in `.graphify/.graphify_labels.json`);
-   descriptions do not.
-   *Mitigation:* `graphify-sync.mjs` regenerates the answers from the tracked
-   cache before each rebuild, so rebuild + ingest happen in one pass.
+   `graphify update` rebuilds `graphify-out/graph.json` without descriptions,
+   and 0.9.46 has no answer-file ingestion — they only come back by
+   re-applying the tracked cache (`reapply-descriptions.mjs` edits the JSON
+   directly). *Mitigation:* `graphify-sync.mjs` runs update + reapply in one
+   pass.
 
-2. **`graphify hook-rebuild` is destructive.**
-   It is what the stock `post-commit` hook calls, so a plain `git commit`
-   silently degrades the graph from N described nodes to 0.
-   *Mitigation:* the installed hooks are patched to call `graphify-sync.mjs`.
+2. **Two graphify lineages live in this repo's tooling docs.**
+   The npm lineage (`@sentropic/graphify` 0.18+) uses `.graphify/` and ships
+   `summary`/`review-analysis`/`hook-rebuild`/`migrate-state`. The installed
+   binary (`graphify.exe` 0.9.46, `~/.local/bin`) uses `graphify-out/` and a
+   different command surface. Scripts and docs were adapted to the INSTALLED
+   binary; if a newer npm version is installed later, re-check `--help` before
+   assuming behavior.
 
-3. **Language misdetection.**
-   Spanish content is reported as Portuguese (`[lang=pt]`) in community
-   instruction files. Write those names in Spanish.
+3. **Node ids differ across lineages.**
+   0.18 ids are `<parentdir>_<filestem>_<symbol>`; 0.9.46 ids are
+   `<full_sanitized_path>_<symbol>`. The cache was re-keyed to 0.9.46 ids via
+   `scripts/migrate-descriptions-v0946.mjs` (join on `source_file`+label).
+   Keep that script for history; it only needs to run again if an 0.18 graph
+   resurfaces.
 
-4. **`portable-check` false positives.**
-   `graphify portable-check` reports 237 issues, most of them URL route paths
-   (`/admin/pedidos`) misclassified as filesystem absolute paths. The genuine
-   problem is `manifest.json` storing absolute machine paths. Either way:
-   **do not commit `.graphify/`**.
+4. **`manifest.json` is machine-bound.**
+   v0.9.46 stores relative paths + mtimes. It is gitignored — do not commit it.
 
 ## 9. Troubleshooting
 
-- **`graphify` not found** → `npm install -g @sentropic/graphify`
+- **`graphify` not found** → the binary lives at `~/.local/bin/graphify.exe`;
+  the npm package is `npm install -g @sentropic/graphify` (different lineage —
+  verify which one is on PATH before relying on a command surface).
 - **Descriptions are 0 after a rebuild** → the cache did not get re-applied.
-  Run `graphify-sync.mjs`. If it reports uncached nodes, those are genuinely new
-  and need an assistant (see §5).
+  Run `reapply-descriptions.mjs`. If it reports uncached nodes, run
+  `describe-new-nodes.mjs` then reapply again (see §5).
 - **`explain` / `path` return nothing** → the node label differs from your
-  term. Run `graphify summary`, then `graphify query` with graph vocabulary.
+  term. Run `graphify god-nodes`, then `graphify query` with graph vocabulary.
 - **Duplicate labels** (`page.tsx`, `route.ts` appear many times) → expected.
   Next.js App Router produces many same-named files. Disambiguate with the
   `source_file` field, or query by symbol name instead.
-- **Graph is empty after a build** → the corpus was fully skipped or is
-  binary-only. Check `graphify scope inspect`.
 - **The graph predates your uncommitted work** → the graph reflects the last
   build, not live edits. Run `graphify-sync.mjs`.
-- **Hooks reverted to stock** → someone ran `graphify hook install`. Re-apply
-  the patch: replace `$GRAPHIFY_CMD hook-rebuild || true` with
-  `node .opencode/skills/graph-first/scripts/graphify-sync.mjs || true` in each
-  hook under `.git/hooks/`.
+- **`graphify-out/` looks dirty after sync** → `graph.json`, `GRAPH_REPORT.md`,
+  `graph.html`, labels and `manifest.json` churn on every rebuild; the ignored
+  artifacts (cache/, snapshots) never appear in `git status`.

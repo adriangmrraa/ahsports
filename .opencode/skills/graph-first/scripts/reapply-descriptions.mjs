@@ -1,53 +1,61 @@
 #!/usr/bin/env node
 /**
- * Re-apply cached node descriptions so `graphify update` can ingest them.
+ * Apply cached node descriptions to the graphify graph (v0.9.46 flow).
  *
  * WHY THIS EXISTS
  * ---------------
- * In assistant mode, graphify rebuilds `.graphify/graph.json` WITHOUT node
- * descriptions. Descriptions are only restored by *ingesting answer files*, and
- * graphify DELETES both the `batch-NNN.md` prompts and the `batch-NNN.json`
- * answers once it has ingested them.
+ * graphify rebuilds the graph WITHOUT node descriptions. The installed CLI
+ * (v0.9.46) writes `graphify-out/graph.json` and — unlike the 0.18 line — has
+ * no assistant-mode batch ingestion: `batch-*.json` files placed next to the
+ * graph are never read. So this script applies the tracked description cache
+ * DIRECTLY into `graph.json` node objects.
  *
- * Net effect: every `graphify update` / `graphify hook-rebuild` wipes all
- * descriptions. Community names survive (persisted in
- * `.graphify/.graphify_labels.json`); node descriptions do not.
+ * Assistant workflow (unchanged in spirit):
+ *   1. Run this script. It prints how many nodes are uncached and emits
+ *      `.graphify/description-instructions/batch-NNN.md` prompt files listing
+ *      each missing node id with its file/line context.
+ *   2. Write sibling `batch-NNN.json` files: a single JSON object mapping
+ *      `node_id` -> one factual English sentence. `describe-new-nodes.mjs`
+ *      generates a mechanical baseline for all misses; hand-edit entries that
+ *      deserve better.
+ *   3. Re-run this script — it absorbs every `batch-NNN.json` into the tracked
+ *      cache, applies them, and deletes the consumed answer files.
  *
- * This script regenerates the answer files from a persistent cache keyed by
- * node id, so descriptions survive rebuilds without an assistant rewriting
- * hundreds of sentences.
- *
- * The cache is TRACKED IN GIT at
- * `.opencode/skills/graph-first/description-cache.json` so the enrichment
- * travels with the repo instead of dying with the gitignored `.graphify/`.
+ * After applying, it mirrors the canonical artifacts into `.graphify/` so the
+ * documented path (`.graphify/graph.json`, `GRAPH_REPORT.md`,
+ * `.graphify_labels.json`, `scope.json`) stays fresh for agents that read it
+ * directly. `graphify-out/graph.json` is the build source of truth because the
+ * CLI defaults every read to it; `.graphify/` is the committed mirror.
  *
  * USAGE
  * -----
  *   node .opencode/skills/graph-first/scripts/reapply-descriptions.mjs
- *   graphify update .
  *
- * Normally you do not run this by hand — `graphify-sync.mjs` wraps both steps.
+ * Normally run by `graphify-sync.mjs` after `graphify update .`.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
+  copyFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SKILL_DIR = join(HERE, "..");
-// Repo root: .opencode/skills/graph-first/scripts -> up four levels.
 const REPO_ROOT = resolve(HERE, "..", "..", "..", "..");
-
-// Git hooks run with an environment where graphify mis-resolves its state root.
-// Pinning the cwd keeps every relative path below anchored to the repo.
 process.chdir(REPO_ROOT);
 
-const GRAPH = ".graphify/graph.json";
-const DIR = ".graphify/description-instructions";
+const OUT_GRAPH = "graphify-out/graph.json";
+const LEGACY_GRAPH = ".graphify/graph.json";
+const INSTR_DIR = ".graphify/description-instructions";
 const BATCH_SIZE = 40;
 
-// Primary cache is tracked in git and ships with the repo; the .graphify copy is
-// a local fallback for graphs built before the cache was moved.
 const PRIMARY_CACHE = join(SKILL_DIR, "description-cache.json");
 const FALLBACK_CACHE = ".graphify/description-cache.json";
 
@@ -59,75 +67,111 @@ const cachePath = existsSync(PRIMARY_CACHE)
 
 if (!cachePath) {
   console.error("[reapply] no description cache found — nothing to re-apply.");
-  console.error(`[reapply] expected at ${PRIMARY_CACHE}`);
   process.exit(1);
 }
-if (!existsSync(GRAPH)) {
-  console.error(`[reapply] no graph at ${GRAPH} — run \`graphify update .\` first.`);
+const graphPath = existsSync(OUT_GRAPH)
+  ? OUT_GRAPH
+  : existsSync(LEGACY_GRAPH)
+    ? LEGACY_GRAPH
+    : null;
+if (!graphPath) {
+  console.error("[reapply] no graph.json found — run `graphify update .` first.");
   process.exit(1);
 }
 
 const cache = JSON.parse(readFileSync(cachePath, "utf-8"));
-const graph = JSON.parse(readFileSync(GRAPH, "utf-8"));
+const graph = JSON.parse(readFileSync(graphPath, "utf-8"));
 const nodes = graph.nodes ?? [];
 
-mkdirSync(DIR, { recursive: true });
+mkdirSync(INSTR_DIR, { recursive: true });
 
-// Clear stale answer files so graphify never ingests ids that no longer exist.
-for (const f of readdirSync(DIR)) {
-  if (/^batch-\d+\.json$/.test(f)) unlinkSync(join(DIR, f));
-}
-
-const hits = [];
-const misses = [];
-let learned = 0;
-let synthesized = 0;
-
-for (const node of nodes) {
-  if (cache[node.id]) {
-    hits.push([node.id, cache[node.id]]);
-  } else if (node.description) {
-    // Description present in the graph but absent from the cache — absorb it.
-    cache[node.id] = node.description;
-    hits.push([node.id, node.description]);
-    learned += 1;
-  } else if (node.id.startsWith("commit:")) {
-    // Git commit nodes churn on every commit, so never route them to an
-    // assistant. Their label already IS the commit subject.
-    const description = `Git commit ${node.label}.`;
-    cache[node.id] = description;
-    hits.push([node.id, description]);
-    synthesized += 1;
-  } else {
-    misses.push(node.id);
+// --- step 1: absorb assistant answer files (batch-NNN.json) into the cache ---
+let absorbedAnswers = 0;
+for (const f of readdirSync(INSTR_DIR)) {
+  if (!/^batch-\d+\.json$/.test(f)) continue;
+  try {
+    const answers = JSON.parse(readFileSync(join(INSTR_DIR, f), "utf-8"));
+    for (const [id, desc] of Object.entries(answers)) {
+      if (typeof desc === "string" && desc.trim()) {
+        cache[id] = desc.trim();
+        absorbedAnswers += 1;
+      }
+    }
+    unlinkSync(join(INSTR_DIR, f));
+  } catch (e) {
+    console.error(`[reapply] could not parse ${f}: ${e.message} — left in place.`);
   }
 }
 
-let batch = 0;
-for (let i = 0; i < hits.length; i += BATCH_SIZE) {
-  const chunk = Object.fromEntries(hits.slice(i, i + BATCH_SIZE));
-  writeFileSync(
-    join(DIR, `batch-${String(batch).padStart(3, "0")}.json`),
-    `${JSON.stringify(chunk, null, 2)}\n`,
-    "utf-8",
-  );
-  batch += 1;
+// --- step 2: apply cache to graph nodes; absorb strays; collect misses ---
+let applied = 0;
+let learned = 0;
+const misses = [];
+for (const node of nodes) {
+  if (cache[node.id]) {
+    node.description = cache[node.id];
+    applied += 1;
+  } else if (node.description) {
+    cache[node.id] = node.description;
+    learned += 1;
+    applied += 1;
+  } else {
+    misses.push(node);
+  }
 }
 
-// Persist anything newly absorbed so the tracked cache keeps improving.
-if (learned > 0 || synthesized > 0) {
+writeFileSync(graphPath, `${JSON.stringify(graph)}\n`, "utf-8");
+
+// --- step 3: emit prompt files for nodes still needing a description ---
+for (const f of readdirSync(INSTR_DIR)) {
+  if (/^batch-\d+\.md$/.test(f)) unlinkSync(join(INSTR_DIR, f));
+}
+for (let i = 0; i < misses.length; i += BATCH_SIZE) {
+  const chunk = misses.slice(i, i + BATCH_SIZE);
+  const lines = chunk.map(
+    (n) =>
+      `- ${n.id}  (${n.file_type || "?"}: ${n.source_file || "no-file"} ${n.source_location || ""}) label="${n.label}"`,
+  );
+  writeFileSync(
+    join(INSTR_DIR, `batch-${String(i / BATCH_SIZE).padStart(3, "0")}.md`),
+    `# Describe these graph nodes — one factual English sentence each.\n` +
+      `Write sibling file batch-${String(i / BATCH_SIZE).padStart(3, "0")}.json mapping node_id -> description.\n\n` +
+      lines.join("\n") +
+      "\n",
+    "utf-8",
+  );
+}
+
+// --- step 4: mirror canonical artifacts into .graphify/ ---
+mkdirSync(".graphify", { recursive: true });
+if (graphPath === OUT_GRAPH) {
+  copyFileSync(OUT_GRAPH, LEGACY_GRAPH);
+  for (const f of ["GRAPH_REPORT.md", ".graphify_labels.json"]) {
+    const src = join("graphify-out", f);
+    if (existsSync(src)) copyFileSync(src, join(".graphify", f));
+  }
+  const scope = {
+    requested_mode: "auto",
+    resolved_mode: "committed",
+    source: "default-auto",
+    root: ".",
+    git_root: ".",
+    head: graph.built_at_commit ?? null,
+    node_count: nodes.length,
+    generated_by: "graphify 0.9.46 -> graphify-out/, mirrored to .graphify/ by reapply-descriptions.mjs",
+  };
+  writeFileSync(".graphify/scope.json", `${JSON.stringify(scope, null, 2)}\n`, "utf-8");
+}
+
+if (absorbedAnswers > 0 || learned > 0 || applied > 0) {
   writeFileSync(PRIMARY_CACHE, `${JSON.stringify(cache, null, 2)}\n`, "utf-8");
 }
 
 console.log(
-  `[reapply] ${hits.length} description(s) → ${batch} batch file(s); ` +
-    `${misses.length} uncached` +
-    `${learned > 0 ? `; ${learned} absorbed` : ""}` +
-    `${synthesized > 0 ? `; ${synthesized} git commit(s) auto-described` : ""}.`,
+  `[reapply] ${applied}/${nodes.length} described (${absorbedAnswers} from answers, ` +
+    `${learned} absorbed from graph); ${misses.length} uncached -> ` +
+    `${Math.ceil(misses.length / BATCH_SIZE)} prompt file(s) in ${INSTR_DIR}`,
 );
-if (misses.length > 0) {
-  console.log("[reapply] nodes needing a fresh description from an assistant:");
-  for (const id of misses.slice(0, 40)) console.log(`  - ${id}`);
-  if (misses.length > 40) console.log(`  ... and ${misses.length - 40} more`);
+if (graphPath === OUT_GRAPH) {
+  console.log("[reapply] mirrored graph.json + report + labels + scope into .graphify/");
 }
-console.log("[reapply] now run: graphify update .");
