@@ -840,7 +840,7 @@ export const draftQuoteWhatsAppTool: AgentTool<z.infer<typeof draftQuoteInput>> 
         entityType: "order",
         entityId: order.id,
         correlationId: customer.conversationId,
-        payload: { orderNumber: order.number, totalQuoted: totals.price },
+        payload: { after: { orderNumber: order.number, totalQuoted: totals.price } },
       });
 
       return { orderId: order.id, number: order.number };
@@ -1056,7 +1056,9 @@ export const draftOrderWhatsAppTool: AgentTool<z.infer<typeof draftOrderInput>> 
         entityType: "order",
         entityId: order.id,
         correlationId: customer.conversationId,
-        payload: { orderNumber: order.number, totalQuoted: totals.price, items: expanded.length },
+        payload: {
+          after: { orderNumber: order.number, totalQuoted: totals.price, items: expanded.length },
+        },
       });
 
       return { orderId: order.id, number: order.number };
@@ -1104,9 +1106,11 @@ export const recordPaymentIntentTool: AgentTool<z.infer<typeof paymentIntentInpu
       entityType: "conversation",
       entityId: customer.conversationId,
       payload: {
-        contactId: customer.contactId,
-        orderNumber: input.orderNumber ?? null,
-        note: input.note?.slice(0, 500) ?? null,
+        after: {
+          contactId: customer.contactId,
+          orderNumber: input.orderNumber ?? null,
+          note: input.note?.slice(0, 500) ?? null,
+        },
       },
     });
     return {
@@ -1176,11 +1180,13 @@ export const transferToHumanTool: AgentTool<z.infer<typeof transferInput>> = {
       entityType: "conversation",
       entityId: conversationId,
       payload: {
-        episode,
-        reason: input.reason.slice(0, 200),
-        category: input.category ?? null,
-        ownerNotified,
-        overrideClaimed: claims.overrideClaimed,
+        after: {
+          episode,
+          reason: input.reason.slice(0, 200),
+          category: input.category ?? null,
+          ownerNotified,
+          overrideClaimed: claims.overrideClaimed,
+        },
       },
     });
 

@@ -118,6 +118,14 @@ function contactNameFor(value: MetaValue, waId: string | undefined): string | un
   return value.contacts?.find((contact) => contact.wa_id === waId)?.profile?.name;
 }
 
+/** Meta timestamps are unix seconds (string); the event wants ISO. */
+function metaTimestamp(value: string | undefined): string {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0
+    ? new Date(seconds * 1000).toISOString()
+    : new Date().toISOString();
+}
+
 function metaMessageToEvent(
   message: WhatsAppMessage,
   value: MetaValue,
@@ -143,6 +151,7 @@ function metaMessageToEvent(
     type: mapMessageType(message.type),
     text: textFor(message),
     mediaRefs: mediaRefsFor(message),
+    timestamp: metaTimestamp(message.timestamp),
     raw: {
       // ycloud-shaped envelope: the pipeline's protocol-artifact and
       // echo-extraction guards key off these field names.
@@ -173,6 +182,7 @@ function metaStatusToEvent(
     platformMessageId: status.id,
     sender: { phone: status.recipient_id ?? routingKey },
     type: "unknown",
+    timestamp: metaTimestamp(status.timestamp),
     raw: { type: "whatsapp.message.status", channel: "whatsapp", status },
   };
 }

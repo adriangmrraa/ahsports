@@ -312,10 +312,12 @@ export async function notifyHandoffOperators(input: HandoffNotifyInput): Promise
     entityType: "conversation",
     entityId: input.conversationId,
     payload: {
-      attempted,
-      delivered,
-      bindings: bindings.length,
-      botTokenConfigured: Boolean(botToken),
+      after: {
+        attempted,
+        delivered,
+        bindings: bindings.length,
+        botTokenConfigured: Boolean(botToken),
+      },
     },
   });
 
