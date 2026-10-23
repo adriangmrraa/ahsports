@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  BarChart3,
   Bot,
   Box,
   Factory,
@@ -15,6 +16,7 @@ import {
   Send,
   Settings,
   ShoppingCart,
+  Target,
   Truck,
   Users,
   Warehouse,
@@ -40,6 +42,8 @@ export type AdminNavIcon =
   | "messages"
   | "channels"
   | "telegram"
+  | "leads"
+  | "analytics"
   | "settings";
 
 export type AdminNavItem = {
@@ -69,6 +73,8 @@ const navigation: Array<Omit<AdminNavItem, "badge">> = [
   { href: "/admin/agent/inbox", label: "Conversaciones", icon: "messages" },
   { href: "/admin/canales", label: "Canales", icon: "channels" },
   { href: "/admin/agent/telegram", label: "Telegram", icon: "telegram" },
+  { href: "/admin/leads", label: "Leads", icon: "leads" },
+  { href: "/admin/analytics", label: "Analytics", icon: "analytics" },
   { href: "/admin/configuracion", label: "Configuración", icon: "settings" },
 ];
 
@@ -91,6 +97,8 @@ export const ADMIN_NAV_ICONS: Record<AdminNavIcon, LucideIcon> = {
   messages: MessagesSquare,
   channels: Plug,
   telegram: Send,
+  leads: Target,
+  analytics: BarChart3,
   settings: Settings,
 };
 
