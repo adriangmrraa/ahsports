@@ -1,7 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  BadgePercent,
   Bot,
   Box,
+  Contact,
   Factory,
   HardHat,
   Image as ImageIcon,
@@ -33,6 +35,8 @@ export type AdminNavIcon =
   | "suppliers"
   | "techniques"
   | "customers"
+  | "contacts"
+  | "promos"
   | "art"
   | "cash"
   | "payments"
@@ -62,6 +66,8 @@ const navigation: Array<Omit<AdminNavItem, "badge">> = [
   { href: "/admin/proveedores", label: "Proveedores", icon: "suppliers" },
   { href: "/admin/tecnicas", label: "Técnicas", icon: "techniques" },
   { href: "/admin/organizaciones", label: "Clientes", icon: "customers" },
+  { href: "/admin/contactos", label: "Contactos", icon: "contacts" },
+  { href: "/admin/promos", label: "Promos", icon: "promos" },
   { href: "/admin/arte", label: "Arte & adjuntos", icon: "art" },
   { href: "/admin/caja", label: "Caja & saldos", icon: "cash" },
   { href: "/admin/pagos", label: "Pagos", icon: "payments" },
@@ -84,6 +90,8 @@ export const ADMIN_NAV_ICONS: Record<AdminNavIcon, LucideIcon> = {
   suppliers: Truck,
   techniques: Wrench,
   customers: Users,
+  contacts: Contact,
+  promos: BadgePercent,
   art: ImageIcon,
   cash: Warehouse,
   payments: Receipt,

@@ -179,6 +179,21 @@ export const organizationSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+/** C-04 — Admin promo CRUD. Items reference real catalog products. */
+export const promotionItemSchema = z.object({
+  productId: z.string().min(1).max(36),
+  quantity: z.number().int().min(1).max(10000),
+}).strict();
+
+export const promotionSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(2000).optional().nullable(),
+  imageUrl: z.string().trim().url().max(2000).optional().nullable(),
+  items: z.array(promotionItemSchema).max(50).default([]),
+  customPrice: z.number().min(0).max(999999999).optional().nullable(),
+  active: z.boolean().default(true),
+});
+
 export const contactSchema = z.object({
   organizationId: z.string().min(1).max(36).optional().nullable(),
   name: z.string().min(1).max(255),
