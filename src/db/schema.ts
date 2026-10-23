@@ -826,6 +826,34 @@ export const agentConfig = pgTable(
     providerKeyEnc: text("provider_key_enc"),
     webhookSecretEnc: text("webhook_secret_enc"),
     /**
+     * Kill-switch (G-01): the scoped dispatcher replies only while enabled.
+     * Defaults true so existing installs keep their behavior after migration.
+     */
+    enabled: boolean("enabled").notNull().default(true),
+    /**
+     * First-contact auto-reply (A-03): when enabled, the inbound pipeline
+     * sends `autoReply24hMessage` once per conversation (durable claim).
+     */
+    autoReply24h: boolean("auto_reply_24h").notNull().default(false),
+    autoReply24hMessage: text("auto_reply_24h_message"),
+    /**
+     * Web-order redirect (A-08): exposes the public /presupuesto link to the
+     * sales agent so it can offer the wizard when a customer wants to order.
+     */
+    webOrderRedirectEnabled: boolean("web_order_redirect_enabled").notNull().default(false),
+    webOrderRedirectMessage: text("web_order_redirect_message"),
+    /**
+     * Per-scope provider credentials (A-15): a channel account whose
+     * `credentialsRef` is `agent_config` resolves these encrypted fields
+     * through account → channel → global scoping (env:PREFIX stays fallback).
+     */
+    ycloudApiKeyEnc: text("ycloud_api_key_enc"),
+    ycloudWebhookSecretEnc: text("ycloud_webhook_secret_enc"),
+    kapsoApiKeyEnc: text("kapso_api_key_enc"),
+    kapsoWebhookSecretEnc: text("kapso_webhook_secret_enc"),
+    zernioApiKeyEnc: text("zernio_api_key_enc"),
+    zernioWebhookSecretEnc: text("zernio_webhook_secret_enc"),
+    /**
      * Resolution scope (account → channel → global):
      *   channel NULL + channelAccountId NULL → global default (id = 1)
      *   channel set  + channelAccountId NULL → channel-scoped row

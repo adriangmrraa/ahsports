@@ -31,6 +31,11 @@
  */
 
 import { decryptIfEncrypted } from "@/lib/crypto/secret-box";
+import {
+  AgentConfigResolutionError,
+  resolveAgentConfigStrict,
+  type AgentConfigRow,
+} from "@/lib/channels/agent-config-scope";
 
 import { isRetryableDbError, isSchemaNotReady } from "./errors";
 import { phoneMatches } from "./phone";
@@ -261,10 +266,68 @@ function credentialsFromEnv(
 }
 
 /**
- * Replaces SocialCRM's `credentialsFromAgentConfig` — AH has no
- * `agent_config` credential columns; unset/`agent_config`/`env` refs resolve
- * through the provider's own env scope so a per-account key is actually
- * used. A blank key is an explicit failure, never a silent global fallback.
+ * A-15 — `credentialsRef: "agent_config"` resolves the scoped row's
+ * encrypted provider fields (account → channel → global via
+ * `resolveAgentConfigStrict`). The dedicated `<provider>*Enc` columns win,
+ * then the generic `providerKeyEnc`/`webhookSecretEnc`/`botTokenEnc`
+ * (telegram), and finally the provider env scope. A transient resolution
+ * failure throws retryable — it must never silently bind another key.
+ */
+const SCOPED_PROVIDER_FIELDS: Record<
+  string,
+  { apiKey: keyof AgentConfigRow; webhookSecret: keyof AgentConfigRow }
+> = {
+  ycloud: {
+    apiKey: "ycloudApiKeyEnc",
+    webhookSecret: "ycloudWebhookSecretEnc",
+  },
+  kapso: {
+    apiKey: "kapsoApiKeyEnc",
+    webhookSecret: "kapsoWebhookSecretEnc",
+  },
+  zernio: {
+    apiKey: "zernioApiKeyEnc",
+    webhookSecret: "zernioWebhookSecretEnc",
+  },
+};
+
+function decryptColumn(value: unknown): string {
+  return typeof value === "string" ? decryptIfEncrypted(value) : "";
+}
+
+async function credentialsFromAgentConfigScope(
+  row: ChannelAccountRow
+): Promise<ChannelAccount["credentials"] | null> {
+  const resolution = await resolveAgentConfigStrict({
+    channel: row.channel as ChannelKind,
+    channelAccountId: row.id,
+  });
+  if (resolution.kind === "db-error") {
+    throw new AgentConfigResolutionError(resolution);
+  }
+  if (resolution.kind !== "resolved") return null;
+
+  const cfg = resolution.row;
+  const scoped = SCOPED_PROVIDER_FIELDS[row.provider];
+  const apiKey =
+    decryptColumn(scoped ? cfg[scoped.apiKey] : null) ||
+    decryptColumn(cfg.providerKeyEnc) ||
+    (row.provider === "telegram" ? decryptColumn(cfg.botTokenEnc) : "");
+  if (!apiKey) return null;
+  return {
+    apiKey,
+    webhookSecret:
+      decryptColumn(scoped ? cfg[scoped.webhookSecret] : null) ||
+      decryptColumn(cfg.webhookSecretEnc),
+  };
+}
+
+/**
+ * Replaces SocialCRM's `credentialsFromAgentConfig` — unset/`env` refs
+ * resolve through the provider's own env scope so a per-account key is
+ * actually used; `agent_config` refs resolve the scoped row's encrypted
+ * fields first and fall back to the same env scope. A blank key is an
+ * explicit failure, never a silent global fallback.
  *
  * Stored values may arrive secret-box encrypted (the channel-accounts wave
  * stores credentials with `encryptSecret`) — `decryptIfEncrypted` keeps the
@@ -293,14 +356,15 @@ function credentialsFromProviderScope(
   };
 }
 
-function resolveCredentials(
+async function resolveCredentials(
   row: ChannelAccountRow
-): ChannelAccount["credentials"] {
+): Promise<ChannelAccount["credentials"]> {
   const ref = row.credentialsRef?.trim();
   if (!ref || ref === "env" || ref === "agent_config") {
-    // `agent_config` is the legacy SocialCRM sentinel; AH resolves it through
-    // the provider env scope — the channel-accounts wave may carry the ref
-    // forward during migration.
+    if (ref === "agent_config") {
+      const scoped = await credentialsFromAgentConfigScope(row);
+      if (scoped) return scoped;
+    }
     return credentialsFromProviderScope(row);
   }
   if (ref.startsWith("env:")) return credentialsFromEnv(row, ref);
@@ -323,7 +387,7 @@ async function rowToAccount(
     channel: row.channel,
     providerAccountId: row.providerAccountId,
     senderAddress: row.senderAddress,
-    credentials: resolveCredentials(row),
+    credentials: await resolveCredentials(row),
     status: toAccountStatus(row.status),
   };
 }

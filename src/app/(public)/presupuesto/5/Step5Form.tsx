@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { WhatsAppCta } from "@/components/WhatsAppCta";
 import { createPublicOrder } from "@/app/actions/public-orders";
 
 interface Props {
@@ -16,6 +17,8 @@ interface Props {
   fileIds?: string[];
   uploadSessionId: string;
   uploadSessionSecret: string;
+  /** Digits-only business WhatsApp — CTA hidden when empty (C-07). */
+  whatsappPhone: string;
   backHref: string;
 }
 
@@ -23,7 +26,7 @@ interface Props {
  * F4-12 — Paso 5 form: confirma y dispara createPublicOrder. Muestra el resultado
  * con link a /seguimiento/[publicToken].
  */
-export function Step5Form({ productName, items, total, sizeQuantities, contactInfo, type, notes, fileIds, uploadSessionId, uploadSessionSecret, backHref }: Props) {
+export function Step5Form({ productName, items, total, sizeQuantities, contactInfo, type, notes, fileIds, uploadSessionId, uploadSessionSecret, whatsappPhone, backHref }: Props) {
   const [result, setResult] = useState<{ publicToken: string; number: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -64,9 +67,15 @@ export function Step5Form({ productName, items, total, sizeQuantities, contactIn
           Tu pedido <span className="font-semibold text-on-surface">#{result.number}</span> está en revisión. Te avisaremos
           por mail/WhatsApp cuando esté aprobado.
         </p>
-        <Link href={`/seguimiento/${result.publicToken}`} className="text-sm font-medium text-primary hover:underline">
-          → Ver seguimiento de tu pedido
-        </Link>
+        <div className="flex flex-col items-center gap-3">
+          <WhatsAppCta
+            phone={whatsappPhone}
+            message={`Hola! Hice el pedido #${result.number} desde la web y quiero seguirlo por acá.`}
+          />
+          <Link href={`/seguimiento/${result.publicToken}`} className="text-sm font-medium text-primary hover:underline">
+            → Ver seguimiento de tu pedido
+          </Link>
+        </div>
       </div>
     );
   }

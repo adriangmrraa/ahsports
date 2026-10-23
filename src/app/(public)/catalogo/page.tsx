@@ -2,6 +2,7 @@ import Link from "next/link";
 import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { productBundleItems, productBundles, products, sizes } from "@/db/schema";
+import { checkPublicGetRateLimit } from "@/lib/infra/public-rate-limit";
 import { formatCurrency } from "@/lib/utils";
 import { labelProductTaxonomy } from "@/lib/product-taxonomy";
 import { ArrowRight, Package, Shirt } from "lucide-react";
@@ -12,6 +13,20 @@ export const dynamic = "force-dynamic";
 const SUBCATEGORY_ORDER = ["prendas", "conjuntos", "mochilas_infantiles", "bolsos", "insumos", "otros"];
 
 export default async function CatalogoPage() {
+  // G-02 — public GET limit, isolated bucket.
+  const rate = await checkPublicGetRateLimit("public:catalogo", {
+    limit: 30,
+    bucketLimit: 300,
+  });
+  if (!rate.success) {
+    return (
+      <div className="mx-auto w-full max-w-2xl px-4 py-16 text-center">
+        <h1 className="text-xl font-semibold">Demasiadas solicitudes</h1>
+        <p className="mt-2 text-sm text-on-surface-variant">Probá de nuevo en un minuto.</p>
+      </div>
+    );
+  }
+
   const rows = await db
     .select({
       id: products.id,

@@ -71,6 +71,11 @@ export type SalesPromptInput = {
   antiLoopDirective?: string;
   nonCommercialDirective?: string;
   temporalDirective?: string;
+  /**
+   * A-08: when the scope enables the web-order redirect, the agent gets the
+   * /presupuesto link + the owner-configured pitch to offer it.
+   */
+  webOrderRedirect?: { url: string; message: string } | null;
   turnIntent?: TurnIntent;
 };
 
@@ -132,6 +137,18 @@ export function buildSalesSystemPrompt(input: SalesPromptInput): string {
     input.temporalDirective,
   ]) {
     if (directive?.trim()) parts.push(directive.trim());
+  }
+
+  if (input.webOrderRedirect) {
+    parts.push(
+      "🌐 PEDIDO POR LA WEB: si el cliente quiere encargar, consultar el catálogo completo o " +
+        "el pedido es complejo (varias prendas, talles y técnicas mezcladas), podés ofrecerle " +
+        "armar el pedido desde la web" +
+        (input.webOrderRedirect.url ? `: ${input.webOrderRedirect.url}` : " (link en el mensaje del equipo)") +
+        `\nMensaje sugerido del equipo: "${input.webOrderRedirect.message}"\n` +
+        "El wizard web genera un presupuesto ordenado que el equipo confirma — nunca inventes " +
+        "un link distinto ni un pedido operativo desde la conversación.",
+    );
   }
 
   if (input.turnIntent === "non_ordering") {

@@ -52,6 +52,7 @@ import { isHumanOverrideActive } from "./human-handoff";
 import { loadConversationHistory } from "./history";
 import { buildTemporalAgentMessages } from "./buffered-history";
 import { buildSalesSystemPrompt, type CustomerPromptContext } from "./prompt-builder";
+import { buildWebOrderRedirectMessage, buildWebOrderUrl } from "./web-order-redirect";
 import {
   classifyTurnIntent,
   evaluateOrderRecency,
@@ -254,6 +255,21 @@ function inReplyToMessageIdOrNull(value: string | undefined): string | null {
   return value ?? null;
 }
 
+/**
+ * A-08: exposes /presupuesto to the agent only when the scope enables the
+ * redirect AND a link or an owner message exists to offer. The wizard stays
+ * informational — the agent never creates an operational order from it.
+ */
+function webOrderRedirectFor(
+  row: { webOrderRedirectEnabled?: boolean; webOrderRedirectMessage?: string | null } | null,
+): { url: string; message: string } | null {
+  if (row?.webOrderRedirectEnabled !== true) return null;
+  const url = buildWebOrderUrl();
+  const message = buildWebOrderRedirectMessage(row);
+  if (!url && !message.trim()) return null;
+  return { url: url ?? "", message };
+}
+
 function pickReply(result: AgentLoopResult): string {
   if (result.status === "completed") {
     const text = result.content.trim();
@@ -272,6 +288,7 @@ async function runAgentTurn(
   configExtras: string | null,
   enabledTools: string[] | null,
   scope: AgentConfigScope,
+  webOrderRedirect: { url: string; message: string } | null,
 ): Promise<void> {
   const conversationId = turn.conversationId;
   const lastBuffered = turn.messages[turn.messages.length - 1];
@@ -308,6 +325,7 @@ async function runAgentTurn(
     antiLoopDirective,
     nonCommercialDirective,
     temporalDirective: TEMPORAL_DIRECTIVE,
+    webOrderRedirect,
     turnIntent,
   });
 
@@ -360,6 +378,9 @@ async function dispatchSalesTurn(
     throw new Error("whatsapp/sales-agent: agent_config resolution failed (retryable)");
   }
   const row = resolution.kind === "resolved" ? resolution.row : null;
+  // G-01 kill-switch: a disabled scope still ingests inbound (persisted
+  // upstream) but produces no reply. `undefined` (pre-migration row) is ON.
+  if (row?.enabled === false) return;
   const runtimeResolution = resolveRuntimeFromConfig(
     row
       ? {
@@ -423,6 +444,7 @@ async function dispatchSalesTurn(
         row?.systemPrompt ?? null,
         row?.enabledTools ?? null,
         scope,
+        webOrderRedirectFor(row),
       );
       return;
   }

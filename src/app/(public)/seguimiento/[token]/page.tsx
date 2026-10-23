@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { attachments, orders } from "@/db/schema";
+import { getBusinessInfo } from "@/lib/business";
+import { checkPublicGetRateLimit } from "@/lib/infra/public-rate-limit";
+import { WhatsAppCta } from "@/components/WhatsAppCta";
 import { eq } from "drizzle-orm";
 
 export const metadata = { title: "Seguimiento · AH Sports" };
@@ -33,6 +36,20 @@ const TIMELINE = [
  * Sin auth; busca por publicToken. NO expone costos internos ni pagos.
  */
 export default async function SeguimientoPage({ params }: { params: Promise<{ token: string }> }) {
+  // G-02 — public GET limit, isolated bucket (token probing flood stops here).
+  const rate = await checkPublicGetRateLimit("public:seguimiento", {
+    limit: 30,
+    bucketLimit: 300,
+  });
+  if (!rate.success) {
+    return (
+      <div className="mx-auto w-full max-w-2xl px-4 py-16 text-center">
+        <h1 className="text-xl font-semibold">Demasiadas solicitudes</h1>
+        <p className="mt-2 text-sm text-on-surface-variant">Probá de nuevo en un minuto.</p>
+      </div>
+    );
+  }
+
   const { token } = await params;
   const [order] = await db.select().from(orders).where(eq(orders.publicToken, token)).limit(1);
   if (!order) notFound();
@@ -44,10 +61,10 @@ export default async function SeguimientoPage({ params }: { params: Promise<{ to
   else if (["control"].includes(order.status)) stage = 3;
   else if (order.status === "entregado") stage = 4;
 
-  const atts = await db
-    .select()
-    .from(attachments)
-    .where(eq(attachments.orderId, order.id));
+  const [atts, business] = await Promise.all([
+    db.select().from(attachments).where(eq(attachments.orderId, order.id)),
+    getBusinessInfo(),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
@@ -82,6 +99,15 @@ export default async function SeguimientoPage({ params }: { params: Promise<{ to
           </li>
         ))}
       </ol>
+
+      {/* C-07 — WhatsApp handoff CTA (hidden when no public phone configured) */}
+      <div className="mb-6">
+        <WhatsAppCta
+          phone={business.whatsappPhone}
+          message={`Hola! Quiero consultar por mi pedido #${order.number}.`}
+          className="w-full"
+        />
+      </div>
 
       {/* Archivos aprobados */}
       {atts.filter((a) => a.status === "aprobado").length > 0 && (
