@@ -209,6 +209,38 @@ export async function releaseChannelDeliveryMarker(
 }
 
 /**
+ * Release the exact marker `persistChannelEvent` claimed for `event` — the
+ * `channelEventKey` (delivery key when a deliveryId exists, the
+ * platform/kind/status key for id-less deliveries). Releasing a
+ * reconstructed `provider:delivery:<id>` for an id-less delivery deletes
+ * nothing and leaves the platform-keyed marker claimed forever — every
+ * redelivery then silently skips.
+ */
+export async function releaseChannelEventMarker(
+  event: NormalizedInboundEvent,
+  channelAccountId: string | null
+): Promise<void> {
+  try {
+    await db
+      .delete(idempotencyKeys)
+      .where(
+        and(
+          eq(idempotencyKeys.scope, CHANNEL_EVENT_SCOPE),
+          eq(
+            idempotencyKeys.key,
+            storageKey(channelAccountId, channelEventKey(event))
+          )
+        )
+      );
+  } catch (error) {
+    console.warn(
+      `[ingress] delivery marker release failed for ${event.provider}/${event.deliveryId || "no-delivery-id"}`,
+      error
+    );
+  }
+}
+
+/**
  * A claim is a marker insert where the event's own eventKey IS the delivery
  * marker (every deliveryId-bearing event). For id-less events the platform
  * key still dedups replays of the identical payload, and the companion
