@@ -42,7 +42,10 @@ export default async function CanalesPage({
         schemaError={accountsResult.ok ? null : accountsResult.error}
         webhooks={baseUrl ? webhookEndpoints(baseUrl) : []}
         baseUrlMissing={!baseUrl}
-        zernioConfigured={Boolean(process.env.ZERNIO_API_KEY?.trim())}
+        zernioConfigured={Boolean(
+          process.env.ZERNIO_API_KEY?.trim() &&
+            process.env.ZERNIO_WEBHOOK_SECRET?.trim()
+        )}
         flashConnected={sp.connected}
         flashError={sp.error}
       />
