@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Card";
+import { useEventStream } from "@/lib/live/useEventStream";
+import type { OrderChangedEvent } from "@/lib/live/events";
 import { formatCurrency } from "@/lib/utils";
 
 type OrderRow = {
@@ -28,12 +30,50 @@ function columnOf(status: string): string {
   return status;
 }
 
+// Statuses the page query loads — an emitted row outside this set is removed
+// from the board (e.g. entregado/cancelado), one inside is inserted or moved.
+const BOARD_STATUSES = new Set([
+  "aprobado",
+  "seniado",
+  "en_produccion",
+  "corte",
+  "confeccion",
+  "estampado",
+  "control",
+]);
+
 export function KanbanBoard({ initialOrders }: { initialOrders: OrderRow[] }) {
   const router = useRouter();
   const [orders, setOrders] = useState(initialOrders);
   const [dragging, setDragging] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Live order changes (SSE): merge each emitted row into local state —
+  // router.refresh wouldn't reach useState, so the event payload carries the
+  // fields the board renders.
+  useEventStream("/api/events/orders", (data) => {
+    const event = data as OrderChangedEvent;
+    if (typeof event?.id !== "string" || typeof event?.status !== "string") return;
+    setOrders((prev) => {
+      const index = prev.findIndex((o) => o.id === event.id);
+      if (!BOARD_STATUSES.has(event.status)) {
+        return index === -1 ? prev : prev.filter((o) => o.id !== event.id);
+      }
+      const row: OrderRow = {
+        id: event.id,
+        number: event.number,
+        status: event.status,
+        totalQuoted: event.totalQuoted,
+        notes: event.notes ?? null,
+        urgent: event.urgent ?? false,
+      };
+      if (index === -1) return [...prev, row];
+      const next = [...prev];
+      next[index] = row;
+      return next;
+    });
+  });
 
   function onDrop(colKey: string, orderId: string) {
     const prev = orders;

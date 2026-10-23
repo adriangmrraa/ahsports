@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Search, Target } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 import { requireAgentAdmin } from "@/lib/agent/rbac";
+import { LiveRefresher } from "@/components/live/LiveRefresher";
 
 type Tone = "primary" | "secondary" | "tertiary" | "error" | "success" | "warning" | "muted";
 
@@ -94,6 +95,9 @@ export default async function LeadsPage({
         title="Leads"
         subtitle={`${total} leads capturados — atribución de campañas y canales`}
       />
+
+      {/* Server-rendered list: any SSE event re-renders this page with fresh rows. */}
+      <LiveRefresher endpoint="/api/events/leads" />
 
       <form method="get" className="flex flex-col md:flex-row gap-2 mb-4">
         <div className="relative flex-1 max-w-md">
