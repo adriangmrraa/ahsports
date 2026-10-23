@@ -2,6 +2,8 @@ import Link from "next/link";
 import { db } from "@/db/client";
 import { channelAccounts, leads } from "@/db/schema";
 import { desc, eq, ilike, or, sql } from "drizzle-orm";
+
+const PAGE_SIZE = 50;
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Input } from "@/components/ui/Input";
@@ -30,14 +32,29 @@ export const metadata = { title: "Leads — Admin" };
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; page?: string }>;
 }) {
   await requireAgentAdmin();
   const sp = await searchParams;
   const filterStatus = sp.status && sp.status in statusLabel ? sp.status : undefined;
   const q = sp.q?.trim() || undefined;
+  const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
 
   const campaignLabel = sql<string | null>`coalesce(${leads.utmCampaign}, ${leads.campaignId})`;
+
+  const where =
+    filterStatus && q
+      ? sql`${leads.status} = ${filterStatus} AND (${leads.phone} ILIKE ${"%" + q + "%"} OR ${leads.name} ILIKE ${"%" + q + "%"})`
+      : filterStatus
+        ? eq(leads.status, filterStatus as never)
+        : q
+          ? or(ilike(leads.phone, `%${q}%`), ilike(leads.name, `%${q}%`))
+          : undefined;
+
+  const [{ total }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(leads)
+    .where(where);
 
   const rows = await db
     .select({
@@ -56,23 +73,26 @@ export default async function LeadsPage({
     })
     .from(leads)
     .leftJoin(channelAccounts, eq(channelAccounts.id, leads.channelAccountId))
-    .where(
-      filterStatus && q
-        ? sql`${leads.status} = ${filterStatus} AND (${leads.phone} ILIKE ${"%" + q + "%"} OR ${leads.name} ILIKE ${"%" + q + "%"})`
-        : filterStatus
-          ? eq(leads.status, filterStatus as never)
-          : q
-            ? or(ilike(leads.phone, `%${q}%`), ilike(leads.name, `%${q}%`))
-            : undefined,
-    )
+    .where(where)
     .orderBy(desc(leads.createdAt))
-    .limit(200);
+    .limit(PAGE_SIZE)
+    .offset((page - 1) * PAGE_SIZE);
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageHref = (target: number) => {
+    const params = new URLSearchParams();
+    if (filterStatus) params.set("status", filterStatus);
+    if (q) params.set("q", q);
+    if (target > 1) params.set("page", String(target));
+    const qs = params.toString();
+    return qs ? `/admin/leads?${qs}` : "/admin/leads";
+  };
 
   return (
     <>
       <PageHeader
         title="Leads"
-        subtitle={`${rows.length} leads capturados — atribución de campañas y canales`}
+        subtitle={`${total} leads capturados — atribución de campañas y canales`}
       />
 
       <form method="get" className="flex flex-col md:flex-row gap-2 mb-4">
@@ -124,6 +144,7 @@ export default async function LeadsPage({
           </div>
         </Card>
       ) : (
+        <>
         <Table responsive>
           <THead>
             <tr>
@@ -173,6 +194,28 @@ export default async function LeadsPage({
             })}
           </tbody>
         </Table>
+        {pageCount > 1 && (
+          <div className="mt-4 flex items-center justify-between gap-2">
+            {page > 1 ? (
+              <Link href={pageHref(page - 1)} className="text-sm text-primary hover:underline">
+                ← Anterior
+              </Link>
+            ) : (
+              <span />
+            )}
+            <span className="text-xs text-on-surface-variant">
+              Página {page} de {pageCount}
+            </span>
+            {page < pageCount ? (
+              <Link href={pageHref(page + 1)} className="text-sm text-primary hover:underline">
+                Siguiente →
+              </Link>
+            ) : (
+              <span />
+            )}
+          </div>
+        )}
+        </>
       )}
     </>
   );
