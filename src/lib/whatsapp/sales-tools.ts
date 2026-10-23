@@ -48,8 +48,8 @@ import { fromCents, toCents } from "@/lib/payments";
 import {
   addOrderContextItem,
   clearOrderContext,
+  consumeOrderContextItems,
   getOrderContextSummary,
-  markOrderContextOrdered,
   removeOrderContextItem,
 } from "@/lib/order-context";
 import { quoteOrder, type QuoteResult, type SizeQuantity } from "@/lib/pricing";
@@ -1542,10 +1542,22 @@ export const draftOrderFromCartTool: AgentTool<z.infer<typeof draftFromCartInput
         payload: { after: { orderNumber: order.number, totalQuoted: totals.price, cartItems: cart.length } },
       });
 
+      // Consume the priced cart INSIDE the draft transaction: a concurrent
+      // retry flips zero rows here and aborts the whole draft, so one cart can
+      // never produce two orders.
+      const consumed = await consumeOrderContextItems(
+        customer.conversationId,
+        cart.map((item) => item.id),
+        tx,
+      );
+      if (consumed.length !== cart.length) {
+        throw new OrderDraftDomainError(
+          "El carrito cambió mientras se creaba el borrador — no se guardó nada; reintentá con el carrito actual.",
+        );
+      }
+
       return { orderId: order.id, number: order.number };
     });
-
-    await markOrderContextOrdered(customer.conversationId);
 
     const totalQuantity = resolvedLines.reduce((sum, line) => sum + line.quantity, 0);
     return {
@@ -2048,9 +2060,31 @@ export const getPromotionsTool: AgentTool<z.infer<typeof getPromotionsInput>> = 
     if (rows.length === 0) {
       return { ok: true as const, promotions: [] as const, message: "No hay promociones activas en este momento." };
     }
+
+    // A promo is only offerable while every component is still an active
+    // product; otherwise the agent promises a bundle the quote step rejects.
+    const componentIds = [...new Set(rows.flatMap((row) => (row.items ?? []).map((item) => item.productId)))];
+    const components = componentIds.length
+      ? await db
+          .select({ id: products.id, active: products.active })
+          .from(products)
+          .where(inArray(products.id, componentIds))
+      : [];
+    const activeById = new Map(components.map((component) => [component.id, component.active]));
+    const available = rows.filter((row) =>
+      (row.items ?? []).every((item) => activeById.get(item.productId) === true),
+    );
+    if (available.length === 0) {
+      return {
+        ok: true as const,
+        promotions: [] as const,
+        message: "No hay promociones activas disponibles en este momento.",
+      };
+    }
+
     return {
       ok: true as const,
-      promotions: rows.map((row) => ({
+      promotions: available.map((row) => ({
         name: row.name,
         description: row.description?.slice(0, 300) ?? null,
         items: (row.items ?? []).map((item) => `${item.quantity}x ${item.productName}`),

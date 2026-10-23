@@ -1,8 +1,9 @@
 import "server-only";
 
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { orderContextItems } from "@/db/schema";
+import type { DbTransaction } from "@/lib/db-transaction";
 
 /**
  * A-09 — Conversation-scoped pre-draft cart ("order context").
@@ -172,10 +173,21 @@ export async function clearOrderContext(conversationId: string): Promise<number>
   return rows.length;
 }
 
-/** Marks the whole live cart consumed — called after a draft is persisted. */
-export async function markOrderContextOrdered(conversationId: string): Promise<void> {
+/**
+ * Consumes the priced cart rows inside the caller's transaction. Only the
+ * exact rows the draft was priced from are flipped, and only while they are
+ * still active and unexpired — a concurrent draft or a cart that drifted
+ * consumes fewer rows, so the caller must abort the draft. Returns the ids
+ * actually consumed.
+ */
+export async function consumeOrderContextItems(
+  conversationId: string,
+  expectedIds: readonly string[],
+  tx: DbTransaction,
+): Promise<string[]> {
+  if (expectedIds.length === 0) return [];
   const now = new Date();
-  await db
+  const rows = await tx
     .update(orderContextItems)
     .set({ status: "ordered" })
     .where(
@@ -183,6 +195,9 @@ export async function markOrderContextOrdered(conversationId: string): Promise<v
         eq(orderContextItems.conversationId, conversationId),
         eq(orderContextItems.status, "active"),
         gt(orderContextItems.expiresAt, now),
+        inArray(orderContextItems.id, [...expectedIds]),
       ),
-    );
+    )
+    .returning({ id: orderContextItems.id });
+  return rows.map((row) => row.id);
 }
