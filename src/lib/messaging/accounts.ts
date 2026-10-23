@@ -35,7 +35,8 @@ import { channelAccounts } from "@/db/schema";
 import { decryptIfEncrypted } from "@/lib/crypto/secret-box";
 import {
   AgentConfigResolutionError,
-  resolveAgentConfigStrict,
+  firstScopedValue,
+  resolveAgentConfigChain,
   type AgentConfigRow,
 } from "@/lib/channels/agent-config-scope";
 
@@ -309,11 +310,13 @@ function credentialsFromEnv(
 /**
  * A-15 — `credentialsRef: "agent_config"` resolves the scoped row's
  * encrypted provider fields (account → channel → global via
- * `resolveAgentConfigStrict`). The dedicated `<provider>*Enc` columns win,
+ * `resolveAgentConfigChain`). The dedicated `<provider>*Enc` columns win,
  * then the channel's own dedicated fields (`botTokenEnc` for telegram,
  * `webhookSecretEnc` for the verify secret), and finally the provider env
- * scope. The generic `providerKeyEnc` is the AI-provider credential — it is
- * NEVER a channel credential. A transient resolution failure throws
+ * scope. Each field walks the whole chain independently (R4-MED-2) so a
+ * scope row created only to toggle a flag cannot hide a parent scope's
+ * credential. The generic `providerKeyEnc` is the AI-provider credential —
+ * it is NEVER a channel credential. A transient resolution failure throws
  * retryable — it must never silently bind another key.
  */
 const SCOPED_PROVIDER_FIELDS: Record<
@@ -341,7 +344,7 @@ function decryptColumn(value: unknown): string {
 async function credentialsFromAgentConfigScope(
   row: ChannelAccountRow
 ): Promise<ChannelAccount["credentials"] | null> {
-  const resolution = await resolveAgentConfigStrict({
+  const resolution = await resolveAgentConfigChain({
     channel: row.channel as ChannelKind,
     channelAccountId: row.id,
   });
@@ -350,17 +353,22 @@ async function credentialsFromAgentConfigScope(
   }
   if (resolution.kind !== "resolved") return null;
 
-  const cfg = resolution.row;
+  const configRows = resolution.rows;
   const scoped = SCOPED_PROVIDER_FIELDS[row.provider];
   const apiKey =
-    decryptColumn(scoped ? cfg[scoped.apiKey] : null) ||
-    (row.provider === "telegram" ? decryptColumn(cfg.botTokenEnc) : "");
+    firstScopedValue(configRows, (config) =>
+      decryptColumn(scoped ? config[scoped.apiKey] : null)
+    ) ||
+    (row.provider === "telegram"
+      ? firstScopedValue(configRows, (config) => decryptColumn(config.botTokenEnc))
+      : "");
   if (!apiKey) return null;
   return {
     apiKey,
     webhookSecret:
-      decryptColumn(scoped ? cfg[scoped.webhookSecret] : null) ||
-      decryptColumn(cfg.webhookSecretEnc),
+      firstScopedValue(configRows, (config) =>
+        decryptColumn(scoped ? config[scoped.webhookSecret] : null)
+      ) || firstScopedValue(configRows, (config) => decryptColumn(config.webhookSecretEnc)),
   };
 }
 
