@@ -1,9 +1,9 @@
 /**
  * First-contact auto-reply primitives (ported from SocialCRM's
- * inbound-pipeline). The 24h-window policy itself is config-driven upstream
- * (`agent_config.autoReply24h*`) — AH has no such config columns, so only the
- * config-free gate and the durable claim key port here. Whatever feature
- * adopts them supplies the enable/message decision.
+ * inbound-pipeline). The enable/message decision is config-driven upstream
+ * via the scoped `agent_config.autoReply24h*` columns, resolved by
+ * `resolveAgentConfig` — this module keeps only the config-free gate and the
+ * durable claim key. Call-site: `maybeSendAutoReply` in inbound-pipeline.
  */
 
 /**

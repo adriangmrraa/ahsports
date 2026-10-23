@@ -9,6 +9,7 @@ import { db } from "@/db/client";
 import { chatMessages } from "@/db/schema";
 import {
   importOperatorOutbound,
+  persistAgentOutbound,
   persistCustomerInbound,
   updateMessageDelivery,
 } from "@/lib/channels/intake";
@@ -20,6 +21,11 @@ import type { NormalizedMessage } from "@/lib/channels/types";
 import { checkRateLimit } from "@/lib/infra/rate-limit";
 
 import { channelAccountRowId, matchSenderToChannelAccount } from "./accounts";
+import {
+  resolveAgentConfigStrict,
+  resolveScopeForConversation,
+} from "@/lib/channels/agent-config-scope";
+import { autoReplyClaimKey, shouldSendAutoReply } from "./auto-reply";
 import {
   BufferManager,
   scheduleBufferProcessing,
@@ -426,6 +432,105 @@ async function handleEcho(
 }
 
 /**
+ * A-03 — first-contact auto-reply, config-driven via the scoped
+ * `agent_config` row (`autoReply24h` + `autoReply24hMessage`). Fires at most
+ * once per conversation: the claim row IS the persisted reply — a concurrent
+ * first message fails the claim insert, and a failed send releases the claim
+ * so a burst sibling or a provider redelivery can retry. Best-effort: any
+ * failure logs and the pipeline continues to the agent turn.
+ */
+async function maybeSendAutoReply(input: {
+  channel: "whatsapp" | "telegram";
+  conversationId: string;
+  externalThreadId: string;
+  customerPhone: string;
+  ctx: InboundContext;
+}): Promise<void> {
+  const { channel, conversationId, externalThreadId, customerPhone, ctx } =
+    input;
+  try {
+    const scope = await resolveScopeForConversation(conversationId);
+    const resolution = await resolveAgentConfigStrict(scope);
+    if (resolution.kind !== "resolved") return;
+    const row = resolution.row;
+
+    // G-01 kill-switch gates auto-replies too (no agent output at all), and
+    // the web-order redirect supersedes the greeting on first contact
+    // (SocialCRM parity: the agent offers /presupuesto instead).
+    if (row.enabled === false) return;
+    if (row.autoReply24h !== true) return;
+    if (row.webOrderRedirectEnabled === true) return;
+    const message = row.autoReply24hMessage?.trim();
+    if (!message) return;
+
+    const claimKey = autoReplyClaimKey(conversationId);
+    const alreadyReplied = await isMessageDuplicate(channel, claimKey);
+    const recent = alreadyReplied
+      ? []
+      : await getRecentConversationMessages(conversationId, 2);
+    // The inbound row is already persisted, so "established" means anything
+    // beyond this one message; `isNew` is covered by `!conversationHasMessages`.
+    if (
+      !shouldSendAutoReply({
+        isNew: false,
+        alreadyReplied,
+        conversationHasMessages: recent.length > 1,
+      })
+    ) {
+      return;
+    }
+
+    // Claim BEFORE sending: the platformMessageId unique index admits one
+    // winner among concurrent first-contact deliveries.
+    const claim = await persistAgentOutbound({
+      channel,
+      channelAccountId: ctx.channelAccountId ?? undefined,
+      externalThreadId,
+      platformMessageId: claimKey,
+      senderRef: "auto-reply",
+      contentType: "text",
+      content: message.slice(0, 20000),
+      deliveryState: "queued",
+    });
+    if (!claim.ok) {
+      console.warn(
+        `[pipeline] auto-reply claim failed for conv ${conversationId} — skipping send`
+      );
+      return;
+    }
+    if (claim.duplicate) return;
+
+    const send = await messenger.send(
+      {
+        to: customerPhone,
+        type: "text",
+        text: message,
+        idempotencyKey: claimKey,
+      },
+      ctx.account ? { channel, account: ctx.account } : { channel }
+    );
+    if (send.ok) {
+      await updateMessageDelivery(claim.messageId, "sent");
+      return;
+    }
+    // Release the claim so a burst sibling can re-claim and retry; the
+    // persisted reply row only makes sense while it can still be delivered.
+    await db
+      .delete(chatMessages)
+      .where(eq(chatMessages.id, claim.messageId))
+      .catch(() => {});
+    console.warn(
+      `[pipeline] auto-reply send failed — claim released, conv ${conversationId}: ${send.error}`
+    );
+  } catch (error) {
+    console.warn(
+      `[pipeline] auto-reply skipped for conv ${conversationId}`,
+      error
+    );
+  }
+}
+
+/**
  * Customer inbound — persist the canonical fact first (dedup-safe), link the
  * contact best-effort, then batch the burst through the debounce buffer and
  * hand ONE turn to the dispatcher. The webhook acks immediately; the agent
@@ -575,6 +680,16 @@ async function handleInboundMessage(
       );
       return NextResponse.json({ ok: true }, { status: 200 });
     }
+
+    // A-03 first-contact auto-reply — config-gated, claimed at most once per
+    // conversation; best-effort so it never delays the agent turn.
+    await maybeSendAutoReply({
+      channel,
+      conversationId,
+      externalThreadId,
+      customerPhone,
+      ctx,
+    });
 
     // Enqueue + schedule the debounced turn. Fire-and-forget: the webhook
     // acks now; the dispatcher runs after the quiet window.
