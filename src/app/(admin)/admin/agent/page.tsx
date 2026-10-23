@@ -69,6 +69,12 @@ export default async function AgentConfigPage({
     botToken: !!config?.botTokenEnc,
     providerKey: !!config?.providerKeyEnc,
     webhookSecret: !!config?.webhookSecretEnc,
+    ycloudApiKey: !!config?.ycloudApiKeyEnc,
+    ycloudWebhookSecret: !!config?.ycloudWebhookSecretEnc,
+    kapsoApiKey: !!config?.kapsoApiKeyEnc,
+    kapsoWebhookSecret: !!config?.kapsoWebhookSecretEnc,
+    zernioApiKey: !!config?.zernioApiKeyEnc,
+    zernioWebhookSecret: !!config?.zernioWebhookSecretEnc,
   };
 
   return (
@@ -87,6 +93,12 @@ export default async function AgentConfigPage({
               model: config?.model ?? "",
               systemPrompt: config?.systemPrompt ?? "",
               enabledTools: config?.enabledTools ?? [],
+              // G-01: undefined on a pre-migration row means enabled (default true).
+              enabled: config?.enabled !== false,
+              autoReply24h: config?.autoReply24h === true,
+              autoReply24hMessage: config?.autoReply24hMessage ?? "",
+              webOrderRedirectEnabled: config?.webOrderRedirectEnabled === true,
+              webOrderRedirectMessage: config?.webOrderRedirectMessage ?? "",
             }}
             tools={tools}
             secretStatus={secretStatus}

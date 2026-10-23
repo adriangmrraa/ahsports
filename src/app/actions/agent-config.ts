@@ -54,6 +54,19 @@ const saveAgentConfigSchema = z
     botToken: z.string().max(4096),
     providerKey: z.string().max(4096),
     webhookSecret: z.string().max(512),
+    // Per-scope provider credentials (A-15) — same write-only semantics.
+    ycloudApiKey: z.string().max(4096),
+    ycloudWebhookSecret: z.string().max(512),
+    kapsoApiKey: z.string().max(4096),
+    kapsoWebhookSecret: z.string().max(512),
+    zernioApiKey: z.string().max(4096),
+    zernioWebhookSecret: z.string().max(512),
+    // G-01 kill-switch / A-03 auto-reply / A-08 web-order redirect.
+    enabled: z.boolean(),
+    autoReply24h: z.boolean(),
+    autoReply24hMessage: z.string().max(2000),
+    webOrderRedirectEnabled: z.boolean(),
+    webOrderRedirectMessage: z.string().max(2000),
   })
   .strict();
 
@@ -136,6 +149,17 @@ export async function saveAgentConfig(input: unknown) {
       botTokenEnc: resolveSecretUpdate(data.botToken, current?.botTokenEnc ?? null).stored,
       providerKeyEnc: resolveSecretUpdate(data.providerKey, current?.providerKeyEnc ?? null).stored,
       webhookSecretEnc: resolveSecretUpdate(data.webhookSecret, current?.webhookSecretEnc ?? null).stored,
+      ycloudApiKeyEnc: resolveSecretUpdate(data.ycloudApiKey, current?.ycloudApiKeyEnc ?? null).stored,
+      ycloudWebhookSecretEnc: resolveSecretUpdate(data.ycloudWebhookSecret, current?.ycloudWebhookSecretEnc ?? null).stored,
+      kapsoApiKeyEnc: resolveSecretUpdate(data.kapsoApiKey, current?.kapsoApiKeyEnc ?? null).stored,
+      kapsoWebhookSecretEnc: resolveSecretUpdate(data.kapsoWebhookSecret, current?.kapsoWebhookSecretEnc ?? null).stored,
+      zernioApiKeyEnc: resolveSecretUpdate(data.zernioApiKey, current?.zernioApiKeyEnc ?? null).stored,
+      zernioWebhookSecretEnc: resolveSecretUpdate(data.zernioWebhookSecret, current?.zernioWebhookSecretEnc ?? null).stored,
+      enabled: data.enabled,
+      autoReply24h: data.autoReply24h,
+      autoReply24hMessage: nullable(data.autoReply24hMessage),
+      webOrderRedirectEnabled: data.webOrderRedirectEnabled,
+      webOrderRedirectMessage: nullable(data.webOrderRedirectMessage),
       updatedById: user.id,
       updatedAt: new Date(),
     };
@@ -204,6 +228,17 @@ export async function copyAgentConfig(input: unknown) {
       botTokenEnc: source.botTokenEnc,
       providerKeyEnc: source.providerKeyEnc,
       webhookSecretEnc: source.webhookSecretEnc,
+      ycloudApiKeyEnc: source.ycloudApiKeyEnc,
+      ycloudWebhookSecretEnc: source.ycloudWebhookSecretEnc,
+      kapsoApiKeyEnc: source.kapsoApiKeyEnc,
+      kapsoWebhookSecretEnc: source.kapsoWebhookSecretEnc,
+      zernioApiKeyEnc: source.zernioApiKeyEnc,
+      zernioWebhookSecretEnc: source.zernioWebhookSecretEnc,
+      enabled: source.enabled,
+      autoReply24h: source.autoReply24h,
+      autoReply24hMessage: source.autoReply24hMessage,
+      webOrderRedirectEnabled: source.webOrderRedirectEnabled,
+      webOrderRedirectMessage: source.webOrderRedirectMessage,
     };
 
     const target = await findAgentConfigForScope(to);
