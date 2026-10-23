@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import { getStringSetting } from "@/lib/settings";
+import { resolvePixelId } from "./pixel-id";
 
 /**
  * Meta Conversions API (CAPI) sender — server-side counterpart of the pixel
@@ -86,13 +86,6 @@ function hashName(name: string): string {
   return sha256Hex(name.trim().toLowerCase());
 }
 
-async function resolvePixelId(): Promise<string | null> {
-  const fromSettings = await getStringSetting("meta_pixel_id").catch(() => null);
-  if (fromSettings) return fromSettings;
-  const fromEnv = process.env.META_PIXEL_ID;
-  return fromEnv && fromEnv.trim().length > 0 ? fromEnv.trim() : null;
-}
-
 export async function sendMetaConversion(
   input: MetaConversionInput
 ): Promise<MetaConversionResult> {
@@ -126,12 +119,14 @@ export async function sendMetaConversion(
   }
 
   try {
+    // Token travels in the body, not the query string: URLs are far more
+    // likely to be captured by HTTP client/proxy logs than request bodies.
     const res = await fetch(
-      `https://graph.facebook.com/${META_GRAPH_VERSION}/${pixelId}/events?access_token=${encodeURIComponent(token)}`,
+      `https://graph.facebook.com/${META_GRAPH_VERSION}/${pixelId}/events`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: [event] }),
+        body: JSON.stringify({ data: [event], access_token: token }),
         signal: AbortSignal.timeout(META_CAPI_TIMEOUT_MS),
       }
     );
