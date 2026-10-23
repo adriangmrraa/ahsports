@@ -1,6 +1,10 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import {
+  AgentConfigResolutionError,
+  resolveAgentConfigStrict,
+} from "@/lib/channels/agent-config-scope";
 import { persistCanonicalMessage, type IntakeOutcome } from "@/lib/channels/intake";
 import { defaultDeliveryState, type NormalizedMessage } from "@/lib/channels/types";
 import { handleOperatorCommand } from "@/lib/agents/commands";
@@ -41,6 +45,23 @@ export async function routeInboundMessage(
 
   if (!persisted.ok || persisted.duplicate) {
     return { persisted, replyText: null, replyMessageId: null };
+  }
+
+  // Kill switch (A-15): agent_config.enabled=false must silence AI output on
+  // EVERY channel, not only the WhatsApp sales dispatcher — the inbound fact
+  // stays persisted either way. Scope comes from the message's own
+  // (channel, channelAccountId) partition, not the conversation row.
+  if (message.direction === "inbound" && message.senderKind !== "operator") {
+    const configResolution = await resolveAgentConfigStrict({
+      channel: message.channel,
+      channelAccountId: message.channelAccountId ?? null,
+    });
+    if (configResolution.kind === "db-error") {
+      throw new AgentConfigResolutionError(configResolution);
+    }
+    if (configResolution.kind === "resolved" && configResolution.row.enabled === false) {
+      return { persisted, replyText: null, replyMessageId: null };
+    }
   }
 
   if (message.channel === "telegram" && message.direction === "inbound") {

@@ -79,6 +79,12 @@ export interface ProcessedInboundMedia {
  * host: credentials are sent only to the provider's own endpoints — Meta CDN
  * links arrive pre-signed and get no auth header.
  */
+function hostMatches(host: string, domain: string): boolean {
+  // Anchored suffix — "ycloud.com.attacker.example" must never receive the
+  // provider credential.
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
 function mediaAuthHeaders(
   provider: ProviderId,
   url: string,
@@ -93,11 +99,11 @@ function mediaAuthHeaders(
   }
   switch (provider) {
     case "ycloud":
-      return host.endsWith("ycloud.com") ? { "X-API-Key": apiKey } : {};
+      return hostMatches(host, "ycloud.com") ? { "X-API-Key": apiKey } : {};
     case "kapso":
       return host === "api.kapso.ai" ? { "X-API-Key": apiKey } : {};
     case "zernio":
-      return host.endsWith("zernio.com")
+      return hostMatches(host, "zernio.com")
         ? { Authorization: `Bearer ${apiKey}` }
         : {};
   }

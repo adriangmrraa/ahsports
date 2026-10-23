@@ -3,13 +3,11 @@
  * messaging contract's `ChannelAccount`.
  *
  * Port of SocialCRM `src/lib/messaging/accounts.ts`, adapted for the seam
- * constraint: AH's `channel_accounts`/`lead_identities` tables are being
- * created by a PARALLEL worktree, so this module must not import
- * `channelAccounts` from `@/db/schema`. Instead, account reads go through
- * the `ChannelAccountStore` interface; the DEFAULT store materializes rows
- * from provider env vars (the migration-tolerant "legacy single-account"
- * path SocialCRM documented in S11). The parallel wave swaps in a DB-backed
- * store via `setChannelAccountStore(...)` without touching provider code.
+ * constraint: account reads go through the `ChannelAccountStore` interface.
+ * The DEFAULT store is DB-backed (`channel_accounts`) and degrades to
+ * env-materialized rows only on positive evidence the schema is absent —
+ * the migration-tolerant "legacy single-account" path SocialCRM documented
+ * in S11. Tests inject fakes via `setChannelAccountStore(...)`.
  *
  * Resolution is strict and account-aware (unchanged semantics):
  * - candidates are matched by canonical (+/digits) comparison against
@@ -30,11 +28,14 @@
  * DB-backed rows (non `env:` credentialsRef) NEVER use this fallback.
  */
 
+import { eq } from "drizzle-orm";
+
+import { db } from "@/db/client";
+import { channelAccounts } from "@/db/schema";
 import { decryptIfEncrypted } from "@/lib/crypto/secret-box";
 import {
   AgentConfigResolutionError,
-  firstScopedValue,
-  resolveAgentConfigChain,
+  resolveAgentConfigStrict,
   type AgentConfigRow,
 } from "@/lib/channels/agent-config-scope";
 
@@ -209,12 +210,51 @@ export function createEnvAccountStore(
   };
 }
 
-let accountStore: ChannelAccountStore = createEnvAccountStore();
-
 /**
- * The DB-backed resolver's swap point (owned by the channel-accounts wave).
- * Pass the env factory result back to restore the default.
+ * DB-backed store over `channel_accounts`. Degradation contract:
+ *  - positive missing-schema evidence (`42P01` et al.) → env rows, matching
+ *    the legacy single-account path on un-migrated installs;
+ *  - any other failure propagates (retryable upstream) — a down store must
+ *    never silently fall back to env rows and route to the wrong sender.
+ * Symbolic ids (`env:*`, `*:agent-config`, `*:caller-resolved`) are never
+ * store rows — they resolve through the env factory verbatim.
  */
+export function createDbBackedAccountStore(
+  fallback: ChannelAccountStore = createEnvAccountStore()
+): ChannelAccountStore {
+  return {
+    async listByChannel(channel) {
+      let rows: ChannelAccountRow[];
+      try {
+        rows = await db
+          .select()
+          .from(channelAccounts)
+          .where(eq(channelAccounts.channel, channel));
+      } catch (error) {
+        if (isSchemaNotReady(error)) return fallback.listByChannel(channel);
+        throw error;
+      }
+      return rows.length > 0 ? rows : fallback.listByChannel(channel);
+    },
+    async findById(id) {
+      if (isSymbolicAccountId(id)) return fallback.findById(id);
+      try {
+        const [row] = await db
+          .select()
+          .from(channelAccounts)
+          .where(eq(channelAccounts.id, id))
+          .limit(1);
+        return row ?? null;
+      } catch (error) {
+        if (isSchemaNotReady(error)) return fallback.findById(id);
+        throw error;
+      }
+    },
+  };
+}
+
+let accountStore: ChannelAccountStore = createDbBackedAccountStore();
+
 export function setChannelAccountStore(store: ChannelAccountStore): void {
   accountStore = store;
 }
@@ -269,12 +309,12 @@ function credentialsFromEnv(
 /**
  * A-15 — `credentialsRef: "agent_config"` resolves the scoped row's
  * encrypted provider fields (account → channel → global via
- * `resolveAgentConfigChain`). The dedicated `<provider>*Enc` columns win,
- * then the generic `providerKeyEnc`/`webhookSecretEnc`/`botTokenEnc`
- * (telegram), and finally the provider env scope. Each field walks the whole
- * chain independently (R4-MED-2) so a scope row created only to toggle a flag
- * cannot hide a parent scope's credential. A transient resolution failure
- * throws retryable — it must never silently bind another key.
+ * `resolveAgentConfigStrict`). The dedicated `<provider>*Enc` columns win,
+ * then the channel's own dedicated fields (`botTokenEnc` for telegram,
+ * `webhookSecretEnc` for the verify secret), and finally the provider env
+ * scope. The generic `providerKeyEnc` is the AI-provider credential — it is
+ * NEVER a channel credential. A transient resolution failure throws
+ * retryable — it must never silently bind another key.
  */
 const SCOPED_PROVIDER_FIELDS: Record<
   string,
@@ -301,7 +341,7 @@ function decryptColumn(value: unknown): string {
 async function credentialsFromAgentConfigScope(
   row: ChannelAccountRow
 ): Promise<ChannelAccount["credentials"] | null> {
-  const resolution = await resolveAgentConfigChain({
+  const resolution = await resolveAgentConfigStrict({
     channel: row.channel as ChannelKind,
     channelAccountId: row.id,
   });
@@ -310,23 +350,17 @@ async function credentialsFromAgentConfigScope(
   }
   if (resolution.kind !== "resolved") return null;
 
-  const configRows = resolution.rows;
+  const cfg = resolution.row;
   const scoped = SCOPED_PROVIDER_FIELDS[row.provider];
   const apiKey =
-    firstScopedValue(configRows, (config) =>
-      decryptColumn(scoped ? config[scoped.apiKey] : null)
-    ) ||
-    firstScopedValue(configRows, (config) => decryptColumn(config.providerKeyEnc)) ||
-    (row.provider === "telegram"
-      ? firstScopedValue(configRows, (config) => decryptColumn(config.botTokenEnc))
-      : "");
+    decryptColumn(scoped ? cfg[scoped.apiKey] : null) ||
+    (row.provider === "telegram" ? decryptColumn(cfg.botTokenEnc) : "");
   if (!apiKey) return null;
   return {
     apiKey,
     webhookSecret:
-      firstScopedValue(configRows, (config) =>
-        decryptColumn(scoped ? config[scoped.webhookSecret] : null)
-      ) || firstScopedValue(configRows, (config) => decryptColumn(config.webhookSecretEnc)),
+      decryptColumn(scoped ? cfg[scoped.webhookSecret] : null) ||
+      decryptColumn(cfg.webhookSecretEnc),
   };
 }
 

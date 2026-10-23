@@ -147,6 +147,12 @@ function evaluate(expr: unknown, row: Row): boolean {
   if (/\bis\s+null\b/.test(text)) {
     return column ? valueOf(row, column) == null : true;
   }
+  if (/\bnot\s+(?:i)?like\b/.test(text)) {
+    if (!column) return true;
+    const value = String(valueOf(row, column) ?? "").toLowerCase();
+    const pattern = String(params[0] ?? "").toLowerCase().replace(/%/g, ".*");
+    return !new RegExp(`^${pattern}$`).test(value);
+  }
   if (/\bilike\b/.test(text) || /\blike\b/.test(text)) {
     if (!column) return true;
     const value = String(valueOf(row, column) ?? "").toLowerCase();
@@ -211,6 +217,16 @@ function uniqueKeys(table: string, row: Row): string[] {
   }
   if (table === "idempotency_keys") keys.push(`pk:${String(row.key)}`);
   if (table === "agent_memories") keys.push(`mem:${String(row.scope)}|${String(row.key)}`);
+  if (table === "lead_identities") {
+    keys.push(`lead:${String(row.channel)}|${String(row.externalId)}`);
+  }
+  if (table === "agent_inbound_jobs") {
+    // Partial unique: at most one LIVE job per dedup key (mirrors the
+    // migration index on status IN ('queued','running')).
+    if (row.status === "queued" || row.status === "running") {
+      keys.push(`job:live:${String(row.dedupKey)}`);
+    }
+  }
   if (table === "channel_events") {
     keys.push(
       `evt:${String(row.provider)}|${String(row.channelAccountId ?? "")}|${String(

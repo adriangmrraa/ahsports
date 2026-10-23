@@ -1,14 +1,20 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
-import { contacts, leadIdentities, orders } from "@/db/schema";
+import { contacts, conversations, leadIdentities, orders } from "@/db/schema";
 import { decideSendAccount } from "@/lib/channels/send-account";
 import { persistCanonicalMessage } from "@/lib/channels/intake";
+import { loadProviderThreadId } from "@/lib/channels/operator-send";
 import { normalizePhone } from "@/lib/channels/phone";
 import { messenger } from "@/lib/messaging/messenger";
 import type { ChannelAccount as MessagingChannelAccount } from "@/lib/messaging/types";
+import {
+  decideCustomerWindowSend,
+  resolveTemplateFallback,
+  type WindowSendDecision,
+} from "./outbound-window";
 
 /**
  * Order-status notification transport — port of SocialCRM
@@ -81,6 +87,12 @@ export interface OrderStatusNotificationInput {
   message: string;
   /** Order contact, persisted as the message's customer. */
   contactId?: string | null;
+  /**
+   * Send-level idempotency key — deterministic per (order, status) so a
+   * repeated stage transition retries the SAME notification instead of
+   * minting a new one. Defaults to a random key when callers don't scope it.
+   */
+  idempotencyKey?: string;
 }
 
 export async function sendOrderStatusNotification(
@@ -110,37 +122,103 @@ export async function sendOrderStatusNotification(
     return { ok: false, error: "account_provider_mismatch", retryable: false };
   }
 
-  const idempotencyKey = `order-status:${randomUUID()}`;
+  // Resolve the thread BEFORE sending: the 24h window decision needs the
+  // conversation, and zernio needs its provider-native thread id or every
+  // send opens a NEW conversation instead of replying inside the thread.
+  const [thread] = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.channel, "whatsapp"),
+        decision.channelAccountId
+          ? eq(conversations.channelAccountId, decision.channelAccountId)
+          : isNull(conversations.channelAccountId),
+        eq(conversations.externalThreadId, digits),
+      ),
+    )
+    .limit(1);
+
+  // F-02 gate: order notifications usually fire days after the customer's
+  // last inbound — outside the window Meta rejects free-form text and only
+  // the configured fallback template is deliverable.
+  let windowDecision: WindowSendDecision;
+  if (thread) {
+    windowDecision = await decideCustomerWindowSend(thread.id).catch(
+      () => ({ kind: "text", windowOpen: true }) as WindowSendDecision,
+    );
+  } else {
+    // No thread → no customer inbound ever → the window is closed.
+    const template = await resolveTemplateFallback();
+    windowDecision = template
+      ? { kind: "template", template, lastInboundAt: null }
+      : { kind: "text", windowOpen: false, reason: "no_template" };
+  }
+  const windowClosedWithoutTemplate =
+    windowDecision.kind === "text" && !windowDecision.windowOpen;
+  const providerConversationId =
+    account?.provider === "zernio" && thread
+      ? await loadProviderThreadId(thread.id)
+      : undefined;
+
+  const idempotencyKey = input.idempotencyKey ?? `order-status:${randomUUID()}`;
   const result = await messenger.send(
-    {
-      to: digits,
-      type: "text",
-      text: input.message,
-      idempotencyKey,
-    },
+    windowDecision.kind === "template"
+      ? {
+          to: digits,
+          type: "template",
+          template: windowDecision.template,
+          idempotencyKey,
+          ...(providerConversationId ? { providerConversationId } : {}),
+        }
+      : {
+          to: digits,
+          type: "text",
+          text: input.message,
+          idempotencyKey,
+          ...(providerConversationId ? { providerConversationId } : {}),
+        },
     account
       ? {
           account: account as unknown as MessagingChannelAccount,
         }
       : { channel: "whatsapp" },
   );
+  if (windowClosedWithoutTemplate) {
+    console.warn(
+      `[order-status-notify] 24h window closed and wa_template_fallback is not configured — text send attempted, delivery may be rejected`,
+    );
+  }
 
+  // The fact is per send: the deterministic key guards the SEND, while a
+  // fresh pmid suffix keeps a repeated same-status notification recordable
+  // rather than deduped into the first fact.
   const platformMessageId = result.ok
-    ? result.providerMessageId || idempotencyKey
-    : `${idempotencyKey}:failed`;
+    ? result.providerMessageId || `${idempotencyKey}:${randomUUID()}`
+    : `${idempotencyKey}:${randomUUID()}:failed`;
   const persisted = await persistCanonicalMessage({
     channel: "whatsapp",
     channelAccountId: decision.channelAccountId,
     externalThreadId: digits,
     platformMessageId,
     direction: "outbound",
-    senderKind: "operator",
+    // Automated send — must never count as operator activity (the pipeline's
+    // 2h operator mute reads senderKind="operator" only).
+    senderKind: "agent",
     senderRef: "order-status-notify",
     contentType: "text",
     content: input.message,
     deliveryState: result.ok ? "sent" : "failed",
     customerId: input.contactId ?? undefined,
-    rawPayload: { source: "order-status-notify" },
+    rawPayload: {
+      source: "order-status-notify",
+      ...(windowDecision.kind === "template"
+        ? { sentAs: "template", template: windowDecision.template }
+        : {}),
+      ...(windowClosedWithoutTemplate
+        ? { windowClosed: true, templateFallback: "not_configured" }
+        : {}),
+    },
   });
 
   if (!result.ok) {
@@ -184,6 +262,9 @@ export async function notifyOrderStatusChange(
     return { ok: false, error: "no_message_for_status", retryable: false };
   }
 
+  // Newest identity first — `.limit(1)` without ORDER BY returns whichever
+  // row the index scan finds, nondeterministically wrong when a contact
+  // carries several whatsapp identities.
   const [identity] = await db
     .select({ externalId: leadIdentities.externalId })
     .from(leadIdentities)
@@ -193,6 +274,7 @@ export async function notifyOrderStatusChange(
         eq(leadIdentities.channel, "whatsapp"),
       ),
     )
+    .orderBy(desc(leadIdentities.createdAt))
     .limit(1);
 
   const [contact] = await db
@@ -217,5 +299,6 @@ export async function notifyOrderStatusChange(
     phoneNumber: phone,
     message,
     contactId: order.contactId,
+    idempotencyKey: `order-status:${orderId}:${status}`,
   });
 }

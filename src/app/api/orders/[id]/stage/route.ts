@@ -36,6 +36,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Pedido bloqueado por seña insuficiente" }, { status: 409 });
   }
 
+  // No-op transition: nothing changed, so no audit row and — critically —
+  // no customer notification (a repeated POST must never re-notify).
+  if (order.status === parsed.data.stage) {
+    return NextResponse.json(order);
+  }
+
   // Neon HTTP: sin tx — update + audit secuenciales.
   const [updated] = await db
     .update(orders)

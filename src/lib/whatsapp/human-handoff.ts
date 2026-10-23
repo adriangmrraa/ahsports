@@ -65,6 +65,7 @@ const HANDOFF_EFFECT_SCOPE = "whatsapp.handoff-effect";
 const HANDOFF_CLAIM_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const HUMAN_OVERRIDE_TTL_MS = 24 * 60 * 60 * 1000;
 const HUMAN_OVERRIDE_KEY_PREFIX = "whatsapp-handoff";
+const HANDOFF_RESOLVED_KEY_PREFIX = "whatsapp-handoff-resolved";
 
 function handoffClaimKey(input: {
   conversationId: string;
@@ -83,6 +84,10 @@ function handoffClaimKey(input: {
 
 function overrideMemoryKey(conversationId: string): string {
   return `${HUMAN_OVERRIDE_KEY_PREFIX}:${conversationId}`.slice(0, 255);
+}
+
+function handoffResolvedMemoryKey(conversationId: string): string {
+  return `${HANDOFF_RESOLVED_KEY_PREFIX}:${conversationId}`.slice(0, 255);
 }
 
 const HANDOFF_EFFECTS: readonly HandoffEffectKind[] = [
@@ -229,6 +234,11 @@ export async function activateHumanOverride(
  * of `activateHumanOverride`. After this the dispatcher's
  * `isHumanOverrideActive` check re-enables the agent without waiting for the
  * 24h TTL (inbox "devolver al agente" / "marcar resuelto" actions).
+ *
+ * Also stamps the handoff.resolvedAt boundary: the pipeline's operator-
+ * activity mute (2h, senderKind="operator" rows) only counts rows written
+ * AFTER this instant, so operator replies sent during the handoff stop
+ * suppressing the agent the moment control is returned.
  */
 export async function deactivateHumanOverride(conversationId: string): Promise<void> {
   await db
@@ -239,6 +249,44 @@ export async function deactivateHumanOverride(conversationId: string): Promise<v
         eq(agentMemories.key, overrideMemoryKey(conversationId)),
       ),
     );
+  const resolvedAt = new Date().toISOString();
+  await db
+    .insert(agentMemories)
+    .values({
+      scope: "customer",
+      key: handoffResolvedMemoryKey(conversationId),
+      value: { resolvedAt },
+      expiresAt: new Date(Date.now() + HUMAN_OVERRIDE_TTL_MS),
+    })
+    .onConflictDoUpdate({
+      target: [agentMemories.scope, agentMemories.key],
+      set: {
+        value: { resolvedAt },
+        expiresAt: new Date(Date.now() + HUMAN_OVERRIDE_TTL_MS),
+      },
+    });
+}
+
+/**
+ * The instant the operator last returned this conversation to the agent
+ * (`deactivateHumanOverride`). Null when no handoff was ever resolved.
+ */
+export async function handoffResolvedAt(conversationId: string): Promise<Date | null> {
+  const [row] = await db
+    .select({ value: agentMemories.value })
+    .from(agentMemories)
+    .where(
+      and(
+        eq(agentMemories.scope, "customer"),
+        eq(agentMemories.key, handoffResolvedMemoryKey(conversationId)),
+        gt(agentMemories.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+  const raw = (row?.value as { resolvedAt?: unknown } | undefined)?.resolvedAt;
+  if (typeof raw !== "string") return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export async function isHumanOverrideActive(conversationId: string): Promise<boolean> {

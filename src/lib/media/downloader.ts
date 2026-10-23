@@ -22,9 +22,12 @@ export function mediaUploadsDir(): string {
 function isAllowedDomain(url: string, extraAllowedDomains: readonly string[] = []): boolean {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
-    return [...ALLOWED_DOMAINS, ...extraAllowedDomains].some((d) =>
-      parsed.hostname.endsWith(d)
+    // https only — an http fetch would carry provider auth headers in clear.
+    if (parsed.protocol !== "https:") return false;
+    // Anchored match: "evil-ycloud.com" / "api.ycloud.com.evil.com" must not
+    // pass — a lookalike domain would receive the provider's auth headers.
+    return [...ALLOWED_DOMAINS, ...extraAllowedDomains].some(
+      (d) => parsed.hostname === d || parsed.hostname.endsWith(`.${d}`)
     );
   } catch {
     return false;

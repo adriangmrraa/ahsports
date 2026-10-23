@@ -10,8 +10,7 @@ import { decryptIfEncrypted } from "@/lib/crypto/secret-box";
 
 import {
   fetchLegacyGlobalAgentConfig,
-  firstScopedValue,
-  resolveAgentConfigChain,
+  resolveAgentConfigStrict,
   type AgentConfigRow,
 } from "./agent-config-scope";
 import { isRetryableDbError, isSchemaNotReady } from "./errors";
@@ -103,14 +102,11 @@ export class MissingScopedCredentialError extends Error {
 
 /**
  * A-15 — per-provider credential columns on the scoped `agent_config` row.
- * Dedicated `<provider>*Enc` fields win, then the generic
- * `providerKeyEnc`/`webhookSecretEnc` (and `botTokenEnc` for telegram), then
- * the provider env scope (`<PROVIDER>_API_KEY`/`ACCESS_TOKEN`/
- * `WEBHOOK_SECRET`).
- *
- * R4-MED-2 — both the dedicated and the generic lookups walk the whole scope
- * chain per FIELD (account → channel → global): an account row that only
- * carries `enabled` no longer hides a parent scope's credential.
+ * Dedicated `<provider>*Enc` fields win, then the channel's own dedicated
+ * fields (`webhookSecretEnc`, and `botTokenEnc` for telegram), then the
+ * provider env scope (`<PROVIDER>_API_KEY`/`ACCESS_TOKEN`/`WEBHOOK_SECRET`).
+ * The generic `providerKeyEnc` is the AI-provider credential — it is NEVER
+ * used as a channel credential.
  */
 const SCOPED_PROVIDER_FIELDS: Record<
   string,
@@ -152,40 +148,36 @@ function credentialsFromProviderEnvScope(
 
 /**
  * `agent_config`/unset credentials resolve through the account's own scope so
- * a per-account credential is actually used (A-15): the scoped chain's
- * encrypted provider fields first, resolved per FIELD (account → channel →
- * global), the provider env scope second. Materializing empty credentials here
- * would bind the account fine but break every send far from the cause — fail
+ * a per-account credential is actually used (A-15): the scoped row's
+ * encrypted provider fields first (account → channel → global), the
+ * provider env scope second. Materializing empty credentials here would
+ * bind the account fine but break every send far from the cause — fail
  * closed instead.
  */
 async function credentialsFromAgentConfig(
   row: ChannelAccountRow
 ): Promise<ChannelAccount["credentials"]> {
-  const resolution = await resolveAgentConfigChain({
+  const resolution = await resolveAgentConfigStrict({
     channel: row.channel,
     channelAccountId: row.id,
   });
 
-  let configRows: AgentConfigRow[] = [];
+  let configRow: AgentConfigRow | undefined;
   let source = "";
   switch (resolution.kind) {
     case "resolved":
-      configRows = resolution.rows;
-      source = resolution.sources
-        .map((entry, index) => `${entry} row #${resolution.rows[index].id}`)
-        .join(" -> ");
+      configRow = resolution.row;
+      source = `${resolution.source} row #${resolution.id}`;
       break;
-    case "schema-not-ready": {
+    case "schema-not-ready":
       // Partial migration: scope columns missing — the legacy global row
       // still carries the generic credential fields, exactly like
       // pre-migration installs.
-      const legacy = await fetchLegacyGlobalAgentConfig();
-      configRows = legacy ? [legacy] : [];
+      configRow = await fetchLegacyGlobalAgentConfig();
       source = "global row (legacy read)";
       break;
-    }
     case "not-found":
-      configRows = [];
+      configRow = undefined;
       break;
     case "db-error":
       // A transient DB error must not be silently replaced by other creds.
@@ -193,18 +185,14 @@ async function credentialsFromAgentConfig(
   }
 
   const scopedFields = SCOPED_PROVIDER_FIELDS[row.provider];
-  const scopedApiKey =
-    firstScopedValue(configRows, (config) =>
-      decryptColumn(scopedFields ? config[scopedFields.apiKey] : null)
-    ) || firstScopedValue(configRows, (config) => decryptColumn(config.providerKeyEnc));
+  const scopedApiKey = decryptColumn(
+    scopedFields ? configRow?.[scopedFields.apiKey] : null
+  );
   const scopedSecret =
-    firstScopedValue(configRows, (config) =>
-      decryptColumn(scopedFields ? config[scopedFields.webhookSecret] : null)
-    ) || firstScopedValue(configRows, (config) => decryptColumn(config.webhookSecretEnc));
+    decryptColumn(scopedFields ? configRow?.[scopedFields.webhookSecret] : null) ||
+    decryptColumn(configRow?.webhookSecretEnc);
   const scopedToken =
-    row.provider === "telegram"
-      ? firstScopedValue(configRows, (config) => decryptColumn(config.botTokenEnc))
-      : "";
+    row.provider === "telegram" ? decryptColumn(configRow?.botTokenEnc) : "";
 
   if (scopedApiKey || scopedToken) {
     return {

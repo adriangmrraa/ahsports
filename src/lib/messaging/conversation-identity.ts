@@ -1,14 +1,10 @@
 /**
- * Account-aware conversation identity (ported from SocialCRM, adapted to the
- * AH schema: `conversations.id` is a varchar uuid and there is no
- * `channel_account_id` column yet — the parallel `ah-channel-accounts` wave
- * owns `src/db/**`).
+ * Account-aware conversation identity (ported from SocialCRM).
  *
  * A conversation identity is (channel, channel_account_id, canonical external
  * user id). Legacy rows (no account stamp) keep the pre-multi-account
- * (channel, canonical external user id) identity. AH's durable conversation
- * key today is the unique index on (channel, external_thread_id); the
- * canonical external user id is what gets stored there.
+ * (channel, canonical external user id) identity in the NULL partition; the
+ * canonical external user id is what gets stored in `external_thread_id`.
  *
  * Safety rules (unchanged from source):
  * - A bound account never adopts a legacy null-account row; it creates its own
@@ -17,14 +13,9 @@
  *   row and a request for account B never returns account A's conversation.
  * - Concurrent creates converge through the unique indexes: the loser re-reads
  *   the winner instead of failing the webhook.
- *
- * Wave-1 note: with no `channel_account_id` column every stored row reports
- * `channelAccountId: null`, so `assertConversationAccount` fails closed the
- * moment a bound (non-null) account id is passed — exactly the intended
- * semantics once the column lands.
  */
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { conversations } from "@/db/schema";
@@ -197,26 +188,35 @@ export function assertConversationAccount(
 }
 
 /**
- * Default repository over the current `conversations` table. The account
- * dimension is compiled away — no `channel_account_id` column exists yet —
- * so every row reads as `channelAccountId: null`. `find` therefore only
- * resolves legacy (null-account) identity; `insert` stores the canonical
- * external id in `external_thread_id`, which is the dedup anchor the
- * canonical intake uses as well. Non-enum channels (`instagram`/`facebook`/
- * `sms`) cannot persist until the enum extends — callers gate those before
- * reaching here.
+ * Default repository over `conversations`, scoped to the exact account
+ * partition the unique indexes enforce: bound rows live under
+ * (channel, channel_account_id, external_thread_id) and legacy rows under
+ * (channel, external_thread_id) where channel_account_id IS NULL. `find`
+ * only resolves inside the caller's partition — a bound account never sees
+ * a legacy row, and never another account's row. `insert` stamps
+ * channel_account_id so bound echoes satisfy `assertConversationAccount`.
+ * Non-enum channels (`instagram`/`facebook`/`sms`) cannot persist until the
+ * enum extends — callers gate those before reaching here.
  */
 export const drizzleConversationIdentityRepository: ConversationIdentityRepository = {
-  async find(channel, _channelAccountId, normalizedExternalUserId, externalUserId) {
+  async find(channel, channelAccountId, normalizedExternalUserId, externalUserId) {
     const candidates = externalUserId && externalUserId !== normalizedExternalUserId
       ? [normalizedExternalUserId, externalUserId]
       : [normalizedExternalUserId];
+    const accountId = channelAccountId ?? null;
     const [row] = await db
-      .select({ id: conversations.id, channel: conversations.channel })
+      .select({
+        id: conversations.id,
+        channel: conversations.channel,
+        channelAccountId: conversations.channelAccountId,
+      })
       .from(conversations)
       .where(
         and(
           eq(conversations.channel, channel as PersistableChannel),
+          accountId === null
+            ? isNull(conversations.channelAccountId)
+            : eq(conversations.channelAccountId, accountId),
           inArray(conversations.externalThreadId, candidates)
         )
       )
@@ -225,21 +225,24 @@ export const drizzleConversationIdentityRepository: ConversationIdentityReposito
     return {
       id: row.id,
       channel: isChannelKind(row.channel) ? row.channel : channel,
-      channelAccountId: null,
+      channelAccountId: row.channelAccountId ?? null,
     };
   },
 
   async insert(input) {
+    const accountId = input.channelAccountId ?? null;
     const [inserted] = await db
       .insert(conversations)
       .values({
         channel: input.channel as PersistableChannel,
+        channelAccountId: accountId,
         externalThreadId: input.externalUserIdNormalized,
         lastMessageAt: new Date(),
       })
-      .onConflictDoNothing({
-        target: [conversations.channel, conversations.externalThreadId],
-      })
+      // No arbiter needed: the two partial uniques partition identity by
+      // account scope (bound rows vs. legacy NULL rows), exactly like the
+      // message-level dedup in canonical intake.
+      .onConflictDoNothing()
       .returning({ id: conversations.id });
     if (!inserted) return { kind: "conflict" };
     return {
@@ -247,7 +250,7 @@ export const drizzleConversationIdentityRepository: ConversationIdentityReposito
       record: {
         id: inserted.id,
         channel: input.channel,
-        channelAccountId: null,
+        channelAccountId: accountId,
       },
     };
   },

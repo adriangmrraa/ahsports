@@ -19,6 +19,12 @@
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  // Install the WhatsApp turn dispatcher BEFORE the first drain: importing
+  // the register module runs `setInboundTurnDispatcher` at init. Without it,
+  // a drained whatsapp turn would fall through to the generic channel
+  // router instead of the sales pipeline.
+  await import("@/lib/whatsapp/register");
+
   const { drainPendingInboundTurns } = await import(
     "@/lib/messaging/inbound-pipeline"
   );

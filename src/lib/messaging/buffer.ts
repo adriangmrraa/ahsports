@@ -72,6 +72,8 @@ interface InMemoryEntry {
   /** Timestamp of the last enqueue — the sliding debounce anchor. */
   timer: number;
   lock: boolean;
+  /** When the lock was taken — bounds a hung flush (lockTtlMs). */
+  lockAcquiredAt: number;
 }
 
 const inMemoryStore = new Map<string, InMemoryEntry>();
@@ -111,7 +113,7 @@ function contentHash(content: string): string {
 function getOrCreateEntry(channel: ChannelKind, userId: string): InMemoryEntry {
   const key = memKey(channel, userId);
   if (!inMemoryStore.has(key)) {
-    inMemoryStore.set(key, { messages: [], timer: 0, lock: false });
+    inMemoryStore.set(key, { messages: [], timer: 0, lock: false, lockAcquiredAt: 0 });
   }
   return inMemoryStore.get(key)!;
 }
@@ -140,8 +142,19 @@ export const BufferManager = {
 
   async acquireLock(channel: ChannelKind, userId: string): Promise<boolean> {
     const entry = getOrCreateEntry(channel, userId);
-    if (entry.lock) return false;
+    const now = Date.now();
+    const lockTtlMs = configFor(channel).lockTtlMs;
+    if (entry.lock) {
+      if (now - entry.lockAcquiredAt < lockTtlMs) return false;
+      // A flush that never released (thrown outside its finally, leaked
+      // await) would otherwise wedge this key forever — bound it.
+      console.warn(
+        `[buffer:lock] stale lock for ${channel}:${userTag(userId)} ` +
+          `exceeded ${lockTtlMs}ms — reacquiring`
+      );
+    }
     entry.lock = true;
+    entry.lockAcquiredAt = now;
     return true;
   },
 

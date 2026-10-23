@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lt, notLike, or, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { agentInboundJobs, channelAccounts, chatMessages } from "@/db/schema";
@@ -173,13 +173,20 @@ export async function enqueueInboundTurnJob(input: {
 }
 
 /**
- * In-process flush marker: the debounce fired and dispatch is starting. The
- * row leaving 'queued' is what lets the drain distinguish "scheduled, buffer
- * owns it" from "queued, owner died" — while counting the dispatch attempt.
+ * In-process flush claim: the debounce fired and dispatch wants to start.
+ * Returns true ONLY when this flush owns the dispatch — either it moved the
+ * job to 'running' itself (including reclaiming a lease-expired row) or no
+ * live row exists at all (queue not populated/un-migrated). False means a
+ * live row is owned by another claimant (a drain pass or a concurrent
+ * process's flush): the caller must NOT dispatch or it would double-send.
+ *
+ * Stale 'running' rows (no update for INBOUND_JOB_LEASE_MS) are treated as
+ * crashed and re-claimable here — the same rule the drain applies.
  */
-export async function markInboundJobRunning(dedupKey: string): Promise<void> {
+export async function markInboundJobRunning(dedupKey: string): Promise<boolean> {
   try {
-    await db
+    const leaseCutoff = new Date(Date.now() - INBOUND_JOB_LEASE_MS);
+    const claimed = await db
       .update(agentInboundJobs)
       .set({
         status: "running",
@@ -189,11 +196,36 @@ export async function markInboundJobRunning(dedupKey: string): Promise<void> {
       .where(
         and(
           eq(agentInboundJobs.dedupKey, dedupKey),
-          eq(agentInboundJobs.status, "queued")
+          or(
+            eq(agentInboundJobs.status, "queued"),
+            and(
+              eq(agentInboundJobs.status, "running"),
+              lt(agentInboundJobs.updatedAt, leaseCutoff)
+            )
+          )
         )
-      );
+      )
+      .returning({ id: agentInboundJobs.id });
+    if (claimed.length > 0) return true;
+
+    const [live] = await db
+      .select({ id: agentInboundJobs.id })
+      .from(agentInboundJobs)
+      .where(
+        and(
+          eq(agentInboundJobs.dedupKey, dedupKey),
+          inArray(agentInboundJobs.status, ["queued", "running"])
+        )
+      )
+      .limit(1);
+    // A live row we could not claim belongs to another claimant → skip the
+    // dispatch. No live row → in-memory path stays authoritative.
+    return !live;
   } catch (error) {
+    // Queue unavailable (42P01 or transient): preserve in-memory dispatch —
+    // a false here would silently drop turns on un-migrated installs.
     logQueueError("mark running", error);
+    return true;
   }
 }
 
@@ -405,6 +437,7 @@ async function rebuildInboundTurn(
 
   return {
     channel: job.channel,
+    channelAccountId: job.channelAccountId,
     conversationId: job.conversationId,
     externalThreadId: payload.externalThreadId,
     to: payload.to,
@@ -440,7 +473,11 @@ async function pendingInboundBatch(
     .where(
       and(
         eq(chatMessages.conversationId, conversationId),
-        eq(chatMessages.direction, "outbound")
+        eq(chatMessages.direction, "outbound"),
+        // The auto-reply claim row is a reservation, not an answer: treating
+        // it as the watermark would rebuild an "already answered" turn out of
+        // unanswered inbound rows and complete the job with no reply sent.
+        notLike(chatMessages.platformMessageId, "auto-reply:%")
       )
     )
     .orderBy(desc(chatMessages.createdAt))

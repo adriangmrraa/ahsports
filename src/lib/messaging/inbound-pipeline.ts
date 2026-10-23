@@ -3,7 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import { NextResponse } from "next/server";
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { chatMessages, conversations } from "@/db/schema";
@@ -39,7 +39,7 @@ import {
 import { matchesAssistantBubble } from "./bubbles";
 import {
   persistChannelEvent,
-  releaseChannelDeliveryMarker,
+  releaseChannelEventMarker,
 } from "./channel-events";
 import {
   canonicalExternalUserId,
@@ -56,8 +56,9 @@ import {
   markInboundJobRunning,
   settleInboundTurnJob,
 } from "./inbound-queue";
-import { ensureLeadIdentity } from "./lead-identity";
+import { ensureLeadIdentity } from "@/lib/channels/lead-identity";
 import { messenger } from "./messenger";
+import { handoffResolvedAt } from "@/lib/whatsapp/human-handoff";
 import { captureLeadIfNew } from "@/lib/whatsapp/lead-capture";
 import { isProtocolArtifact } from "./protocol";
 import type {
@@ -120,12 +121,15 @@ const INBOUND_RATE_LIMIT = 30;
 
 /**
  * Dedup anchor: an existing canonical message with this (channel,
- * platformMessageId). The unique index makes the same check race-safe inside
- * intake; this pre-check skips the transaction entirely on replay.
+ * platformMessageId) in the same account partition. The account-scoped
+ * partial unique indexes make the same check race-safe inside intake; this
+ * pre-check skips the transaction entirely on replay. `null` targets the
+ * legacy null-account partition (env-materialized accounts).
  */
 export async function isMessageDuplicate(
   channel: ChannelKind,
-  platformMessageId: string
+  platformMessageId: string,
+  channelAccountId: string | null = null
 ): Promise<boolean> {
   if (!platformMessageId) return false;
   const [row] = await db
@@ -134,7 +138,10 @@ export async function isMessageDuplicate(
     .where(
       and(
         eq(chatMessages.channel, channel),
-        eq(chatMessages.platformMessageId, platformMessageId)
+        eq(chatMessages.platformMessageId, platformMessageId),
+        channelAccountId
+          ? eq(chatMessages.channelAccountId, channelAccountId)
+          : isNull(chatMessages.channelAccountId)
       )
     )
     .limit(1);
@@ -160,13 +167,20 @@ async function getRecentConversationMessages(
 
 /**
  * A human operator answered recently (outbound senderKind="operator") — the
- * schema has no override column, so the fact itself is the signal.
+ * schema has no override column, so the fact itself is the signal. A
+ * resolved handoff bounds the window: "return to agent" stamps
+ * `handoffResolvedAt`, and operator rows written BEFORE that instant belong
+ * to the closed episode — they must not keep muting the agent (the 2h mute
+ * would otherwise outlive an explicit release).
  */
 async function hasRecentOperatorMessage(
   conversationId: string,
   withinMs: number
 ): Promise<boolean> {
-  const cutoff = new Date(Date.now() - withinMs);
+  const resolvedAt = await handoffResolvedAt(conversationId);
+  const cutoff = new Date(
+    Math.max(Date.now() - withinMs, resolvedAt?.getTime() ?? 0)
+  );
   const [row] = await db
     .select({ id: chatMessages.id })
     .from(chatMessages)
@@ -187,6 +201,8 @@ async function hasRecentOperatorMessage(
 /** One debounced batch, ready for the agent layer. */
 export interface InboundTurn {
   channel: "whatsapp" | "telegram";
+  /** channel_accounts row id of the bound account — null in the legacy partition. */
+  channelAccountId?: string | null;
   conversationId: string;
   /** Canonical external user id — the conversation's external_thread_id. */
   externalThreadId: string;
@@ -315,6 +331,9 @@ async function handleEcho(
   event: NormalizedInboundEvent,
   ctx: InboundContext
 ): Promise<NextResponse> {
+  // Echoes persist on their own channel — a telegram/zernio echo stamped
+  // "whatsapp" corrupts the transcript partition and its dedup anchor.
+  const channel = ctx.channel ?? "whatsapp";
   try {
     const customerPhone = event.providerConversationId;
     const botPhone = event.sender.phone;
@@ -328,7 +347,7 @@ async function handleEcho(
     // active row (providerAccountId, or the E.164 senderAddress). An
     // unmatched sender is a foreign echo → ack + ignore.
     const senderMatch = await matchSenderToChannelAccount(
-      "whatsapp",
+      channel,
       {
         senderAddress: botPhone,
         providerAccountId: event.providerAccountId || undefined,
@@ -362,7 +381,10 @@ async function handleEcho(
         : ctx.channelAccountId;
 
     const echoMsgId = event.platformMessageId;
-    if (echoMsgId && (await isMessageDuplicate("whatsapp", echoMsgId))) {
+    if (
+      echoMsgId &&
+      (await isMessageDuplicate(channel, echoMsgId, echoAccountId ?? null))
+    ) {
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
@@ -375,7 +397,7 @@ async function handleEcho(
       const identity = await resolveConversationIdentity(
         drizzleConversationIdentityRepository,
         {
-          channel: "whatsapp",
+          channel,
           externalUserId: customerPhone,
           channelAccountId: echoAccountId ?? null,
         }
@@ -417,7 +439,8 @@ async function handleEcho(
     // is notNull in AH, so an id-less echo gets a deterministic synthetic id
     // that keeps redelivery dedupable.
     const outcome = await importOperatorOutbound({
-      channel: "whatsapp",
+      channel,
+      channelAccountId: echoAccountId ?? null,
       externalThreadId,
       platformMessageId:
         echoMsgId ?? `echo:${event.provider}:${event.deliveryId}`,
@@ -480,7 +503,11 @@ async function maybeSendAutoReply(input: {
     if (!message) return;
 
     const claimKey = autoReplyClaimKey(conversationId);
-    const alreadyReplied = await isMessageDuplicate(channel, claimKey);
+    const alreadyReplied = await isMessageDuplicate(
+      channel,
+      claimKey,
+      ctx.channelAccountId ?? null
+    );
     const recent = alreadyReplied
       ? []
       : await getRecentConversationMessages(conversationId, 2);
@@ -601,7 +628,42 @@ async function handleInboundMessage(
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    if (await isMessageDuplicate(channel, platformMessageId)) {
+    const externalThreadId = canonicalExternalUserId(channel, customerPhone);
+    const userKey = accountScopedInboundKey(
+      ctx.channelAccountId,
+      customerPhone
+    );
+    const turnPayload = {
+      externalThreadId,
+      to: customerPhone,
+      providerConversationId: event.providerConversationId ?? null,
+    };
+    // The durable turn job (`turn:<conv>`) is idempotent — ensuring it on
+    // every exit that can follow a post-persist crash is free, and it is the
+    // only thing standing between the claimed marker and a silently lost turn.
+    const ensureDurableTurnJob = async (conversationId: string) => {
+      await enqueueInboundTurnJob({
+        channel,
+        channelAccountId: ctx.channelAccountId ?? null,
+        conversationId,
+        conversationKey: userKey,
+        payload: turnPayload,
+      });
+    };
+
+    if (
+      await isMessageDuplicate(channel, platformMessageId, ctx.channelAccountId ?? null)
+    ) {
+      // Delivery already acked once — but if the original run crashed between
+      // persist and enqueue, this redelivery is the last chance to re-arm the
+      // durable job for the conversation it already wrote.
+      const record = await drizzleConversationIdentityRepository.find(
+        channel,
+        ctx.channelAccountId ?? null,
+        externalThreadId,
+        customerPhone
+      );
+      if (record) await ensureDurableTurnJob(record.id);
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
@@ -610,10 +672,6 @@ async function handleInboundMessage(
     // was persisted yet, so the provider's redelivery runs clean. The key is
     // account-scoped: the same phone on two provisioned accounts never
     // shares a bucket.
-    const userKey = accountScopedInboundKey(
-      ctx.channelAccountId,
-      customerPhone
-    );
     const rate = await checkRateLimit(
       `inbound:${channel}:${createHash("sha256").update(userKey).digest("hex").slice(0, 10)}`,
       {
@@ -623,16 +681,10 @@ async function handleInboundMessage(
       }
     );
     if (!rate.success) {
-      await releaseChannelDeliveryMarker(
-        event.provider,
-        event.deliveryId,
-        ctx.channelAccountId ?? null
-      );
+      await releaseChannelEventMarker(event, ctx.channelAccountId ?? null);
       deliveryClaimed = false;
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
-
-    const externalThreadId = canonicalExternalUserId(channel, customerPhone);
 
     // Media pipeline (A-01): resolve provider URLs → download (allowlisted,
     // size-capped, magic-byte checked) → transcribe / vision / extract. The
@@ -655,6 +707,7 @@ async function handleInboundMessage(
 
     const persisted = await persistCustomerInbound({
       channel,
+      channelAccountId: ctx.channelAccountId ?? null,
       externalThreadId,
       platformMessageId,
       senderRef: customerPhone,
@@ -683,11 +736,7 @@ async function handleInboundMessage(
     });
     if (!persisted.ok) {
       if (persisted.error === "persistence_failed") {
-        await releaseChannelDeliveryMarker(
-          event.provider,
-          event.deliveryId,
-          ctx.channelAccountId ?? null
-        );
+        await releaseChannelEventMarker(event, ctx.channelAccountId ?? null);
         deliveryClaimed = false;
         return NextResponse.json(
           { error: "transient-failure" },
@@ -703,10 +752,19 @@ async function handleInboundMessage(
       return NextResponse.json({ ok: true }, { status: 200 });
     }
     if (persisted.duplicate) {
+      // The row already exists — a live turn job may not (post-persist crash
+      // on the first delivery). Ensure it before acking.
+      await ensureDurableTurnJob(persisted.conversationId);
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
     const conversationId = persisted.conversationId;
+    const jobDedupKey = inboundTurnJobDedupKey(conversationId);
+
+    // Durable shadow FIRST (A-02 ordering): anything below that throws — lead
+    // linking, attachments, capture — previously left a persisted fact with
+    // no claimable turn and a marker that acks every redelivery.
+    await ensureDurableTurnJob(conversationId);
 
     // Best-effort contact linking — never fails the webhook.
     await ensureLeadIdentity({
@@ -730,25 +788,28 @@ async function handleInboundMessage(
       });
     }
 
-    // Marketing lead capture (W6): dedup by phone inside captureLeadIfNew;
-    // first attribution (account, ref:, campaign ids) is stamped once and
-    // never overwritten. A capture failure must not fail the webhook.
-    try {
-      const [conv] = await db
-        .select({ customerId: conversations.customerId })
-        .from(conversations)
-        .where(eq(conversations.id, conversationId))
-        .limit(1);
-      await captureLeadIfNew({
-        phone: customerPhone,
-        name: event.sender.name ?? null,
-        firstMessage: eventContent(event),
-        channel,
-        channelAccountId: ctx.channelAccountId ?? null,
-        contactId: conv?.customerId ?? null,
-      });
-    } catch (leadError) {
-      console.error("[pipeline] lead capture failed — continuing", leadError);
+    // Marketing lead capture (W6): phone-keyed only — telegram social ids
+    // must never land in `leads.phone`. `firstMessage` uses the media-derived
+    // content so `ref:` codes in captions/voice transcriptions attribute.
+    // A capture failure must not fail the webhook.
+    if (event.sender.phone) {
+      try {
+        const [conv] = await db
+          .select({ customerId: conversations.customerId })
+          .from(conversations)
+          .where(eq(conversations.id, conversationId))
+          .limit(1);
+        await captureLeadIfNew({
+          phone: event.sender.phone,
+          name: event.sender.name ?? null,
+          firstMessage: content,
+          channel,
+          channelAccountId: ctx.channelAccountId ?? null,
+          contactId: conv?.customerId ?? null,
+        });
+      } catch (leadError) {
+        console.error("[pipeline] lead capture failed — continuing", leadError);
+      }
     }
 
     // Operator-active gate: a human answered within the window — suppress the
@@ -780,28 +841,18 @@ async function handleInboundMessage(
         messageId: persisted.messageId,
         timestamp: Date.now(),
       });
-      // A-02: durable shadow of the in-process schedule — one live job per
-      // conversation, claimed by a drain pass if this process dies before the
-      // flush. Queue failures never break the webhook (see inbound-queue.ts).
-      const jobDedupKey = inboundTurnJobDedupKey(conversationId);
-      await enqueueInboundTurnJob({
-        channel,
-        channelAccountId: ctx.channelAccountId ?? null,
-        conversationId,
-        conversationKey: userKey,
-        payload: {
-          externalThreadId,
-          to: customerPhone,
-          providerConversationId: event.providerConversationId ?? null,
-        },
-      });
       const deadLettersBefore = (
         await BufferManager.getDeadLetters(channel, userKey)
       ).length;
       scheduleBufferProcessing(channel, userKey, async (messages) => {
-        await markInboundJobRunning(jobDedupKey);
+        // Claim before dispatching: when a drain pass (or another process's
+        // flush) already owns the live job, dispatching here would double the
+        // turn. False only means "owned elsewhere" — a dead/unmigrated queue
+        // still returns true so in-memory scheduling stays authoritative.
+        if (!(await markInboundJobRunning(jobDedupKey))) return;
         await turnDispatcher.dispatch({
           channel,
+          channelAccountId: ctx.channelAccountId ?? null,
           conversationId,
           externalThreadId,
           to: customerPhone,
@@ -830,11 +881,7 @@ async function handleInboundMessage(
       error
     );
     if (deliveryClaimed) {
-      await releaseChannelDeliveryMarker(
-        event.provider,
-        event.deliveryId,
-        ctx.channelAccountId ?? null
-      );
+      await releaseChannelEventMarker(event, ctx.channelAccountId ?? null);
     }
     if (classifyError(error) === "retryable-db") {
       return NextResponse.json({ error: "transient-failure" }, { status: 503 });
