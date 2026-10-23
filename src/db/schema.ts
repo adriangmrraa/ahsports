@@ -947,6 +947,53 @@ export const leadIdentities = pgTable(
   }),
 );
 
+/**
+ * Durable inbound-turn queue (gap A-02). Every accepted inbound message
+ * enqueues a job keyed `turn:<conversation_id>` alongside the in-process
+ * debounce flush: the durable copy is what survives a restart. A partial
+ * unique index keeps at most one LIVE (queued/running) job per conversation,
+ * so debounce coalescing holds at the durable layer too. `status='dead'` is
+ * the DLQ surfaced by /api/admin/dlq and /admin/agent/dlq.
+ *
+ * Un-migrated installs degrade to the in-memory buffer (the queue layer
+ * swallows 42P01) — matching the wave-1 migration-tolerance contract.
+ */
+export const agentInboundJobs = pgTable(
+  "agent_inbound_jobs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: text("tenant_id").notNull().default("default"),
+    dedupKey: text("dedup_key").notNull(),
+    channel: channel("channel").notNull(),
+    channelAccountId: varchar("channel_account_id", { length: 36 }).references(
+      (): AnyPgColumn => channelAccounts.id,
+      { onDelete: "set null" },
+    ),
+    conversationId: varchar("conversation_id", { length: 36 }).notNull().references(
+      (): AnyPgColumn => conversations.id,
+      { onDelete: "cascade" },
+    ),
+    /** Buffer key (account-scoped sender id) — ops correlation, never logged raw. */
+    conversationKey: text("conversation_key").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>(),
+    status: text("status").notNull().default("queued"),
+    attempts: integer("attempts").notNull().default(0),
+    runAfter: timestamp("run_after", { withTimezone: true }).notNull().defaultNow(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    liveDedupUq: uniqueIndex("agent_inbound_jobs_live_dedup_uq")
+      .on(t.dedupKey)
+      .where(sql`${t.status} in ('queued', 'running')`),
+    claimIdx: index("agent_inbound_jobs_claim_idx")
+      .on(t.runAfter)
+      .where(sql`${t.status} = 'queued'`),
+    statusCreatedIdx: index("agent_inbound_jobs_status_created_idx").on(t.status, t.createdAt),
+  }),
+);
+
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
   customer: one(contacts, { fields: [conversations.customerId], references: [contacts.id] }),
   organization: one(organizations, { fields: [conversations.organizationId], references: [organizations.id] }),
@@ -984,6 +1031,11 @@ export const channelAccountsRelations = relations(channelAccounts, ({ one, many 
 
 export const channelEventsRelations = relations(channelEvents, ({ one }) => ({
   account: one(channelAccounts, { fields: [channelEvents.channelAccountId], references: [channelAccounts.id] }),
+}));
+
+export const agentInboundJobsRelations = relations(agentInboundJobs, ({ one }) => ({
+  conversation: one(conversations, { fields: [agentInboundJobs.conversationId], references: [conversations.id] }),
+  account: one(channelAccounts, { fields: [agentInboundJobs.channelAccountId], references: [channelAccounts.id] }),
 }));
 
 export const leadIdentitiesRelations = relations(leadIdentities, ({ one }) => ({

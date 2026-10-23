@@ -8,6 +8,7 @@ import {
   Layers,
   LayoutDashboard,
   MessagesSquare,
+  OctagonAlert,
   Package,
   Plug,
   Receipt,
@@ -38,6 +39,7 @@ export type AdminNavIcon =
   | "payments"
   | "ai"
   | "messages"
+  | "dlq"
   | "channels"
   | "telegram"
   | "settings";
@@ -67,6 +69,7 @@ const navigation: Array<Omit<AdminNavItem, "badge">> = [
   { href: "/admin/pagos", label: "Pagos", icon: "payments" },
   { href: "/admin/agent", label: "Agente IA", icon: "ai" },
   { href: "/admin/agent/inbox", label: "Conversaciones", icon: "messages" },
+  { href: "/admin/agent/dlq", label: "Cola DLQ", icon: "dlq" },
   { href: "/admin/canales", label: "Canales", icon: "channels" },
   { href: "/admin/agent/telegram", label: "Telegram", icon: "telegram" },
   { href: "/admin/configuracion", label: "Configuración", icon: "settings" },
@@ -89,6 +92,7 @@ export const ADMIN_NAV_ICONS: Record<AdminNavIcon, LucideIcon> = {
   payments: Receipt,
   ai: Bot,
   messages: MessagesSquare,
+  dlq: OctagonAlert,
   channels: Plug,
   telegram: Send,
   settings: Settings,

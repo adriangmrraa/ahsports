@@ -43,6 +43,13 @@ import {
 } from "./conversation-identity";
 import { classifyError } from "./errors";
 import { accountScopedInboundKey } from "./inbound-keys";
+import {
+  drainInboundJobs,
+  enqueueInboundTurnJob,
+  inboundTurnJobDedupKey,
+  markInboundJobRunning,
+  settleInboundTurnJob,
+} from "./inbound-queue";
 import { ensureLeadIdentity } from "./lead-identity";
 import { messenger } from "./messenger";
 import { isProtocolArtifact } from "./protocol";
@@ -636,7 +643,26 @@ async function handleInboundMessage(
         messageId: persisted.messageId,
         timestamp: Date.now(),
       });
+      // A-02: durable shadow of the in-process schedule — one live job per
+      // conversation, claimed by a drain pass if this process dies before the
+      // flush. Queue failures never break the webhook (see inbound-queue.ts).
+      const jobDedupKey = inboundTurnJobDedupKey(conversationId);
+      await enqueueInboundTurnJob({
+        channel,
+        channelAccountId: ctx.channelAccountId ?? null,
+        conversationId,
+        conversationKey: userKey,
+        payload: {
+          externalThreadId,
+          to: customerPhone,
+          providerConversationId: event.providerConversationId ?? null,
+        },
+      });
+      const deadLettersBefore = (
+        await BufferManager.getDeadLetters(channel, userKey)
+      ).length;
       scheduleBufferProcessing(channel, userKey, async (messages) => {
+        await markInboundJobRunning(jobDedupKey);
         await turnDispatcher.dispatch({
           channel,
           conversationId,
@@ -646,9 +672,18 @@ async function handleInboundMessage(
           account: ctx.account,
           messages,
         });
-      }).catch((err) =>
-        console.error("[pipeline] buffer processing error:", err)
-      );
+      })
+        .then(() =>
+          settleInboundTurnJob({
+            dedupKey: jobDedupKey,
+            channel,
+            userKey,
+            deadLettersBefore,
+          })
+        )
+        .catch((err) =>
+          console.error("[pipeline] buffer processing error:", err)
+        );
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });
@@ -680,6 +715,9 @@ export async function handleNormalizedEvent(
   event: NormalizedInboundEvent,
   ctx: InboundContext
 ): Promise<NextResponse> {
+  // A-02: every inbound webhook is a self-healing opportunity — drain pending
+  // durable jobs (throttled per process; no-op when the queue table is absent).
+  triggerInboundQueueDrain();
   if (event.kind === "message.echo") {
     return handleEcho(event, ctx);
   }
@@ -717,4 +755,49 @@ export async function handleNormalizedEvent(
     );
     return NextResponse.json({ error: "persistence-failed" }, { status: 500 });
   }
+}
+
+// ─── Durable queue drain (A-02) ─────────────────────────────────────────────
+// Mechanism and lifecycle are documented in ./inbound-queue.ts. This module
+// owns orchestration only: the drain dispatches through the same
+// `turnDispatcher` seam the in-process buffer flush uses.
+
+/** Minimum spacing between webhook-triggered drain passes (per process). */
+const DRAIN_TRIGGER_MIN_INTERVAL_MS = 20_000;
+
+let drainInFlight = false;
+let lastDrainAt = 0;
+
+/**
+ * Rebuild-and-dispatch pass over due durable jobs. Invoked by the webhook
+ * trigger below, by `instrumentation.ts` register(), and by the DLQ retry
+ * action. A recent operator outbound suppresses the turn — same gate as the
+ * live path: the human owns the thread, the job is closed, not retried.
+ */
+export async function drainPendingInboundTurns(limit?: number): Promise<number> {
+  return drainInboundJobs(async (turn) => {
+    if (
+      await hasRecentOperatorMessage(turn.conversationId, OPERATOR_ACTIVE_WINDOW_MS)
+    ) {
+      return "skipped";
+    }
+    await turnDispatcher.dispatch(turn);
+    return "dispatched";
+  }, limit);
+}
+
+/**
+ * Throttled, fire-and-forget drain kick. Self-healing: every inbound webhook
+ * is an opportunity to recover orphaned work from a previous process.
+ */
+export function triggerInboundQueueDrain(): void {
+  const now = Date.now();
+  if (drainInFlight || now - lastDrainAt < DRAIN_TRIGGER_MIN_INTERVAL_MS) return;
+  drainInFlight = true;
+  lastDrainAt = now;
+  drainPendingInboundTurns()
+    .catch((err) => console.error("[pipeline] inbound queue drain failed:", err))
+    .finally(() => {
+      drainInFlight = false;
+    });
 }
