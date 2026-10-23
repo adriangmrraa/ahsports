@@ -271,7 +271,7 @@ export function ChannelsView({
 
             <Field
               label="Referencia de credenciales"
-              hint="env:PREFIX resuelve PREFIX_API_KEY/ACCESS_TOKEN/WEBHOOK_SECRET (env:ZERNIO_ → ZERNIO_API_KEY). 'agent_config' usa credenciales con ámbito (solo Telegram). Vacío = fail-closed."
+              hint="'agent_config' usa las credenciales cifradas del scope (cuenta → canal → global) configurables en /admin/agent — sin redeploy. env:PREFIX resuelve PREFIX_API_KEY/ACCESS_TOKEN/WEBHOOK_SECRET del entorno (env:ZERNIO_ → ZERNIO_API_KEY). Vacío = fail-closed."
             >
               <Input
                 value={credentialsRef}

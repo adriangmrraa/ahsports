@@ -11,6 +11,7 @@ import { decryptIfEncrypted } from "@/lib/crypto/secret-box";
 import {
   fetchLegacyGlobalAgentConfig,
   resolveAgentConfigStrict,
+  type AgentConfigRow,
 } from "./agent-config-scope";
 import { isRetryableDbError, isSchemaNotReady } from "./errors";
 import { phoneMatches } from "./phone";
@@ -100,32 +101,67 @@ export class MissingScopedCredentialError extends Error {
 }
 
 /**
+ * A-15 — per-provider credential columns on the scoped `agent_config` row.
+ * Dedicated `<provider>*Enc` fields win, then the generic
+ * `providerKeyEnc`/`webhookSecretEnc` (and `botTokenEnc` for telegram), then
+ * the provider env scope (`<PROVIDER>_API_KEY`/`ACCESS_TOKEN`/
+ * `WEBHOOK_SECRET`).
+ */
+const SCOPED_PROVIDER_FIELDS: Record<
+  string,
+  {
+    apiKey: "ycloudApiKeyEnc" | "kapsoApiKeyEnc" | "zernioApiKeyEnc";
+    webhookSecret:
+      | "ycloudWebhookSecretEnc"
+      | "kapsoWebhookSecretEnc"
+      | "zernioWebhookSecretEnc";
+  }
+> = {
+  ycloud: { apiKey: "ycloudApiKeyEnc", webhookSecret: "ycloudWebhookSecretEnc" },
+  kapso: { apiKey: "kapsoApiKeyEnc", webhookSecret: "kapsoWebhookSecretEnc" },
+  zernio: { apiKey: "zernioApiKeyEnc", webhookSecret: "zernioWebhookSecretEnc" },
+};
+
+function decryptColumn(value: unknown): string {
+  return typeof value === "string" ? decryptIfEncrypted(value) : "";
+}
+
+/** Last-resort env scope for `agent_config` refs with no scoped secrets. */
+function credentialsFromProviderEnvScope(
+  row: ChannelAccountRow
+): ChannelAccount["credentials"] | null {
+  const scope = row.provider.toUpperCase();
+  const apiKey = decryptIfEncrypted(process.env[`${scope}_API_KEY`] ?? "");
+  const accessToken = decryptIfEncrypted(
+    process.env[`${scope}_ACCESS_TOKEN`] ?? ""
+  );
+  if (!apiKey && !accessToken) return null;
+  return {
+    apiKey,
+    webhookSecret: decryptIfEncrypted(
+      process.env[`${scope}_WEBHOOK_SECRET`] ?? ""
+    ),
+    ...(accessToken ? { accessToken } : {}),
+  };
+}
+
+/**
  * `agent_config`/unset credentials resolve through the account's own scope so
- * a per-account credential is actually used. In AH Sports the only channel
- * credential that lives in `agent_config` is the Telegram bot token
- * (`bot_token_enc` + `webhook_secret_enc`, possibly on a scoped row): a
- * whatsapp/zernio row has no agent_config credential slot and must use an
- * `env:` ref. Materializing empty credentials here would bind the account
- * fine but break every send far from the cause — fail closed instead.
+ * a per-account credential is actually used (A-15): the scoped row's
+ * encrypted provider fields first (account → channel → global), the
+ * provider env scope second. Materializing empty credentials here would
+ * bind the account fine but break every send far from the cause — fail
+ * closed instead.
  */
 async function credentialsFromAgentConfig(
   row: ChannelAccountRow
 ): Promise<ChannelAccount["credentials"]> {
-  if (row.channel !== "telegram") {
-    throw new MissingScopedCredentialError(
-      row.id,
-      `channel '${row.channel}' cannot resolve credentialsRef 'agent_config' (telegram scoped credentials only)`
-    );
-  }
-
   const resolution = await resolveAgentConfigStrict({
     channel: row.channel,
     channelAccountId: row.id,
   });
 
-  let configRow:
-    | { botTokenEnc: string | null; webhookSecretEnc: string | null }
-    | undefined;
+  let configRow: AgentConfigRow | undefined;
   let source = "";
   switch (resolution.kind) {
     case "resolved":
@@ -134,32 +170,46 @@ async function credentialsFromAgentConfig(
       break;
     case "schema-not-ready":
       // Partial migration: scope columns missing — the legacy global row
-      // still carries the bot token, exactly like pre-migration installs.
+      // still carries the generic credential fields, exactly like
+      // pre-migration installs.
       configRow = await fetchLegacyGlobalAgentConfig();
       source = "global row (legacy read)";
       break;
     case "not-found":
-      throw new MissingScopedCredentialError(
-        row.id,
-        "no scoped/global agent_config row"
-      );
+      configRow = undefined;
+      break;
     case "db-error":
       // A transient DB error must not be silently replaced by other creds.
       throw resolution.error;
   }
 
-  const accessToken = decryptIfEncrypted(configRow?.botTokenEnc);
-  if (!accessToken) {
-    throw new MissingScopedCredentialError(
-      row.id,
-      `${source || "agent_config"} has no telegram bot token`
-    );
+  const scopedFields = SCOPED_PROVIDER_FIELDS[row.provider];
+  const scopedApiKey =
+    decryptColumn(scopedFields ? configRow?.[scopedFields.apiKey] : null) ||
+    decryptColumn(configRow?.providerKeyEnc);
+  const scopedSecret =
+    decryptColumn(scopedFields ? configRow?.[scopedFields.webhookSecret] : null) ||
+    decryptColumn(configRow?.webhookSecretEnc);
+  const scopedToken =
+    row.provider === "telegram" ? decryptColumn(configRow?.botTokenEnc) : "";
+
+  if (scopedApiKey || scopedToken) {
+    return {
+      apiKey: scopedApiKey,
+      webhookSecret: scopedSecret,
+      ...(scopedToken ? { accessToken: scopedToken } : {}),
+    };
   }
-  return {
-    apiKey: "",
-    webhookSecret: decryptIfEncrypted(configRow?.webhookSecretEnc),
-    accessToken,
-  };
+
+  // No scoped secrets → provider env scope (env:PREFIX stays the explicit
+  // form; this fallback keeps 'agent_config' rows working pre-migration).
+  const envScoped = credentialsFromProviderEnvScope(row);
+  if (envScoped) return envScoped;
+
+  throw new MissingScopedCredentialError(
+    row.id,
+    `${source || "agent_config"} has no usable '${row.provider}' credential`
+  );
 }
 
 async function resolveCredentials(
