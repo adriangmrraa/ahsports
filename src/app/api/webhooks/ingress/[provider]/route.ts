@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// Registers whatsappSalesDispatcher via setInboundTurnDispatcher() at import
+// time — the canonical ingress must run the same sales pipeline as the
+// dedicated WhatsApp webhook. The dispatcher itself routes non-whatsapp
+// channels to defaultInboundTurnDispatcher, so telegram stays unaffected.
+import "@/lib/whatsapp/register";
+
 import { getProvider, hasProvider } from "@/lib/messaging";
 import type { ProviderId } from "@/lib/messaging";
 import { ChannelAccountResolutionError } from "@/lib/messaging/accounts";
