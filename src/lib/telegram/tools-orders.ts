@@ -447,7 +447,28 @@ async function applyOrderStatus(order: OrderRow, target: AnyOrderStatus, reason:
     }
   });
 
+  await notifyCustomerStatusQuietly(order.id, target);
+
   return { ok: true as const, orderId: order.id, number: order.number, from: order.status, to: target };
+}
+
+/**
+ * A-04: best-effort customer notification after a committed status change.
+ * The operator action already succeeded, so a failed send is logged and never
+ * reported as a failed transition.
+ */
+async function notifyCustomerStatusQuietly(orderId: string, status: string): Promise<void> {
+  try {
+    const { notifyOrderStatusChange } = await import("@/lib/whatsapp/order-status-notify");
+    const notified = await notifyOrderStatusChange(orderId, status);
+    if (!notified.ok) {
+      console.warn(
+        `[telegram/orders] customer notification not sent for order ${orderId.slice(0, 8)}… (${notified.error})`,
+      );
+    }
+  } catch {
+    console.warn(`[telegram/orders] customer notification failed for order ${orderId.slice(0, 8)}…`);
+  }
 }
 
 const updateOrderStatusInner: AgentTool<z.infer<typeof updateOrderStatusInput>> = {
@@ -640,6 +661,9 @@ const registerPaymentInner: AgentTool<z.infer<typeof registerPaymentInput>> = {
           createdById: context.actorRef ?? null,
         }),
       );
+      if (result.statusChanged) {
+        await notifyCustomerStatusQuietly(order.id, result.status);
+      }
       const rows = await db.select({ amount: payments.amount, cancelled: payments.cancelled }).from(payments).where(eq(payments.orderId, order.id));
       const paidCents = sumActivePaymentsCents(rows);
       const balanceCents = toCents(order.totalQuoted) - paidCents;
@@ -680,6 +704,9 @@ const cancelPaymentInner: AgentTool<z.infer<typeof cancelPaymentInput>> = {
     try {
       const { withDbTransaction } = await import("@/lib/db-transaction");
       const result = await withDbTransaction(async (tx: DbTransaction) => cancelPaymentTx(tx, input.paymentId, context.actorRef ?? null));
+      if (result.statusChanged) {
+        await notifyCustomerStatusQuietly(result.orderId, result.status);
+      }
       return { ok: true as const, paymentId: input.paymentId, orderId: result.orderId, status: result.status, statusChanged: result.statusChanged };
     } catch (error) {
       if (error instanceof PaymentDomainError) {

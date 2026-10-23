@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { orders, productionEvents } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { stageSchema } from "@/lib/validators";
+import { notifyOrderStatusChange } from "@/lib/whatsapp/order-status-notify";
 
 const PRODUCTIVE = ["en_produccion", "corte", "confeccion", "estampado", "control", "entregado"] as const;
 
@@ -47,6 +48,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     note: `order:${parsed.data.stage}`,
     userId: user.id,
   });
+
+  // Customer notification is best-effort: the stage change already committed,
+  // and an unreachable customer must never fail the admin operation.
+  try {
+    const notified = await notifyOrderStatusChange(id, parsed.data.stage);
+    if (!notified.ok) {
+      console.warn(
+        `[orders/stage] customer notification not sent for order ${id.slice(0, 8)}… (${notified.error})`,
+      );
+    }
+  } catch {
+    console.warn(`[orders/stage] customer notification failed for order ${id.slice(0, 8)}…`);
+  }
 
   return NextResponse.json(updated);
 }
