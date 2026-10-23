@@ -1,7 +1,7 @@
 import { db } from "@/db/client";
 import { orders, pricingRules, settings } from "@/db/schema";
 import { desc, asc } from "drizzle-orm";
-import { requireUser } from "@/lib/auth";
+import { requireAgentAdmin } from "@/lib/agent/rbac";
 import { formatDateTime } from "@/lib/utils";
 import { Badge, Card, PageHeader } from "@/components/ui/Card";
 import { PricingRulesManager } from "./PricingRulesManager";
@@ -13,9 +13,12 @@ import { LinkButton } from "@/components/ui/Button";
  * F5-07 — /admin/configuracion: hub con todas las reglas.
  * 1) Reglas de precio (F2-17 integrado) · 2) Datos del taller (F5-08) ·
  * 3) Notificaciones (placeholder) · 4) Storage (info) · 5) Snapshots (info).
+ *
+ * R4-HIGH-3 — the hub exposes public business identity + contact routing, so
+ * it shares the admin/gerencia gate of `updateSetting`.
  */
 export default async function ConfiguracionPage() {
-  await requireUser();
+  await requireAgentAdmin();
   const [rules, settingRows, snapshots] = await Promise.all([
     db.select().from(pricingRules).orderBy(asc(pricingRules.name)).limit(500),
     db.select().from(settings),
