@@ -847,6 +847,12 @@ export const agentConfig = pgTable(
      * Per-scope provider credentials (A-15): a channel account whose
      * `credentialsRef` is `agent_config` resolves these encrypted fields
      * through account → channel → global scoping (env:PREFIX stays fallback).
+     *
+     * Each credential column resolves INDEPENDENTLY through that chain: the
+     * first scope holding a non-empty value for the field wins, so a scoped
+     * row created only to change `enabled` (or another flag) does not hide a
+     * parent scope's credential. Empty everywhere → provider env scope, then
+     * fail closed (`MissingScopedCredentialError`).
      */
     ycloudApiKeyEnc: text("ycloud_api_key_enc"),
     ycloudWebhookSecretEnc: text("ycloud_webhook_secret_enc"),
