@@ -26,11 +26,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
 
-  const code = signRefCode({
+  const minted = {
     campaignId: parsed.data.campaignId,
     adsetId: parsed.data.adsetId || "general",
     adId: parsed.data.adId || "general",
     timestamp: Date.now(),
+  };
+  const code = signRefCode(minted);
+
+  // Minting is stateless — this log is the only audit trail of who minted
+  // which code. Never log the signature itself, only the payload.
+  console.info("[admin/ref-code] minted", {
+    userId: auth.user.id,
+    campaignId: minted.campaignId,
+    adsetId: minted.adsetId,
+    adId: minted.adId,
+    timestamp: minted.timestamp,
   });
 
   return NextResponse.json({ code });

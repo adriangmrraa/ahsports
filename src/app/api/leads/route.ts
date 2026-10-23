@@ -10,6 +10,7 @@ import { checkRateLimit, clientIpFromRequest } from "@/lib/infra/rate-limit";
 import { normalizePhone } from "@/lib/messaging/phone";
 import { sendMetaConversion } from "@/lib/meta/conversions";
 
+import { corsHeaders } from "./cors";
 import { isUniqueViolation } from "./helpers";
 
 // ─── POST /api/leads ──────────────────────────────────────────────────────────
@@ -19,20 +20,37 @@ import { isUniqueViolation } from "./helpers";
 // limited per-IP inside its own bucket so public-API abuse can never consume
 // the inbound messaging allowance.
 
+/** Optional text: blank input is normalized to NULL so coalesce-healing works. */
+const optionalText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .optional()
+    .transform((value) => (value && value.trim().length > 0 ? value : null));
+
 const CreateLeadSchema = z.object({
   phone: z.string().min(1, "phone is required").max(30),
-  name: z.string().max(120).optional(),
+  name: optionalText(120),
   email: z.string().email().max(200).optional().or(z.literal("")),
   firstMessage: z.string().max(2000).optional(),
-  utmSource: z.string().max(120).optional(),
-  utmMedium: z.string().max(120).optional(),
-  utmCampaign: z.string().max(120).optional(),
-  utmContent: z.string().max(120).optional(),
-  platform: z.string().max(40).optional(),
-  adId: z.string().max(120).optional(),
-  campaignId: z.string().max(120).optional(),
-  adsetId: z.string().max(120).optional(),
+  utmSource: optionalText(120),
+  utmMedium: optionalText(120),
+  utmCampaign: optionalText(120),
+  utmContent: optionalText(120),
+  platform: optionalText(40),
+  adId: optionalText(120),
+  campaignId: optionalText(120),
+  adsetId: optionalText(120),
 });
+
+function json(req: NextRequest, body: unknown, status: number) {
+  return NextResponse.json(body, { status, headers: corsHeaders(req) });
+}
+
+/** CORS preflight — without this, cross-origin JSON POSTs die at 405. */
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,32 +58,33 @@ export async function POST(req: NextRequest) {
       bucket: "leads",
     });
     if (!rate.success) {
-      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+      return json(req, { error: "Too many requests" }, 429);
     }
 
     // Reject oversized bodies before parsing — the endpoint is public. The
     // header is only a fast path: content-length is client-supplied and may
     // be absent (chunked), so the actual body is measured too.
     if (Number(req.headers.get("content-length")) > 8000) {
-      return NextResponse.json({ error: "Payload demasiado grande" }, { status: 413 });
+      return json(req, { error: "Payload demasiado grande" }, 413);
     }
     const rawBody = await req.text();
     if (Buffer.byteLength(rawBody, "utf8") > 8000) {
-      return NextResponse.json({ error: "Payload demasiado grande" }, { status: 413 });
+      return json(req, { error: "Payload demasiado grande" }, 413);
     }
 
     let body: unknown;
     try {
       body = JSON.parse(rawBody);
     } catch {
-      return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+      return json(req, { error: "JSON inválido" }, 400);
     }
     const parsed = CreateLeadSchema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
+      return json(
+        req,
         { error: "Validation error", details: parsed.error.flatten() },
-        { status: 400 }
+        400
       );
     }
 
@@ -75,19 +94,24 @@ export async function POST(req: NextRequest) {
     // normalization or empty phones slip past zod's min(1) and collide on
     // leads.phone's unique index (second "" → unhandled 23505).
     if (!/^\d{7,15}$/.test(data.phone)) {
-      return NextResponse.json({ error: "Teléfono inválido" }, { status: 400 });
+      return json(req, { error: "Teléfono inválido" }, 400);
     }
 
     const refCode = data.firstMessage ? extractRefCode(data.firstMessage) : null;
 
     // Attribution resolution — fail-open: errors must never block lead
-    // creation. Signed codes that fail HMAC verification keep the raw refCode
-    // but drop the ad ids they carried.
+    // creation. Only HMAC-verified ref codes yield ad ids; unsigned/tampered
+    // codes keep the raw refCode but drop the ids they carried.
     const refAttribution = resolveAttributionFromRef(refCode);
 
-    const resolvedCampaignId = refAttribution?.campaignId ?? data.campaignId ?? null;
-    const resolvedAdsetId = refAttribution?.adsetId ?? data.adsetId ?? null;
-    const resolvedAdId = refAttribution?.adId ?? data.adId ?? null;
+    // Trust levels: ids from a verified ref are signed; ids from the request
+    // body are unverified claims (Meta lead forms do send them). Rows carry
+    // both today; with no `attribution_source` column (code-only wave, no
+    // migration) analytics can tell them apart by `refCode` presence until
+    // that discriminator lands.
+    const resolvedCampaignId = refAttribution?.campaignId ?? data.campaignId;
+    const resolvedAdsetId = refAttribution?.adsetId ?? data.adsetId;
+    const resolvedAdId = refAttribution?.adId ?? data.adId;
     const resolvedPlatform = refAttribution ? "meta" : data.platform ?? (refCode ? "unknown" : "organic");
     const resolvedUtmSource = data.utmSource ?? (refAttribution ? "meta" : null);
 
@@ -97,14 +121,14 @@ export async function POST(req: NextRequest) {
         .insert(leads)
         .values({
           phone: data.phone,
-          name: data.name ?? null,
+          name: data.name,
           email: data.email || null,
           firstMessage: data.firstMessage ?? null,
           refCode: refCode ?? null,
           utmSource: resolvedUtmSource,
-          utmMedium: data.utmMedium ?? null,
-          utmCampaign: data.utmCampaign ?? null,
-          utmContent: data.utmContent ?? null,
+          utmMedium: data.utmMedium,
+          utmCampaign: data.utmCampaign,
+          utmContent: data.utmContent,
           platform: resolvedPlatform,
           campaignId: resolvedCampaignId,
           adsetId: resolvedAdsetId,
@@ -113,41 +137,34 @@ export async function POST(req: NextRequest) {
         .returning();
     } catch (insertErr) {
       // A repeat signup (or a retry) hits leads.phone's unique index. That is
-      // a conflict, not a server fault: return the existing lead so the
-      // caller can reconcile instead of a 500.
+      // a conflict, not a server fault: return only the existing id so the
+      // caller can reconcile without leaking the lead's status/PII.
       if (!isUniqueViolation(insertErr)) throw insertErr;
       const [existing] = await db
-        .select({
-          id: leads.id,
-          phone: leads.phone,
-          name: leads.name,
-          status: leads.status,
-          createdAt: leads.createdAt,
-        })
+        .select({ id: leads.id })
         .from(leads)
         .where(eq(leads.phone, data.phone))
         .limit(1);
-      return NextResponse.json(
+      return json(
+        req,
         { error: "El teléfono ya está registrado", lead: existing ?? null },
-        { status: 409 }
+        409
       );
     }
 
     // Server-side conversion signal (H-04): deterministic event_id dedups
     // against a pixel-side Lead event for the same signup. Fire-and-forget —
-    // a CAPI failure must not fail lead capture.
-    const capi = await sendMetaConversion({
+    // a slow/unavailable Meta must not add latency to public lead capture.
+    // The sender logs its own failures without PII.
+    void sendMetaConversion({
       eventName: "Lead",
       eventId: `lead_${lead.id}`,
       userData: { phone: data.phone, email: data.email || null },
     });
-    if (!capi.ok && capi.reason !== "not_configured") {
-      console.warn("[POST /api/leads] meta capi lead event failed:", capi.reason);
-    }
 
-    return NextResponse.json(lead, { status: 201 });
+    return json(req, lead, 201);
   } catch (err) {
     console.error("[POST /api/leads]", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return json(req, { error: "Internal server error" }, 500);
   }
 }
