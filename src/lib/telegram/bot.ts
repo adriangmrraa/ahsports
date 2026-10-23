@@ -5,6 +5,10 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { chatMessages } from "@/db/schema";
 import { persistCanonicalMessage, type IntakeOutcome } from "@/lib/channels/intake";
+import {
+  AgentConfigResolutionError,
+  resolveAgentConfigStrict,
+} from "@/lib/channels/agent-config-scope";
 import { defaultDeliveryState, type NormalizedMessage } from "@/lib/channels/types";
 import type { NormalizedTelegramInbound } from "@/lib/channels/telegram";
 import { handleOperatorCommand } from "@/lib/agents/commands";
@@ -136,6 +140,20 @@ export async function handleTelegramOperatorUpdate(inbound: NormalizedTelegramIn
   // Deterministic slash commands always answer without the model.
   if (SLASH_COMMAND.test(text)) {
     return persistOutboundReply(persisted, inbound, handleOperatorCommand({ text, identity: identity as AuthorizedOperator }));
+  }
+
+  // Kill switch (A-15): agent_config.enabled=false silences the AI loop on
+  // telegram too — deterministic denials/CONFIRM/slash above stay alive so
+  // an operator can still release pending actions while the agent is off.
+  const configResolution = await resolveAgentConfigStrict({
+    channel: "telegram",
+    channelAccountId: message.channelAccountId ?? null,
+  });
+  if (configResolution.kind === "db-error") {
+    throw new AgentConfigResolutionError(configResolution);
+  }
+  if (configResolution.kind === "resolved" && configResolution.row.enabled === false) {
+    return { persisted, replyText: null, replyMessageId: null };
   }
 
   try {
