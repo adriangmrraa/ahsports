@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { agentMemories, contacts, leadIdentities, orders } from "@/db/schema";
@@ -194,16 +194,25 @@ const broadcastInner: AgentTool<BroadcastInput> = {
   effect: "draft",
   inputSchema: broadcastInput,
   async handler(input, context) {
+    const now = new Date();
     const recipients = await resolveRecipients(input);
     const phones = recipients.map((r) => r.phone);
     const hash = broadcastHash(input, phones);
 
     if (input.dryRun !== false) {
-      const value = { audience: input.audience, query: input.query ?? null, count: recipients.length, at: new Date().toISOString() };
+      const value = { audience: input.audience, query: input.query ?? null, count: recipients.length, at: now.toISOString() };
       await db
         .insert(agentMemories)
-        .values({ scope: "global", key: `broadcast:dryrun:${hash}`, value, expiresAt: new Date(Date.now() + BROADCAST_DRYRUN_TTL_MS) })
-        .onConflictDoUpdate({ target: [agentMemories.scope, agentMemories.key], set: { value } });
+        .values({
+          scope: "global",
+          key: `broadcast:dryrun:${hash}`,
+          value,
+          expiresAt: new Date(now.getTime() + BROADCAST_DRYRUN_TTL_MS),
+        })
+        .onConflictDoUpdate({
+          target: [agentMemories.scope, agentMemories.key],
+          set: { value, expiresAt: new Date(now.getTime() + BROADCAST_DRYRUN_TTL_MS) },
+        });
       return {
         ok: true as const,
         dryRun: true as const,
@@ -218,7 +227,13 @@ const broadcastInner: AgentTool<BroadcastInput> = {
     const [dryRunMarker] = await db
       .select({ id: agentMemories.id })
       .from(agentMemories)
-      .where(and(eq(agentMemories.scope, "global"), eq(agentMemories.key, `broadcast:dryrun:${hash}`)))
+      .where(
+        and(
+          eq(agentMemories.scope, "global"),
+          eq(agentMemories.key, `broadcast:dryrun:${hash}`),
+          or(isNull(agentMemories.expiresAt), gt(agentMemories.expiresAt, now)),
+        ),
+      )
       .limit(1);
     if (!dryRunMarker) {
       return {
@@ -231,7 +246,13 @@ const broadcastInner: AgentTool<BroadcastInput> = {
     const [lastSend] = await db
       .select({ id: agentMemories.id, value: agentMemories.value })
       .from(agentMemories)
-      .where(and(eq(agentMemories.scope, "global"), eq(agentMemories.key, `broadcast:last:${hash}`)))
+      .where(
+        and(
+          eq(agentMemories.scope, "global"),
+          eq(agentMemories.key, `broadcast:last:${hash}`),
+          or(isNull(agentMemories.expiresAt), gt(agentMemories.expiresAt, now)),
+        ),
+      )
       .limit(1);
     if (lastSend) {
       return { ok: false as const, error: "duplicate_broadcast" as const, message: "Ya se envió un broadcast idéntico en las últimas 24h." };
@@ -252,8 +273,16 @@ const broadcastInner: AgentTool<BroadcastInput> = {
     const value = { sent, failed, at: new Date().toISOString(), by: context.actorRef ?? null };
     await db
       .insert(agentMemories)
-      .values({ scope: "global", key: `broadcast:last:${hash}`, value, expiresAt: new Date(Date.now() + BROADCAST_DEDUPE_TTL_MS) })
-      .onConflictDoUpdate({ target: [agentMemories.scope, agentMemories.key], set: { value } });
+      .values({
+        scope: "global",
+        key: `broadcast:last:${hash}`,
+        value,
+        expiresAt: new Date(Date.now() + BROADCAST_DEDUPE_TTL_MS),
+      })
+      .onConflictDoUpdate({
+        target: [agentMemories.scope, agentMemories.key],
+        set: { value, expiresAt: new Date(Date.now() + BROADCAST_DEDUPE_TTL_MS) },
+      });
 
     return { ok: true as const, dryRun: false as const, attempted: recipients.length, sent, failed, errors };
   },
@@ -318,12 +347,19 @@ const setContactOptOutInner: AgentTool<z.infer<typeof optOutInput>> = {
 
     let contactId = identity?.contactId ?? null;
     if (!contactId) {
-      const [byPhone] = await db
+      const matches = await db
         .select({ id: contacts.id })
         .from(contacts)
-        .where(sql`${contacts.phone} ilike ${"%" + digits + "%"}`)
+        .where(sql`regexp_replace(${contacts.phone}, '[^0-9]', '', 'g') = ${digits}`)
         .limit(2);
-      if (byPhone) contactId = byPhone.id;
+      if (matches.length > 1) {
+        return {
+          ok: false as const,
+          error: "ambiguous" as const,
+          message: "Hay más de un contacto con ese teléfono. Resolvé la identidad por lead_identities antes de cambiar el opt-out.",
+        };
+      }
+      contactId = matches[0]?.id ?? null;
     }
     if (!contactId) {
       return { ok: false as const, error: "contact_not_found", message: "No encontré un contacto con ese teléfono." };
