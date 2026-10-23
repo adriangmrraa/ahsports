@@ -18,6 +18,11 @@ import {
 } from "@/lib/channels/router";
 import type { NormalizedMessage } from "@/lib/channels/types";
 import { checkRateLimit } from "@/lib/infra/rate-limit";
+import {
+  persistInboundMediaAttachments,
+  processInboundMedia,
+  type ProcessedInboundMedia,
+} from "@/lib/media/inbound";
 
 import { channelAccountRowId, matchSenderToChannelAccount } from "./accounts";
 import {
@@ -54,9 +59,12 @@ import type {
  * Handles normalized events on channels the AH agent layer can consume
  * (`whatsapp`, `telegram` — the persistable channel enum). Everything SocialCRM
  * bolted on top and AH lacks is intentionally NOT here: the session boundary
- * machine, seller/delivery routing, `agent_config` credentials, media download
- * + transcription (wave 2), order redirects, and `humanOverrideUntil` (no such
- * column). The transports kept, unchanged in spirit:
+ * machine, seller/delivery routing, `agent_config` credentials, order
+ * redirects, and `humanOverrideUntil` (no such column). Inbound media IS
+ * wired (A-01): `mediaRefs` resolve through the provider's `resolveMedia`,
+ * download via the allowlisted downloader, and feed the dispatcher
+ * transcribed/described/extracted text instead of `[type]` placeholders.
+ * The transports kept, unchanged in spirit:
  *
  * - echo attribution: the business-side sender must resolve to a provisioned
  *   account before an echo may touch a conversation (no foreign echo binds);
@@ -102,7 +110,7 @@ const INBOUND_RATE_LIMIT = 30;
  * intake; this pre-check skips the transaction entirely on replay.
  */
 export async function isMessageDuplicate(
-  channel: "whatsapp" | "telegram",
+  channel: ChannelKind,
   platformMessageId: string
 ): Promise<boolean> {
   if (!platformMessageId) return false;
@@ -512,13 +520,33 @@ async function handleInboundMessage(
     }
 
     const externalThreadId = canonicalExternalUserId(channel, customerPhone);
+
+    // Media pipeline (A-01): resolve provider URLs → download (allowlisted,
+    // size-capped, magic-byte checked) → transcribe / vision / extract. The
+    // derived text becomes the content the dispatcher sees. Any failure is
+    // non-fatal — the event falls back to the `[type]` placeholder.
+    let media: ProcessedInboundMedia | undefined;
+    try {
+      media = await processInboundMedia(event, {
+        channel,
+        account: ctx.account,
+        scope: externalThreadId,
+      });
+    } catch (error) {
+      console.error(
+        `[pipeline] media processing failed for ${event.provider} ${event.deliveryId} — continuing with placeholder`,
+        error
+      );
+    }
+    const content = media?.content ?? eventContent(event);
+
     const persisted = await persistCustomerInbound({
       channel,
       externalThreadId,
       platformMessageId,
       senderRef: customerPhone,
       contentType: mapContentType(event.type),
-      content: eventContent(event),
+      content,
       rawPayload: {
         provider: event.provider,
         deliveryId: event.deliveryId,
@@ -526,6 +554,17 @@ async function handleInboundMessage(
         providerConversationId: event.providerConversationId,
         providerThreadId: event.providerThreadId,
         mediaRefs: event.mediaRefs,
+        ...(media?.items.length
+          ? {
+              media: media.items.map((item) => ({
+                url: item.url,
+                fileName: item.fileName,
+                mimeType: item.mimeType,
+                sizeBytes: item.sizeBytes,
+                documentType: item.documentType,
+              })),
+            }
+          : {}),
         raw: event.raw,
       },
     });
@@ -567,6 +606,17 @@ async function handleInboundMessage(
       conversationId,
     });
 
+    // Media files land in the org's attachment library once the
+    // conversation↔contact link exists. Best-effort — a missing org or a
+    // failed insert never affects the turn.
+    if (media?.items.length) {
+      await persistInboundMediaAttachments({
+        conversationId,
+        items: media.items,
+        source: `${event.provider}:${event.deliveryId}`,
+      });
+    }
+
     // Operator-active gate: a human answered within the window — suppress the
     // AI turn. The message stays persisted; only the reply is skipped.
     if (await hasRecentOperatorMessage(conversationId, OPERATOR_ACTIVE_WINDOW_MS)) {
@@ -577,8 +627,9 @@ async function handleInboundMessage(
     }
 
     // Enqueue + schedule the debounced turn. Fire-and-forget: the webhook
-    // acks now; the dispatcher runs after the quiet window.
-    const content = eventContent(event);
+    // acks now; the dispatcher runs after the quiet window. The buffered
+    // content is the SAME string persisted above — media-derived text
+    // included — so the dispatcher sees what the transcript stores.
     if (!(await BufferManager.isContentDuplicate(channel, userKey, content))) {
       await BufferManager.enqueue(channel, userKey, {
         content,

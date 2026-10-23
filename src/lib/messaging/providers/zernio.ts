@@ -66,6 +66,20 @@ import type {
 } from "../types";
 
 const API_BASE = "https://zernio.com/api/v1";
+/**
+ * Media download allowlist for zernio-resolved media only — the analog of
+ * KAPSO_MEDIA_DOMAINS (C12). `zernio.com` serves the Bearer-authenticated
+ * re-mint and `/v1/whatsapp/media/{id}` endpoints; re-minted links point at
+ * Meta's CDN (lookaside.fbsbx.com, *.cdninstagram.com, *.fbcdn.net). Passed
+ * to the downloader as per-call extra domains — never added to the global
+ * allowlist.
+ */
+export const ZERNIO_MEDIA_DOMAINS = [
+  "zernio.com",
+  "lookaside.fbsbx.com",
+  "cdninstagram.com",
+  "fbcdn.net",
+];
 const SIGNATURE_HEADERS = ["x-zernio-signature", "x-late-signature"];
 const EVENT_ID_HEADERS = ["x-zernio-event-id", "x-late-event-id"];
 const EVENT_NAME_HEADER = "x-zernio-event";

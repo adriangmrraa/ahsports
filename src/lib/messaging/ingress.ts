@@ -48,10 +48,9 @@ import type {
  *   (everything except whatsapp/telegram, plus non-message kinds) get
  *   durable persistence: a channel_events-equivalent marker in
  *   `idempotency_keys` always; a canonical conversation+message through
- *   `persistCanonicalMessage` when the channel is in the persistence enum
- *   (whatsapp|telegram today). Channels outside the enum get marker + ack —
- *   the schema wave that adds instagram/facebook rows flips them on without
- *   touching this flow.
+ *   `persistCanonicalMessage` when the channel is in the persistence set
+ *   (whatsapp|telegram|instagram|facebook). Channels outside the set
+ *   (sms/reddit — no verified provider normalization yet) get marker + ack.
  * - The delivery marker claim → persist → release-on-failure protocol is
  *   unchanged: claim before any write so concurrent redeliveries can't both
  *   pass the dedup read, release on failure so retries aren't permanently
@@ -357,9 +356,16 @@ const PASSIVE_PERSISTED_KINDS = new Set<NormalizedInboundEvent["kind"]>([
   "comment.received",
 ]);
 
-/** Channels in the persistence enum — others get marker + ack until the
- *  schema extends `channel` past telegram|whatsapp. */
-const PERSISTABLE_CHANNELS = new Set<ChannelKind>(["whatsapp", "telegram"]);
+/** Channels that persist a canonical conversation + message passively.
+ *  instagram/facebook events resolve conversations through the same
+ *  channel-agnostic intake; sms/reddit stay marker-only until a provider
+ *  emits them with verifiable normalization. */
+const PERSISTABLE_CHANNELS = new Set<ChannelKind>([
+  "whatsapp",
+  "telegram",
+  "instagram",
+  "facebook",
+]);
 
 /**
  * Persisted sender kind for passive message kinds. Echoes are
@@ -429,16 +435,15 @@ export async function handlePassiveChannelEvent(
     }
     deliveryClaimed = marker.kind === "persisted";
 
-    // Channels outside the persistence enum keep only the durable marker —
-    // the schema wave that adds them flips the set above, no flow changes.
+    // Channels outside the persistence set keep only the durable marker.
     if (!PERSISTABLE_CHANNELS.has(ctx.channel)) {
       logAckedWithoutPersistence(
         event,
-        `channel '${ctx.channel}' not in persistence enum`
+        `channel '${ctx.channel}' not in persistence set`
       );
       return NextResponse.json({ ok: true }, { status: 200 });
     }
-    const channel = ctx.channel as "whatsapp" | "telegram";
+    const channel = ctx.channel;
 
     const platformMessageId = event.platformMessageId;
     if (!platformMessageId) {
