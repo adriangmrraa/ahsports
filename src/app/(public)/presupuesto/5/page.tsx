@@ -5,6 +5,10 @@ import { eq } from "drizzle-orm";
 import { getBusinessInfo } from "@/lib/business";
 import { Step5Form } from "./Step5Form";
 import { StepIndicator } from "../_components/StepIndicator";
+import {
+  WizardRateLimitNotice,
+  wizardRateLimitReached,
+} from "../_components/rate-limit";
 
 export const metadata = { title: "Presupuesto · Paso 5 · AH Sports" };
 
@@ -28,6 +32,8 @@ export default async function PresupuestoStep5({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
+
   const sp = await searchParams;
   if (!sp.productId || !sp.lineItems) redirect("/presupuesto/2");
   if (!sp.uploadSessionId || !sp.uploadSessionSecret) redirect("/presupuesto/4");

@@ -9,13 +9,13 @@ import { Button } from "@/components/ui/Button";
  * F4-08 — Paso 1: tipo de cliente + datos del contacto.
  * Estado en search params de la URL; el continue arma /presupuesto/2?...params
  */
-export function Step1Form({ existing }: { existing?: { name?: string; email?: string; phone?: string } | null }) {
+export function Step1Form({ initialType = "new" }: { initialType?: "new" | "returning" }) {
   const router = useRouter();
-  const [type, setType] = useState<"new" | "returning">("new");
+  const [type, setType] = useState<"new" | "returning">(initialType);
   const [form, setForm] = useState({
-    name: existing?.name ?? "",
-    email: existing?.email ?? "",
-    phone: existing?.phone ?? "",
+    name: "",
+    email: "",
+    phone: "",
     organizationName: "",
     notes: "",
   });

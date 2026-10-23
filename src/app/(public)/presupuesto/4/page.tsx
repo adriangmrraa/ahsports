@@ -1,5 +1,9 @@
 import { Step4Form } from "./Step4Form";
 import { StepIndicator } from "../_components/StepIndicator";
+import {
+  WizardRateLimitNotice,
+  wizardRateLimitReached,
+} from "../_components/rate-limit";
 
 export const metadata = { title: "Presupuesto · Paso 4 · AH Sports" };
 
@@ -12,6 +16,8 @@ export default async function PresupuestoStep4({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
+
   const sp = await searchParams;
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">

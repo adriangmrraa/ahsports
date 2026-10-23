@@ -4,6 +4,10 @@ import { products } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Step3Form } from "./Step3Form";
 import { StepIndicator } from "../_components/StepIndicator";
+import {
+  WizardRateLimitNotice,
+  wizardRateLimitReached,
+} from "../_components/rate-limit";
 
 export const metadata = { title: "Presupuesto · Paso 3 · AH Sports" };
 
@@ -28,6 +32,8 @@ export default async function PresupuestoStep3({
 }: {
   searchParams: Promise<{ productId?: string; sizeQuantities?: string; total?: string }>;
 }) {
+  if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
+
   const sp = await searchParams;
   if (!sp.productId) redirect("/presupuesto/2");
 
