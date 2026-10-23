@@ -1,9 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { products } from "@/db/schema";
-import { requireUser } from "@/lib/auth";
+import { getCurrentUser, requireUser } from "@/lib/auth";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/infra/rate-limit";
 import { productSchema, isUniqueViolation } from "@/lib/validators";
 import { replaceBundleItems, validateProductClassification, validateProductStructure } from "@/lib/product-domain";
+
+const PRODUCTS_RATE_LIMIT = 30;
+const PRODUCTS_RATE_BUCKET = 300;
+
+/**
+ * B-10 — GET /api/products: public, rate-limited product feed.
+ * Anonymous callers get ACTIVE products only with the same field set the
+ * public catalog renders — no cost/internals. `?all=1` (inactive included)
+ * requires an authenticated session and keeps the admin field set.
+ */
+export async function GET(req: NextRequest) {
+  const rate = await checkRateLimit(`pub:products:${clientIpFromRequest(req)}`, {
+    bucket: "pub:products",
+    limit: PRODUCTS_RATE_LIMIT,
+    bucketLimit: PRODUCTS_RATE_BUCKET,
+  });
+  if (!rate.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
+  const includeInactive = req.nextUrl.searchParams.get("all") === "1";
+  if (includeInactive && !(await getCurrentUser())) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const rows = await db
+    .select()
+    .from(products)
+    .where(includeInactive ? undefined : eq(products.active, true))
+    .orderBy(asc(products.name))
+    .limit(200);
+
+  return NextResponse.json(
+    rows.map((p) => ({
+      id: p.id,
+      sku: p.sku,
+      name: p.name,
+      description: p.description,
+      imageUrl: p.imageUrl,
+      basePrice: includeInactive ? p.basePrice : null,
+      minOrder: p.minOrder,
+      productKind: p.productKind,
+      garmentType: p.garmentType,
+      zones: p.zones,
+      active: p.active,
+    })),
+  );
+}
 
 export async function POST(req: NextRequest) {
   await requireUser();
