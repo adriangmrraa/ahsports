@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { settings } from "@/db/schema";
-import { requireUser } from "@/lib/auth";
+import { requireAgentAdmin } from "@/lib/agent/rbac";
 import { z } from "zod";
 
 const updateSettingSchema = z
@@ -45,9 +45,13 @@ export const BUSINESS_SETTING_KEYS = [
  * F5-08 — Upsert en `settings` (INSERT ... ON CONFLICT DO UPDATE).
  * Solo claves conocidas o prefijos `taller_`/`business.` para evitar
  * polución arbitraria.
+ *
+ * R4-HIGH-3 — admin/gerencia only: `business.whatsapp_phone` feeds the public
+ * wa.me CTAs, so an operario must never be able to repoint the contact
+ * channel or rewrite the public identity.
  */
 export async function updateSetting(input: unknown) {
-  await requireUser();
+  await requireAgentAdmin();
   const parsed = updateSettingSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: "Datos inválidos", issues: parsed.error.flatten() };

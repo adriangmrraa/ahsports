@@ -18,7 +18,9 @@ export const dynamic = "force-dynamic";
  * overlapping invocations answer `already_running` without double work.
  *
  * Only aggregate counts are returned — never conversation ids or message
- * content — and failures are logged without request details.
+ * content — and failures are logged without request details. A run that
+ * scanned nothing (DB down, broken scan) answers `status: "failed"` with 500
+ * so the scheduler can distinguish it from an empty successful run.
  */
 
 type ReconcileMode = "scan" | "sweep";
@@ -54,16 +56,21 @@ export async function POST(request: Request): Promise<NextResponse> {
       lookbackHours: defaults.lookbackHours,
       minNewMessages: defaults.minNewMessages,
     });
-    return NextResponse.json({
-      ok: true,
-      mode,
-      status: summary.status,
-      scanned: summary.scanned,
-      candidatesCreated: summary.candidatesCreated,
-      errors: summary.errors,
-      ranAt: summary.ranAt,
-      correlationId: summary.correlationId,
-    });
+    const failed = summary.status === "failed";
+    if (failed) console.error("[cron/reconcile] run failed");
+    return NextResponse.json(
+      {
+        ok: !failed,
+        mode,
+        status: summary.status,
+        scanned: summary.scanned,
+        candidatesCreated: summary.candidatesCreated,
+        errors: summary.errors,
+        ranAt: summary.ranAt,
+        correlationId: summary.correlationId,
+      },
+      { status: failed ? 500 : 200 },
+    );
   } catch {
     // Never log request details (query/IP) or reconciliation content here.
     console.error("[cron/reconcile] run failed");

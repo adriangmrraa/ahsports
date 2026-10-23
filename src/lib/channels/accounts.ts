@@ -10,7 +10,8 @@ import { decryptIfEncrypted } from "@/lib/crypto/secret-box";
 
 import {
   fetchLegacyGlobalAgentConfig,
-  resolveAgentConfigStrict,
+  firstScopedValue,
+  resolveAgentConfigChain,
   type AgentConfigRow,
 } from "./agent-config-scope";
 import { isRetryableDbError, isSchemaNotReady } from "./errors";
@@ -106,6 +107,10 @@ export class MissingScopedCredentialError extends Error {
  * `providerKeyEnc`/`webhookSecretEnc` (and `botTokenEnc` for telegram), then
  * the provider env scope (`<PROVIDER>_API_KEY`/`ACCESS_TOKEN`/
  * `WEBHOOK_SECRET`).
+ *
+ * R4-MED-2 — both the dedicated and the generic lookups walk the whole scope
+ * chain per FIELD (account → channel → global): an account row that only
+ * carries `enabled` no longer hides a parent scope's credential.
  */
 const SCOPED_PROVIDER_FIELDS: Record<
   string,
@@ -147,36 +152,40 @@ function credentialsFromProviderEnvScope(
 
 /**
  * `agent_config`/unset credentials resolve through the account's own scope so
- * a per-account credential is actually used (A-15): the scoped row's
- * encrypted provider fields first (account → channel → global), the
- * provider env scope second. Materializing empty credentials here would
- * bind the account fine but break every send far from the cause — fail
+ * a per-account credential is actually used (A-15): the scoped chain's
+ * encrypted provider fields first, resolved per FIELD (account → channel →
+ * global), the provider env scope second. Materializing empty credentials here
+ * would bind the account fine but break every send far from the cause — fail
  * closed instead.
  */
 async function credentialsFromAgentConfig(
   row: ChannelAccountRow
 ): Promise<ChannelAccount["credentials"]> {
-  const resolution = await resolveAgentConfigStrict({
+  const resolution = await resolveAgentConfigChain({
     channel: row.channel,
     channelAccountId: row.id,
   });
 
-  let configRow: AgentConfigRow | undefined;
+  let configRows: AgentConfigRow[] = [];
   let source = "";
   switch (resolution.kind) {
     case "resolved":
-      configRow = resolution.row;
-      source = `${resolution.source} row #${resolution.id}`;
+      configRows = resolution.rows;
+      source = resolution.sources
+        .map((entry, index) => `${entry} row #${resolution.rows[index].id}`)
+        .join(" -> ");
       break;
-    case "schema-not-ready":
+    case "schema-not-ready": {
       // Partial migration: scope columns missing — the legacy global row
       // still carries the generic credential fields, exactly like
       // pre-migration installs.
-      configRow = await fetchLegacyGlobalAgentConfig();
+      const legacy = await fetchLegacyGlobalAgentConfig();
+      configRows = legacy ? [legacy] : [];
       source = "global row (legacy read)";
       break;
+    }
     case "not-found":
-      configRow = undefined;
+      configRows = [];
       break;
     case "db-error":
       // A transient DB error must not be silently replaced by other creds.
@@ -185,13 +194,17 @@ async function credentialsFromAgentConfig(
 
   const scopedFields = SCOPED_PROVIDER_FIELDS[row.provider];
   const scopedApiKey =
-    decryptColumn(scopedFields ? configRow?.[scopedFields.apiKey] : null) ||
-    decryptColumn(configRow?.providerKeyEnc);
+    firstScopedValue(configRows, (config) =>
+      decryptColumn(scopedFields ? config[scopedFields.apiKey] : null)
+    ) || firstScopedValue(configRows, (config) => decryptColumn(config.providerKeyEnc));
   const scopedSecret =
-    decryptColumn(scopedFields ? configRow?.[scopedFields.webhookSecret] : null) ||
-    decryptColumn(configRow?.webhookSecretEnc);
+    firstScopedValue(configRows, (config) =>
+      decryptColumn(scopedFields ? config[scopedFields.webhookSecret] : null)
+    ) || firstScopedValue(configRows, (config) => decryptColumn(config.webhookSecretEnc));
   const scopedToken =
-    row.provider === "telegram" ? decryptColumn(configRow?.botTokenEnc) : "";
+    row.provider === "telegram"
+      ? firstScopedValue(configRows, (config) => decryptColumn(config.botTokenEnc))
+      : "";
 
   if (scopedApiKey || scopedToken) {
     return {

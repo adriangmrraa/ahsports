@@ -274,8 +274,9 @@ export function ChannelsView({
         </p>
         {!zernioConfigured && (
           <p className="mb-3 text-xs text-status-warning">
-            Falta <code className="data-mono">ZERNIO_API_KEY</code> en el entorno — la conexión embebida
-            queda deshabilitada hasta configurarla.
+            Faltan <code className="data-mono">ZERNIO_API_KEY</code> y/o{" "}
+            <code className="data-mono">ZERNIO_WEBHOOK_SECRET</code> en el entorno — la conexión
+            embebida queda deshabilitada hasta configurar ambos.
           </p>
         )}
         {baseUrlMissing && (

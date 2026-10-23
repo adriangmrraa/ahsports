@@ -249,6 +249,145 @@ async function resolveScopedRowId(
     : { kind: "not-found" };
 }
 
+/**
+ * R4-MED-2 — the FULL scope chain (account → channel → global), ordered from
+ * most to least specific. Credential fields resolve per field across this
+ * chain: a scoped row created only to toggle `enabled` no longer hides the
+ * dedicated provider credential stored on a broader scope.
+ */
+async function resolveScopedRowIds(
+  scope: AgentConfigScope
+): Promise<
+  | {
+      kind: "resolved";
+      entries: { id: number; source: AgentConfigResolutionSource }[];
+    }
+  | { kind: "not-found" }
+> {
+  const entries: { id: number; source: AgentConfigResolutionSource }[] = [];
+  let channel = scope.channel ?? undefined;
+
+  if (scope.channelAccountId != null) {
+    const [scoped] = await db
+      .select({ id: agentConfig.id })
+      .from(agentConfig)
+      .where(eq(agentConfig.channelAccountId, scope.channelAccountId))
+      .limit(1);
+    if (scoped) entries.push({ id: scoped.id, source: "account" });
+
+    // Binding seam: an account row can point straight at any config row.
+    // Only consulted when no direct per-account row exists — same precedence
+    // as `resolveScopedRowId` so both helpers agree. When a direct row exists
+    // and the channel is already known, the account lookup is unnecessary.
+    if (!scoped || channel == null) {
+      const [account] = await db
+        .select({
+          channel: channelAccounts.channel,
+          boundConfigId: channelAccounts.agentConfigId,
+        })
+        .from(channelAccounts)
+        .where(eq(channelAccounts.id, scope.channelAccountId))
+        .limit(1);
+      channel ??= account?.channel;
+      if (!scoped && account?.boundConfigId != null) {
+        const [bound] = await db
+          .select({ id: agentConfig.id })
+          .from(agentConfig)
+          .where(eq(agentConfig.id, account.boundConfigId))
+          .limit(1);
+        if (bound) entries.push({ id: bound.id, source: "account" });
+      }
+    }
+  }
+
+  if (channel) {
+    const [row] = await db
+      .select({ id: agentConfig.id })
+      .from(agentConfig)
+      .where(
+        and(
+          eq(agentConfig.channel, channel),
+          isNull(agentConfig.channelAccountId)
+        )
+      )
+      .limit(1);
+    if (row) entries.push({ id: row.id, source: "channel" });
+  }
+
+  const [global] = await db
+    .select({ id: agentConfig.id })
+    .from(agentConfig)
+    .where(
+      and(isNull(agentConfig.channel), isNull(agentConfig.channelAccountId))
+    )
+    .orderBy(asc(agentConfig.id))
+    .limit(1);
+  if (global) entries.push({ id: global.id, source: "global" });
+
+  return entries.length > 0
+    ? { kind: "resolved", entries }
+    : { kind: "not-found" };
+}
+
+export type AgentConfigChainResolution =
+  | {
+      kind: "resolved";
+      /** Rows ordered from most to least specific (account → channel → global). */
+      rows: AgentConfigRow[];
+      sources: AgentConfigResolutionSource[];
+    }
+  | { kind: "not-found" }
+  | { kind: "schema-not-ready"; error: unknown }
+  | { kind: "db-error"; error: unknown };
+
+/**
+ * Credential-oriented resolution: returns every row in the scope chain instead
+ * of just the first one. Callers resolve each credential field independently
+ * with `firstScopedValue` and only fall to env / `MissingScopedCredentialError`
+ * when every scope is empty for that field.
+ */
+export async function resolveAgentConfigChain(
+  scope: AgentConfigScope = currentAgentConfigScope()
+): Promise<AgentConfigChainResolution> {
+  try {
+    const resolved = await resolveScopedRowIds(scope);
+    if (resolved.kind === "not-found") return { kind: "not-found" };
+
+    const rows: AgentConfigRow[] = [];
+    const sources: AgentConfigResolutionSource[] = [];
+    const seen = new Set<number>();
+    for (const entry of resolved.entries) {
+      if (seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      const row = await fetchConfigById(entry.id);
+      if (!row) continue;
+      rows.push(row);
+      sources.push(entry.source);
+    }
+    return rows.length > 0
+      ? { kind: "resolved", rows, sources }
+      : { kind: "not-found" };
+  } catch (error) {
+    if (isSchemaNotReady(error)) return { kind: "schema-not-ready", error };
+    return { kind: "db-error", error };
+  }
+}
+
+/**
+ * First non-empty value for a single field across an ordered scope chain.
+ * Used by credential resolution so each field inherits independently.
+ */
+export function firstScopedValue(
+  rows: readonly AgentConfigRow[],
+  read: (row: AgentConfigRow) => unknown
+): string {
+  for (const row of rows) {
+    const value = read(row);
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return "";
+}
+
 async function fetchConfigById(id: number): Promise<AgentConfigRow | undefined> {
   const [row] = await db
     .select()

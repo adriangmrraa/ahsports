@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { db } from "@/db/client";
 import { auditEvents, idempotencyKeys } from "@/db/schema";
 import { resolveAgentRuntime } from "@/lib/ai/config";
@@ -36,7 +36,7 @@ export type ConversationReconcileResult = {
 };
 
 export type CandidatesReconcileSummary = {
-  status: "completed" | "already_running" | "not_configured";
+  status: "completed" | "already_running" | "not_configured" | "failed";
   ranAt: string;
   correlationId: string;
   scanned: number;
@@ -91,6 +91,12 @@ async function audit(action: string, correlationId: string, payload: Record<stri
 }
 
 async function claimRunLock(now: Date): Promise<boolean> {
+  // A crashed run never reaches the `finally` release, so reclaim a lock whose
+  // TTL has passed before claiming. A live lock is not expired and keeps
+  // blocking through the primary-key conflict below.
+  await db
+    .delete(idempotencyKeys)
+    .where(and(eq(idempotencyKeys.key, RUN_LOCK_KEY), lt(idempotencyKeys.expiresAt, now)));
   const claimed = await db
     .insert(idempotencyKeys)
     .values({ key: RUN_LOCK_KEY, scope: "reconcile.candidates", createdAt: now, expiresAt: new Date(now.getTime() + RUN_LOCK_TTL_MS) })
@@ -152,6 +158,7 @@ export async function runReconcileCandidates(options: {
         if (transcript.length === 0) {
           await markConversationReconciled(target.conversationId, now);
           base.results.push({ conversationId: target.conversationId, verdict: "none", note: "sin mensajes nuevos", candidateIds: [] });
+          base.scanned += 1;
           continue;
         }
 
@@ -212,7 +219,9 @@ export async function runReconcileCandidates(options: {
       error: error instanceof Error ? error.message.slice(0, 300) : "unknown_error",
       scanned: base.scanned,
     });
-    return { ...base, status: "completed", errors: base.errors + 1 };
+    // Nothing was scanned: this is a total failure (DB down, broken scan), not
+    // a successful empty run. Surface it so the scheduler can alert.
+    return { ...base, status: base.scanned === 0 ? "failed" : "completed", errors: base.errors + 1 };
   } finally {
     await releaseRunLock().catch(() => undefined);
   }

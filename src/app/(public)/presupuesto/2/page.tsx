@@ -3,6 +3,10 @@ import { products, sizes } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { Step2Form } from "./Step2Form";
 import { StepIndicator } from "../_components/StepIndicator";
+import {
+  WizardRateLimitNotice,
+  wizardRateLimitReached,
+} from "../_components/rate-limit";
 
 export const metadata = { title: "Presupuesto · Paso 2 · AH Sports" };
 
@@ -15,6 +19,8 @@ export default async function PresupuestoStep2({
 }: {
   searchParams: Promise<{ productId?: string }>;
 }) {
+  if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
+
   const sp = await searchParams;
   const [productRows, sizeRows] = await Promise.all([
     // Keep the public catalog compatible while the additive product-classification migration is pending.
