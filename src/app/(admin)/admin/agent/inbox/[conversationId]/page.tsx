@@ -8,17 +8,22 @@ import { queryMessagesPage } from "@/lib/agent/inbox";
 import { isSchemaNotReady } from "@/lib/channels/errors";
 import { INBOX_CHANNEL_LABEL } from "../filters";
 import { formatDateTime } from "@/lib/utils";
+import { isHumanOverrideActive } from "@/lib/whatsapp/human-handoff";
 import { Badge, Card, PageHeader } from "@/components/ui/Card";
 import { ArrowLeft } from "lucide-react";
+import { HandoffControls } from "./HandoffControls";
 import { MessagesTimeline } from "./MessagesTimeline";
+import { ReplyComposer } from "./ReplyComposer";
 
 /**
  * P4.2 / P4 — /admin/agent/inbox/[conversationId]: canonical timeline.
  *
  * Renders persisted message facts with full provenance (channel, direction,
  * sender kind, delivery state, content type and timestamp). The view is
- * read-only and restricted to admin/gerencia via `requireAgentAdmin()`. The
- * timeline is cursor-paginated: newest first, older pages loaded on scroll (G3).
+ * restricted to admin/gerencia via `requireAgentAdmin()`. The timeline is
+ * cursor-paginated: newest first, older pages loaded on scroll (G3). The
+ * operator card carries the human-handoff workflow: reply composer (E-01),
+ * override toggle (E-02) and resolve affordance (E-03).
  */
 
 export default async function ConversationTimelinePage({
@@ -90,7 +95,10 @@ export default async function ConversationTimelinePage({
 
   if (!conversation) notFound();
 
-  const firstPage = await queryMessagesPage({ conversationId });
+  const [firstPage, overrideActive] = await Promise.all([
+    queryMessagesPage({ conversationId }),
+    isHumanOverrideActive(conversationId),
+  ]);
 
   return (
     <div className="p-6">
@@ -138,6 +146,13 @@ export default async function ConversationTimelinePage({
               </dd>
             </div>
           </dl>
+        </Card>
+
+        <Card title="Operador">
+          <div className="flex flex-col gap-4">
+            <HandoffControls conversationId={conversationId} overrideActive={overrideActive} />
+            <ReplyComposer conversationId={conversationId} />
+          </div>
         </Card>
 
         <MessagesTimeline

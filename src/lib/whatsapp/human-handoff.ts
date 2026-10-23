@@ -203,23 +203,42 @@ export class DrizzleHandoffEffectRepository implements HandoffEffectRepository {
 export async function activateHumanOverride(
   conversationId: string,
   episode: number,
+  origin: "agent" | "operator" = "agent",
 ): Promise<void> {
   const key = overrideMemoryKey(conversationId);
+  const value = { episode, origin, activatedAt: new Date().toISOString() };
   await db
     .insert(agentMemories)
     .values({
       scope: "customer",
       key,
-      value: { episode, activatedAt: new Date().toISOString() },
+      value,
       expiresAt: new Date(Date.now() + HUMAN_OVERRIDE_TTL_MS),
     })
     .onConflictDoUpdate({
       target: [agentMemories.scope, agentMemories.key],
       set: {
-        value: { episode, activatedAt: new Date().toISOString() },
+        value,
         expiresAt: new Date(Date.now() + HUMAN_OVERRIDE_TTL_MS),
       },
     });
+}
+
+/**
+ * Clears the human-override marker immediately — the operator-side counterpart
+ * of `activateHumanOverride`. After this the dispatcher's
+ * `isHumanOverrideActive` check re-enables the agent without waiting for the
+ * 24h TTL (inbox "devolver al agente" / "marcar resuelto" actions).
+ */
+export async function deactivateHumanOverride(conversationId: string): Promise<void> {
+  await db
+    .delete(agentMemories)
+    .where(
+      and(
+        eq(agentMemories.scope, "customer"),
+        eq(agentMemories.key, overrideMemoryKey(conversationId)),
+      ),
+    );
 }
 
 export async function isHumanOverrideActive(conversationId: string): Promise<boolean> {
