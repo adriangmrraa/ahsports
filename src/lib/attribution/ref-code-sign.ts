@@ -1,14 +1,24 @@
 // Server-only — never import from "use client" code (uses Node crypto).
-// Port of SocialCRM `src/lib/attribution/ref-code-sign.ts`; the HMAC secret
-// is AH's SESSION_SECRET (the install-wide signing key auth.ts already uses).
+// Port of SocialCRM `src/lib/attribution/ref-code-sign.ts`; the HMAC key is
+// derived from AH's SESSION_SECRET with domain separation (below) so the ref
+// protocol never reuses the session-cookie key verbatim.
 import { createHmac, timingSafeEqual } from "crypto";
 import { getSessionSecret } from "@/lib/env";
 import { decodeRefCode, type RefCodeData } from "./ref-code";
 
 const SIG_LEN = 16;
 
+/**
+ * Domain-separated sub-key: `hmac(secret, "ref-code")`. Keeps ref-code
+ * signatures in their own key space, so a weakness in one protocol cannot
+ * cross over to the other.
+ */
+function refCodeKey(): Buffer {
+  return createHmac("sha256", getSessionSecret()).update("ref-code").digest();
+}
+
 function sign(payload: string): string {
-  return createHmac("sha256", getSessionSecret()).update(payload).digest("hex").slice(0, SIG_LEN);
+  return createHmac("sha256", refCodeKey()).update(payload).digest("hex").slice(0, SIG_LEN);
 }
 
 /**
@@ -42,17 +52,27 @@ export interface RefAttribution {
 }
 
 /**
- * Resolves a raw `ref:` code to ad-attribution ids, verifying the HMAC when
- * the code is signed. Returns null for malformed codes and for signed codes
- * whose signature fails — callers stamp the result only onto empty
- * attribution fields (first attribution wins).
+ * Resolves a raw `ref:` code to ad-attribution ids, accepting ONLY codes whose
+ * HMAC verifies. Returns null for malformed codes, unsigned 4-part codes, and
+ * signed codes whose signature fails — callers stamp the result only onto
+ * empty attribution fields (first attribution wins).
+ *
+ * 4-part codes are rejected on purpose: SocialCRM kept them for ads already
+ * published in the wild, but AH has never minted an unsigned code, and
+ * `ref:fake_fake_fake_1` is attacker-controlled from both `/api/leads` and
+ * every inbound message. The raw `refCode` is still stored by callers for
+ * forensics; only the carried campaign/ad ids are dropped.
  */
 export function resolveAttributionFromRef(refCode: string | null): RefAttribution | null {
   if (!refCode) return null;
   try {
     const decoded = decodeRefCode(refCode);
     if (!decoded) return null;
-    if (decoded.signed && !verifyRefCodeSignature(refCode)) {
+    if (!decoded.signed) {
+      console.warn("[attribution] unsigned ref code — dropping attribution");
+      return null;
+    }
+    if (!verifyRefCodeSignature(refCode)) {
       console.warn("[attribution] ref code signature invalid — dropping attribution");
       return null;
     }

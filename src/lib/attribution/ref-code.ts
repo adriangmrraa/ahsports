@@ -16,9 +16,15 @@ export interface RefCodeData {
  * Extracts a `ref:CODE` token from free text (the first message of a wa.me
  * deep link conversation, or a lead-capture payload). Returns the code
  * without the `ref:` prefix, or null when absent.
+ *
+ * The token is capped at 255 chars (the `leads.ref_code` column width) and
+ * must be followed by a non-token character: an overlong run is rejected
+ * whole instead of being truncated into a different (partial) code. Without
+ * the cap, any pasted URL containing `ref:` overflowed the varchar and turned
+ * a public capture into a 500 (pg 22001).
  */
 export function extractRefCode(text: string): string | null {
-  const match = text.match(/ref:([A-Za-z0-9_-]+)/i);
+  const match = text.match(/ref:([A-Za-z0-9_-]{1,255})(?![A-Za-z0-9_-])/i);
   return match ? match[1] : null;
 }
 
