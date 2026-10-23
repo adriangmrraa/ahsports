@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { products, sizes } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { getBusinessInfo } from "@/lib/business";
 import { Step5Form } from "./Step5Form";
 import { StepIndicator } from "../_components/StepIndicator";
 
@@ -48,6 +49,7 @@ export default async function PresupuestoStep5({
     phone: sp.phone ?? "",
     org: sp.org ?? "",
   };
+  const business = await getBusinessInfo();
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
@@ -64,6 +66,7 @@ export default async function PresupuestoStep5({
         fileIds={sp.files ? sp.files.split(",").filter(Boolean) : undefined}
         uploadSessionId={sp.uploadSessionId}
         uploadSessionSecret={sp.uploadSessionSecret}
+        whatsappPhone={business.whatsappPhone}
         backHref={`/presupuesto/4?${new URLSearchParams(sp as Record<string, string>).toString()}`}
       />
     </div>
