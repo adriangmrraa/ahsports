@@ -4169,5 +4169,13 @@
   "src_lib_business": "src/lib/business.ts — Business identity (A-16 — port of SocialCRM business.ts, adapted: AH stores the identity in the settings key-value table under business. keys instead of.",
   "src_lib_business_business_setting_keys": "BUSINESS_SETTING_KEYS — constant exported from src/lib/business.ts: Business identity (A-16 — port of SocialCRM business.ts, adapted: AH stores the identity in the settings key-value table under business. keys instead of.",
   "src_lib_business_fallback": "FALLBACK — constant declared in src/lib/business.ts (line 39).",
-  "src_lib_infra_public_rate_limit": "src/lib/infra/public-rate-limit.ts — G-02 — per-IP limit for public GET pages (RSC)."
+  "src_lib_infra_public_rate_limit": "src/lib/infra/public-rate-limit.ts — G-02 — per-IP limit for public GET pages (RSC).",
+  "docs_07_deployment_5_cron_job_de_reconciliación_render": "Deployment section documenting how to schedule the reconcile cron endpoint as a Render Cron Job with its secret and schedule.",
+  "docs_07_deployment_6_seed_inicial_una_sola_vez": "Deployment section describing the one-time initial database seed and how the admin password is set.",
+  "docs_07_deployment_7_custom_domain_opcional": "Deployment section explaining how to attach an optional custom domain and CNAME to the Render service.",
+  "docs_07_deployment_8_monitoreo_mínimo": "Deployment section listing the minimum monitoring setup: Render logs, uptime checks, and Neon DB metrics.",
+  "docs_07_deployment_9_backups": "Deployment section covering database backups and Neon point-in-time recovery limits.",
+  "docs_07_deployment_10_troubleshooting": "Deployment troubleshooting table mapping common build, login, and database symptoms to their fixes.",
+  "docs_07_deployment_11_ci_cd": "Deployment section describing the push-to-deploy CI/CD flow and preview deploys on Render.",
+  "docs_07_deployment_12_post_mvp_checklist": "Deployment post-MVP checklist of pending observability, backup, SSL, and rate-limiting improvements."
 }
