@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq, isNotNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
 import { agentMemories, contacts, leadIdentities, orders } from "@/db/schema";
@@ -31,7 +31,23 @@ const BROADCAST_DRYRUN_TTL_MS = 1000 * 60 * 30;
 const BROADCAST_DEDUPE_TTL_MS = 1000 * 60 * 60 * 24;
 const MAX_RECIPIENTS = 200;
 
-const audienceSchema = z.enum(["all", "with_orders", "search"]);
+/**
+ * A-10 — audience segmentation. There is no `leads` table in this schema yet
+ * (W6 adds it in parallel); until then segments map to contacts/organizations
+ * attributes:
+ *
+ *  - all / with_orders / search — existing audiences;
+ *  - new_leads   — contacts with lead_status = 'nuevo' (freshest prospects);
+ *  - qualified   — 'contactado' | 'calificado' (mid-funnel);
+ *  - no_org      — contacts with no organization (particulares / sin agrupar).
+ *
+ * FOLLOW-UP (leads): when `leads` lands, re-map these segments to lead
+ * attributes (UTM, ref code, channel_account_id de primera atribución).
+ *
+ * Opt-out: contacts.marketing_opt_out=true are ALWAYS excluded — they never
+ * reach the dry-run count nor the send path.
+ */
+const audienceSchema = z.enum(["all", "with_orders", "search", "new_leads", "qualified", "no_org"]);
 
 type BroadcastInput = z.infer<typeof broadcastInput>;
 
@@ -81,6 +97,33 @@ async function resolveRecipients(input: BroadcastInput): Promise<Recipient[]> {
       .limit(500);
     const ids = new Set(matched.map((row) => row.id));
     contactIds = contactIds.filter((id) => ids.has(id));
+  } else if (input.audience === "new_leads" || input.audience === "qualified" || input.audience === "no_org") {
+    const matched = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(
+        input.audience === "new_leads"
+          ? eq(contacts.status, "nuevo")
+          : input.audience === "qualified"
+            ? or(eq(contacts.status, "contactado"), eq(contacts.status, "calificado"))
+            : sql`${contacts.organizationId} IS NULL`,
+      )
+      .limit(500);
+    const ids = new Set(matched.map((row) => row.id));
+    contactIds = contactIds.filter((id) => ids.has(id));
+  }
+
+  // Opt-out is a hard filter: opted-out contacts are excluded BEFORE the
+  // dry-run count so the preview the operator confirms is the real send set.
+  if (contactIds.length > 0) {
+    const optedOut = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(inArray(contacts.id, contactIds), eq(contacts.marketingOptOut, true)));
+    if (optedOut.length > 0) {
+      const excluded = new Set(optedOut.map((row) => row.id));
+      contactIds = contactIds.filter((id) => !excluded.has(id));
+    }
   }
 
   return contactIds.slice(0, MAX_RECIPIENTS).map((contactId) => ({ contactId, phone: byContact.get(contactId)! }));
@@ -144,7 +187,7 @@ const broadcastInput = z.object({
 const broadcastInner: AgentTool<BroadcastInput> = {
   id: "broadcastWhatsApp",
   description:
-    "Envía un mensaje de WhatsApp a una audiencia de contactos (all | with_orders | search). SIEMPRE correr primero con dryRun=true: la ejecución real exige un dry-run fresco + confirmación y se rechaza si ya se envió lo mismo en 24h.",
+    "Envía un mensaje de WhatsApp a una audiencia de contactos (all | with_orders | search | new_leads | qualified | no_org). Los contactos con opt-out de marketing quedan siempre excluidos. SIEMPRE correr primero con dryRun=true: la ejecución real exige un dry-run fresco + confirmación y se rechaza si ya se envió lo mismo en 24h.",
   effect: "draft",
   inputSchema: broadcastInput,
   async handler(input, context) {
@@ -244,4 +287,64 @@ const sendWhatsAppInner: AgentTool<z.infer<typeof sendWhatsAppInput>> = {
 
 export const sendWhatsAppMessageTool = withOperatorConfirmation(sendWhatsAppInner, (args) => `enviar WhatsApp como operador a ${maskTail(String(args.phone))}`);
 
-export const broadcastTools = [broadcastWhatsAppTool, sendWhatsAppMessageTool] as const;
+// ─── A-10 · Marketing opt-out management ─────────────────────────────────────
+// The flag lives on contacts and is enforced in resolveRecipients (broadcast)
+// for EVERY audience — this tool is the operator's way to honor "no me manden
+// más" or re-enable a contact who asked to return.
+
+const optOutInput = z.object({
+  phone: z.string().trim().min(7).max(64).describe("Teléfono del contacto (se resuelve por lead_identities o contacts.phone)"),
+  optOut: z.boolean().describe("true = excluir de broadcasts; false = volver a incluir"),
+});
+
+const setContactOptOutInner: AgentTool<z.infer<typeof optOutInput>> = {
+  id: "setContactOptOut",
+  description:
+    "Marca/desmarca el opt-out de marketing de un contacto por teléfono. Los contactos con opt-out nunca reciben broadcasts. Requiere confirmación.",
+  effect: "draft",
+  inputSchema: optOutInput,
+  async handler(input, context) {
+    const digits = input.phone.replace(/\D/g, "");
+    if (digits.length < 7) return { ok: false as const, error: "invalid_phone" };
+
+    const [identity] = await db
+      .select({ contactId: leadIdentities.contactId })
+      .from(leadIdentities)
+      .where(and(eq(leadIdentities.channel, "whatsapp"), eq(leadIdentities.externalId, digits)))
+      .limit(1);
+
+    let contactId = identity?.contactId ?? null;
+    if (!contactId) {
+      const [byPhone] = await db
+        .select({ id: contacts.id })
+        .from(contacts)
+        .where(sql`${contacts.phone} ilike ${"%" + digits + "%"}`)
+        .limit(2);
+      if (byPhone) contactId = byPhone.id;
+    }
+    if (!contactId) {
+      return { ok: false as const, error: "contact_not_found", message: "No encontré un contacto con ese teléfono." };
+    }
+
+    await db.update(contacts).set({ marketingOptOut: input.optOut }).where(eq(contacts.id, contactId));
+    await db.insert(agentMemories).values({
+      scope: "global",
+      key: `broadcast:optout:${contactId}:${Date.now()}`,
+      value: { contactId, optOut: input.optOut, by: context.actorRef ?? null, at: new Date().toISOString() },
+    });
+    return {
+      ok: true as const,
+      contactId,
+      marketingOptOut: input.optOut,
+      message: input.optOut
+        ? "Contacto excluido de futuros broadcasts."
+        : "Contacto re-incluido en broadcasts.",
+    };
+  },
+};
+
+export const setContactOptOutTool = withOperatorConfirmation(setContactOptOutInner, (args) =>
+  `${args.optOut ? "excluir de" : "re-incluir en"} broadcasts a ${maskTail(String(args.phone))}`,
+);
+
+export const broadcastTools = [broadcastWhatsAppTool, sendWhatsAppMessageTool, setContactOptOutTool] as const;
