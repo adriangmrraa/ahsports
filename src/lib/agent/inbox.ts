@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, ilike, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import { chatMessages, contacts, conversations, organizations } from "@/db/schema";
 
@@ -65,6 +65,39 @@ export type MessagePage = {
   items: ChatMessageItem[];
   nextCursor: MessageCursor | null;
 };
+
+const chatMessageProjection = {
+  id: chatMessages.id,
+  direction: chatMessages.direction,
+  senderKind: chatMessages.senderKind,
+  senderRef: chatMessages.senderRef,
+  channel: chatMessages.channel,
+  contentType: chatMessages.contentType,
+  content: chatMessages.content,
+  deliveryState: chatMessages.deliveryState,
+  platformMessageId: chatMessages.platformMessageId,
+  createdAt: chatMessages.createdAt,
+} as const;
+
+type ChatMessageRow = Pick<
+  typeof chatMessages.$inferSelect,
+  keyof typeof chatMessageProjection
+>;
+
+function toChatMessageItem(row: ChatMessageRow): ChatMessageItem {
+  return {
+    id: row.id,
+    direction: row.direction,
+    senderKind: row.senderKind,
+    senderRef: row.senderRef,
+    channel: row.channel,
+    contentType: row.contentType,
+    content: row.content,
+    deliveryState: row.deliveryState,
+    platformMessageId: row.platformMessageId,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
 
 function normalizeChannel(channel: string | undefined): "telegram" | "whatsapp" | undefined {
   return channel === "telegram" || channel === "whatsapp" ? channel : undefined;
@@ -174,18 +207,7 @@ export async function queryMessagesPage(input: {
   }
 
   const rows = await db
-    .select({
-      id: chatMessages.id,
-      direction: chatMessages.direction,
-      senderKind: chatMessages.senderKind,
-      senderRef: chatMessages.senderRef,
-      channel: chatMessages.channel,
-      contentType: chatMessages.contentType,
-      content: chatMessages.content,
-      deliveryState: chatMessages.deliveryState,
-      platformMessageId: chatMessages.platformMessageId,
-      createdAt: chatMessages.createdAt,
-    })
+    .select(chatMessageProjection)
     .from(chatMessages)
     .where(and(...filters))
     .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
@@ -195,21 +217,40 @@ export async function queryMessagesPage(input: {
   const page = hasMore ? rows.slice(0, INBOX_PAGE_SIZE) : rows;
   const last = page[page.length - 1];
 
-  const items: ChatMessageItem[] = page.map((row) => ({
-    id: row.id,
-    direction: row.direction,
-    senderKind: row.senderKind,
-    senderRef: row.senderRef,
-    channel: row.channel,
-    contentType: row.contentType,
-    content: row.content,
-    deliveryState: row.deliveryState,
-    platformMessageId: row.platformMessageId,
-    createdAt: row.createdAt.toISOString(),
-  }));
-
   return {
-    items,
+    items: page.map(toChatMessageItem),
     nextCursor: hasMore && last ? { createdAt: last.createdAt.toISOString(), id: last.id } : null,
   };
+}
+
+/** Max rows emitted per live poll — far above any real burst. */
+export const MESSAGES_AFTER_BATCH = 200;
+
+/**
+ * Forward-cursor companion of `queryMessagesPage`: rows strictly newer than
+ * `after` (same `(created_at, id)` keyset), ascending — the order subscribers
+ * append them in. Backs the /api/events/conversations/[id] SSE stream.
+ */
+export async function queryMessagesAfter(input: {
+  conversationId: string;
+  after: MessageCursor;
+  limit?: number;
+}): Promise<ChatMessageItem[]> {
+  const at = new Date(input.after.createdAt);
+  const rows = await db
+    .select(chatMessageProjection)
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.conversationId, input.conversationId),
+        or(
+          gt(chatMessages.createdAt, at),
+          and(eq(chatMessages.createdAt, at), gt(chatMessages.id, input.after.id)),
+        ),
+      ),
+    )
+    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+    .limit(input.limit ?? MESSAGES_AFTER_BATCH);
+
+  return rows.map(toChatMessageItem);
 }
