@@ -20,6 +20,7 @@ export const WORKSHOP_SETTING_KEYS = [
   "taller_contacto_email",
   "taller_contacto_phone",
   "taller_direccion",
+  "meta_pixel_id",
 ] as const;
 
 /**
