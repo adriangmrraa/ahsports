@@ -4,6 +4,7 @@ import { channelValues } from "@/lib/channels/types";
 import { Card, PageHeader } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Input";
 import { Search } from "lucide-react";
+import { LiveRefresher } from "@/components/live/LiveRefresher";
 import { ConversationTable } from "./ConversationTable";
 import {
   accountOptionLabel,
@@ -108,14 +109,19 @@ export default async function AgentInboxPage({
       </div>
 
       {firstPage.items.length === 0 ? (
-        <Card>
-          <div className="text-center py-10">
-            <p className="label-caps text-primary mb-2">Sin conversaciones</p>
-            <p className="text-sm text-on-surface-variant">
-              Cuando el canal reciba mensajes, las conversaciones aparecerán acá.
-            </p>
-          </div>
-        </Card>
+        <>
+          {/* No table mounted → no stream of its own; refresh swaps in the
+              table (which then merges live events itself) on first activity. */}
+          <LiveRefresher endpoint="/api/events/inbox" />
+          <Card>
+            <div className="text-center py-10">
+              <p className="label-caps text-primary mb-2">Sin conversaciones</p>
+              <p className="text-sm text-on-surface-variant">
+                Cuando el canal reciba mensajes, las conversaciones aparecerán acá.
+              </p>
+            </div>
+          </Card>
+        </>
       ) : (
         <ConversationTable
           key={`${q ?? ""}|${channelFilter ?? ""}|${accountKey}`}

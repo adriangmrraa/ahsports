@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { loadConversations } from "@/app/actions/inbox";
 import { Badge } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
+import { useEventStream } from "@/lib/live/useEventStream";
 import { formatDateTime } from "@/lib/utils";
 import type { ConversationCursor } from "@/lib/agent/inbox";
 import { channelBadgeTone, INBOX_CHANNEL_LABEL, type InboxConversationItem } from "./filters";
@@ -33,6 +34,35 @@ export function ConversationTable({
   const [hasMore, setHasMore] = useState(initialCursor !== null);
   const [failed, setFailed] = useState(false);
   const [pending, startTransition] = useTransition();
+  const liveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Live inbox activity (SSE): refetch the head page through the same server
+  // action the pagination uses — filters stay server-side — and merge it with
+  // the loaded tail instead of resetting state (router.refresh can't reach
+  // it). Debounced so an inbound burst coalesces into one fetch.
+  useEventStream("/api/events/inbox", () => {
+    if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
+    liveTimerRef.current = setTimeout(() => {
+      startTransition(async () => {
+        try {
+          const page = await loadConversations({ q, channel, account, cursor: null });
+          setItems((prev) => {
+            const freshIds = new Set(page.items.map((item) => item.id));
+            return [...page.items, ...prev.filter((item) => !freshIds.has(item.id))];
+          });
+        } catch {
+          // Transient failure — the next event or a reconnect heals the list.
+        }
+      });
+    }, 500);
+  });
+
+  useEffect(
+    () => () => {
+      if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
+    },
+    [],
+  );
 
   const loadMore = () => {
     if (!hasMore || pending) return;
