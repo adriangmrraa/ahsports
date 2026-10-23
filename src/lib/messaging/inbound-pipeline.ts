@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { and, desc, eq, gt } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { chatMessages } from "@/db/schema";
+import { chatMessages, conversations } from "@/db/schema";
 import {
   importOperatorOutbound,
   persistCustomerInbound,
@@ -40,6 +40,7 @@ import { classifyError } from "./errors";
 import { accountScopedInboundKey } from "./inbound-keys";
 import { ensureLeadIdentity } from "./lead-identity";
 import { messenger } from "./messenger";
+import { captureLeadIfNew } from "@/lib/whatsapp/lead-capture";
 import { isProtocolArtifact } from "./protocol";
 import type {
   ChannelAccount,
@@ -566,6 +567,27 @@ async function handleInboundMessage(
       channelAccountId: ctx.channelAccountId ?? null,
       conversationId,
     });
+
+    // Marketing lead capture (W6): dedup by phone inside captureLeadIfNew;
+    // first attribution (account, ref:, campaign ids) is stamped once and
+    // never overwritten. A capture failure must not fail the webhook.
+    try {
+      const [conv] = await db
+        .select({ customerId: conversations.customerId })
+        .from(conversations)
+        .where(eq(conversations.id, conversationId))
+        .limit(1);
+      await captureLeadIfNew({
+        phone: customerPhone,
+        name: event.sender.name ?? null,
+        firstMessage: eventContent(event),
+        channel,
+        channelAccountId: ctx.channelAccountId ?? null,
+        contactId: conv?.customerId ?? null,
+      });
+    } catch (leadError) {
+      console.error("[pipeline] lead capture failed — continuing", leadError);
+    }
 
     // Operator-active gate: a human answered within the window — suppress the
     // AI turn. The message stays persisted; only the reply is skipped.
