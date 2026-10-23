@@ -82,7 +82,12 @@ export async function startZernioConnect(input: unknown) {
     redirectUrl: `${baseUrl}${ZERNIO_CALLBACK_PATH}?state=${state}`,
     apiKey,
   });
-  if (!connect.ok) return { ok: false as const, error: connect.error };
+  if (!connect.ok) {
+    // No authUrl to return — drop the nonce instead of leaving a dead
+    // one-shot cookie that could only ever fail verification later.
+    cookieStore.delete(connectStateCookieName(platform));
+    return { ok: false as const, error: connect.error };
+  }
   return { ok: true as const, authUrl: connect.authUrl };
 }
 
