@@ -538,7 +538,9 @@ async function sendDirectlyWithAccount(
   return {
     ok: false,
     error: res.error,
-    retryable: status === undefined ? true : status >= 500,
+    // 429 is a rate-limit, not a rejection — as retryable as a 5xx. A
+    // non-retryable 429 silently drops the send the provider asked to retry.
+    retryable: status === undefined ? true : status === 429 || status >= 500,
   };
 }
 
