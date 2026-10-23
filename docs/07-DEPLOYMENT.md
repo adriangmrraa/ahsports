@@ -71,7 +71,32 @@ Canales del agente IA (opcionales; por nombre, nunca valores acá):
 3. Si falla: revisar logs (panel de Render)
 4. Una vez vivo: la URL pública del servicio (`https://<tu-dominio-publico>/`) debería responder 200
 
-## 5. Seed inicial (una sola vez)
+## 5. Cron Job de reconciliación (Render)
+
+El endpoint `POST /api/cron/reconcile` **no se agenda solo**. Sin un Cron Job, el
+reconcile de candidatos nunca corre.
+
+1. Render → **New +** → **Cron Job**
+2. Conectar el mismo repo; **Runtime**: Node (igual que el Web Service)
+3. **Build Command**: `npm install` (el job solo necesita Node)
+4. **Schedule**: `*/15 * * * *` (cada 15 min). El lock del runner (TTL 15 min)
+   evita solapamientos dentro de esa ventana: una invocación concurrente
+   responde `already_running`; un lock vencido por una corrida caída se
+   reclama en la siguiente invocación.
+5. **Command** (Node 22, sin depender de `curl`):
+   ```bash
+   node -e "fetch('https://<tu-dominio-publico>/api/cron/reconcile',{method:'POST',headers:{Authorization:'Bearer '+process.env.CRON_SECRET}}).then(async r=>{console.log(r.status, await r.text());process.exit(r.ok?0:1)}).catch(e=>{console.error(e.message);process.exit(1)})"
+   ```
+6. Cargar `CRON_SECRET` también en las env vars del Cron Job (mismo valor que
+   el Web Service). Si está vacío, la ruta falla cerrado con 401.
+7. Variantes: agregar `?mode=sweep` (lookback 72h, hasta 20 conversaciones) y
+   `&limit=N` (1..20) a la URL.
+
+Respuestas: `200` con `status: completed | already_running | not_configured`;
+`500` con `status: "failed"` cuando la corrida no escaneó ninguna conversación
+(DB caída, scan roto), para que el scheduler pueda alertar.
+
+## 6. Seed inicial (una sola vez)
 
 Después del primer deploy:
 
@@ -88,24 +113,24 @@ Alternativa: ejecutar seed localmente apuntando a la DB de producción (con cuid
 $env:ADMIN_PASSWORD='clave-segura-del-taller'; DATABASE_URL=postgresql://... npm run db:seed
 ```
 
-## 6. Custom domain (opcional)
+## 7. Custom domain (opcional)
 
 Render → Settings → Custom Domain → `app.ahsports.com.ar`
 
 Agregar CNAME en el DNS del dominio:
 - `app` CNAME → `ah-sports-os.onrender.com`
 
-## 7. Monitoreo mínimo
+## 8. Monitoreo mínimo
 
 - **Logs**: Render → Logs (stdout). En MVP alcanza.
 - **Uptime**: Render tiene health check automático en `/`.
 - **DB metrics**: Neon dashboard muestra CPU, storage, queries lentas.
 
-## 8. Backups
+## 9. Backups
 
 Neon hace PITR (Point-in-Time Recovery) hasta 7 días en tier gratuito. Para producción real considerar tier Pro.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Síntoma | Causa probable | Fix |
 |---------|----------------|-----|
@@ -116,13 +141,13 @@ Neon hace PITR (Point-in-Time Recovery) hasta 7 días en tier gratuito. Para pro
 | 500 al cargar dashboard | DB no migrada | Re-correr `npm run db:migrate` en build command |
 | Queries lentas | DB en region lejana | Elegir region Neon cercana a Render (US East) |
 
-## 10. CI/CD
+## 11. CI/CD
 
 - Push a `main` → Render redeploy automático
 - PR branches → Render crea preview deploy (plan de pago)
 - Para evitar redeploys innecesarios: agregar `docs/**` al `.renderignore`
 
-## 11. Post-MVP checklist
+## 12. Post-MVP checklist
 
 - [ ] Configurar logs estructurados (Pino o similar)
 - [ ] Configurar monitoring (Sentry, LogRocket, o PostHog)
