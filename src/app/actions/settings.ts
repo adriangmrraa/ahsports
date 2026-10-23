@@ -22,9 +22,21 @@ export const WORKSHOP_SETTING_KEYS = [
   "taller_direccion",
 ] as const;
 
+/** Claves de identidad del negocio (A-16) — públicas vía /api/business. */
+export const BUSINESS_SETTING_KEYS = [
+  "business.name",
+  "business.address",
+  "business.whatsapp_phone",
+  "business.instagram",
+  "business.website",
+  "business.description",
+  "business.hours",
+] as const;
+
 /**
  * F5-08 — Upsert en `settings` (INSERT ... ON CONFLICT DO UPDATE).
- * Solo claves conocidas o prefijo `taller_` para evitar polución arbitraria.
+ * Solo claves conocidas o prefijos `taller_`/`business.` para evitar
+ * polución arbitraria.
  */
 export async function updateSetting(input: unknown) {
   await requireUser();
@@ -34,7 +46,9 @@ export async function updateSetting(input: unknown) {
   }
   const { key, value } = parsed.data;
   const allowed =
-    (WORKSHOP_SETTING_KEYS as readonly string[]).includes(key) || key.startsWith("taller_");
+    (WORKSHOP_SETTING_KEYS as readonly string[]).includes(key) ||
+    (BUSINESS_SETTING_KEYS as readonly string[]).includes(key) ||
+    key.startsWith("taller_");
   if (!allowed) return { ok: false as const, error: "Clave de configuración no permitida" };
   if (value === undefined) return { ok: false as const, error: "Valor requerido" };
 

@@ -6,6 +6,7 @@ import { formatDateTime } from "@/lib/utils";
 import { Badge, Card, PageHeader } from "@/components/ui/Card";
 import { PricingRulesManager } from "./PricingRulesManager";
 import { WorkshopSettingsForm } from "./WorkshopSettingsForm";
+import { BusinessSettingsForm } from "./BusinessSettingsForm";
 import { LinkButton } from "@/components/ui/Button";
 
 /**
@@ -43,6 +44,10 @@ export default async function ConfiguracionPage() {
 
         <Card title="Datos del taller">
           <WorkshopSettingsForm initial={initial} />
+        </Card>
+
+        <Card title="Identidad del negocio (pública)">
+          <BusinessSettingsForm initial={initial} />
         </Card>
 
         <Card title="Notificaciones">
