@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { products, promotions } from "@/db/schema";
-import { requireUser } from "@/lib/auth";
+import { authorizeAgentApi } from "@/lib/agent/rbac";
 import { promotionSchema } from "@/lib/validators";
 
-/** GET /api/promotions/[id] — admin read (includes inactive rows). */
+/** GET /api/promotions/[id] — admin/gerencia read (includes inactive rows). */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  await requireUser();
+  const auth = await authorizeAgentApi();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.status === 401 ? "No autorizado" : "Prohibido" }, { status: auth.status });
+  }
   const { id } = await params;
   const [row] = await db.select().from(promotions).where(eq(promotions.id, id)).limit(1);
   if (!row) return NextResponse.json({ error: "Promoción no encontrada" }, { status: 404 });
@@ -16,7 +19,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 /** PATCH — admin update; re-validates item productIds against the catalog. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  await requireUser();
+  const auth = await authorizeAgentApi();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.status === 401 ? "No autorizado" : "Prohibido" }, { status: auth.status });
+  }
   const { id } = await params;
   const body = await req.json().catch(() => null);
   const parsed = promotionSchema.partial().safeParse(body);
@@ -55,7 +61,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 /** DELETE — admin hard delete (promos are marketing content, not financial facts). */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  await requireUser();
+  const auth = await authorizeAgentApi();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.status === 401 ? "No autorizado" : "Prohibido" }, { status: auth.status });
+  }
   const { id } = await params;
   const [row] = await db.delete(promotions).where(eq(promotions.id, id)).returning({ id: promotions.id });
   if (!row) return NextResponse.json({ error: "Promoción no encontrada" }, { status: 404 });

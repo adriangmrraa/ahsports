@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { products, promotions } from "@/db/schema";
-import { getCurrentUser, requireUser } from "@/lib/auth";
+import { authorizeAgentApi } from "@/lib/agent/rbac";
 import { checkRateLimit, clientIpFromRequest } from "@/lib/infra/rate-limit";
 import { promotionSchema } from "@/lib/validators";
 
@@ -30,9 +30,9 @@ export async function GET(req: NextRequest) {
 
   const activeOnly = req.nextUrl.searchParams.get("all") !== "1";
   if (!activeOnly) {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    const auth = await authorizeAgentApi();
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.status === 401 ? "No autorizado" : "Prohibido" }, { status: auth.status });
     }
   }
 
@@ -85,7 +85,10 @@ export async function GET(req: NextRequest) {
  * stays readable if a product is later renamed.
  */
 export async function POST(req: NextRequest) {
-  await requireUser();
+  const auth = await authorizeAgentApi();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.status === 401 ? "No autorizado" : "Prohibido" }, { status: auth.status });
+  }
   const body = await req.json().catch(() => null);
   const parsed = promotionSchema.safeParse(body);
   if (!parsed.success) {
