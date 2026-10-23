@@ -24,7 +24,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { contacts, conversations, orders, products, techniques } from "@/db/schema";
+import { contacts, conversations, orders, products, promotions, techniques } from "@/db/schema";
 import {
   defaultInboundTurnDispatcher,
   type InboundTurn,
@@ -145,7 +145,7 @@ async function loadCustomerPromptContext(conversationId: string): Promise<{
 
 /** Compact catalog layer: names only — prices are never injected. */
 async function loadCatalogSummary(): Promise<string | null> {
-  const [rows, techs] = await Promise.all([
+  const [rows, techs, promos] = await Promise.all([
     db
       .select({ name: products.name, garmentType: products.garmentType, minOrder: products.minOrder })
       .from(products)
@@ -156,13 +156,21 @@ async function loadCatalogSummary(): Promise<string | null> {
       .from(techniques)
       .where(eq(techniques.active, true))
       .limit(12),
+    // A-14: active promotion NAMES only — content/price detail goes through
+    // the getPromotions tool so the prompt never becomes a price channel.
+    db
+      .select({ name: promotions.name })
+      .from(promotions)
+      .where(eq(promotions.active, true))
+      .limit(8),
   ]);
   if (rows.length === 0) return null;
   const productLines = rows.map(
     (row) => `- ${row.name}${row.garmentType ? ` (${row.garmentType})` : ""} — mínimo ${row.minOrder}`,
   );
   const techLine = techs.length > 0 ? `Técnicas: ${techs.map((t) => t.name).join(", ")}` : null;
-  return [...productLines, ...(techLine ? [techLine] : [])].join("\n");
+  const promoLine = promos.length > 0 ? `Promos activas (detalle con getPromotions): ${promos.map((p) => p.name).join(", ")}` : null;
+  return [...productLines, ...(techLine ? [techLine] : []), ...(promoLine ? [promoLine] : [])].join("\n");
 }
 
 // ─── Outbound delivery ───────────────────────────────────────────────────────
