@@ -102,10 +102,11 @@ export class MissingScopedCredentialError extends Error {
 
 /**
  * A-15 — per-provider credential columns on the scoped `agent_config` row.
- * Dedicated `<provider>*Enc` fields win, then the generic
- * `providerKeyEnc`/`webhookSecretEnc` (and `botTokenEnc` for telegram), then
- * the provider env scope (`<PROVIDER>_API_KEY`/`ACCESS_TOKEN`/
- * `WEBHOOK_SECRET`).
+ * Dedicated `<provider>*Enc` fields win, then the channel's own dedicated
+ * fields (`webhookSecretEnc`, and `botTokenEnc` for telegram), then the
+ * provider env scope (`<PROVIDER>_API_KEY`/`ACCESS_TOKEN`/`WEBHOOK_SECRET`).
+ * The generic `providerKeyEnc` is the AI-provider credential — it is NEVER
+ * used as a channel credential.
  */
 const SCOPED_PROVIDER_FIELDS: Record<
   string,
@@ -184,9 +185,9 @@ async function credentialsFromAgentConfig(
   }
 
   const scopedFields = SCOPED_PROVIDER_FIELDS[row.provider];
-  const scopedApiKey =
-    decryptColumn(scopedFields ? configRow?.[scopedFields.apiKey] : null) ||
-    decryptColumn(configRow?.providerKeyEnc);
+  const scopedApiKey = decryptColumn(
+    scopedFields ? configRow?.[scopedFields.apiKey] : null
+  );
   const scopedSecret =
     decryptColumn(scopedFields ? configRow?.[scopedFields.webhookSecret] : null) ||
     decryptColumn(configRow?.webhookSecretEnc);
