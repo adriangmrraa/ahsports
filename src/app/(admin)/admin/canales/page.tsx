@@ -13,6 +13,12 @@ import { ChannelsView } from "./ChannelsView";
  * `startZernioConnect` (action) → Zernio authUrl → back to
  * `/admin/canales/conectar/zernio` (route handler) → `?connected=zernio:<plat>`
  * or `?error=<code>` flash consumed by the view.
+ *
+ * Providers without an embedded flow (YCloud, Kapso, Telegram) use the manual
+ * "API key" form: provider account id + a `credentialsRef` pointer, never a
+ * secret. Direct Meta OAuth (B-09/F-04) is intentionally not surfaced here:
+ * Zernio already covers IG/FB, and a direct Meta route would need its own
+ * adapter plus credential storage (a schema change), so it stays deferred.
  */
 export default async function CanalesPage({
   searchParams,
@@ -36,6 +42,7 @@ export default async function CanalesPage({
         schemaError={accountsResult.ok ? null : accountsResult.error}
         webhooks={baseUrl ? webhookEndpoints(baseUrl) : []}
         baseUrlMissing={!baseUrl}
+        zernioConfigured={Boolean(process.env.ZERNIO_API_KEY?.trim())}
         flashConnected={sp.connected}
         flashError={sp.error}
       />

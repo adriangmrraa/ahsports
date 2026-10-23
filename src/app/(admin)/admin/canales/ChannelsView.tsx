@@ -42,12 +42,41 @@ const PROVIDER_HINTS: Record<string, string> = {
   telegram: "Bot id de Telegram (parte numérica del token, antes de ':')",
 };
 
+/**
+ * Credential pointers per provider. Selecting a provider pre-fills the
+ * reference (never a secret): `env:PREFIX` resolves PREFIX_API_KEY /
+ * PREFIX_ACCESS_TOKEN / PREFIX_WEBHOOK_SECRET at send/webhook time.
+ */
+const CREDENTIALS_DEFAULTS: Record<string, string> = {
+  ycloud: "env:YCLOUD_",
+  zernio: "env:ZERNIO_",
+  kapso: "env:KAPSO_",
+  telegram: "agent_config",
+};
+
+/**
+ * Kapso exposes no embedded-signup/partner flow (verified against the
+ * provider adapter and the SocialCRM reference), so its connect path is
+ * manual: phone_number_id + an `env:KAPSO_` credential reference + the
+ * webhook URL pasted in Kapso's dashboard.
+ */
+const MANUAL_PROVIDER_NOTES: Record<string, string> = {
+  kapso:
+    "Kapso no ofrece conexión embebida. Cargá el phone_number_id de Meta, apuntá la referencia a env:KAPSO_ y pegá la URL de webhook en el dashboard de Kapso.",
+};
+
 /** Zernio embedded-connect buttons (OAuth / WhatsApp Embedded Signup). */
-const ZERNIO_CONNECT: { platform: string; label: string }[] = [
-  { platform: "whatsapp", label: "WhatsApp (Embedded Signup)" },
-  { platform: "instagram", label: "Instagram" },
-  { platform: "facebook", label: "Facebook" },
+const ZERNIO_CONNECT: { platform: string; action: string }[] = [
+  { platform: "whatsapp", action: "Conectar WhatsApp (Zernio)" },
+  { platform: "instagram", action: "Conectar Instagram (Zernio)" },
+  { platform: "facebook", action: "Conectar Facebook (Zernio)" },
 ];
+
+const ZERNIO_PLATFORMS = ZERNIO_CONNECT.map((c) => c.platform);
+
+const CHANNEL_LABELS: Record<string, string> = Object.fromEntries(
+  CHANNELS.map((c) => [c.value, c.label]),
+);
 
 const FLASH_ERRORS: Record<string, string> = {
   "oauth-state": "Estado OAuth inválido — reintentá la conexión",
@@ -105,6 +134,7 @@ export function ChannelsView({
   initialAccounts,
   webhooks,
   baseUrlMissing,
+  zernioConfigured,
   schemaError,
   flashConnected,
   flashError,
@@ -112,6 +142,7 @@ export function ChannelsView({
   initialAccounts: ChannelAccountRow[];
   webhooks: WebhookEndpoint[];
   baseUrlMissing: boolean;
+  zernioConfigured: boolean;
   schemaError: string | null;
   flashConnected?: string;
   flashError?: string;
@@ -131,7 +162,9 @@ export function ChannelsView({
   const [providerAccountId, setProviderAccountId] = useState("");
   const [senderAddress, setSenderAddress] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [credentialsRef, setCredentialsRef] = useState("");
+  const [credentialsRef, setCredentialsRef] = useState(CREDENTIALS_DEFAULTS.zernio);
+  const embeddedReady = zernioConfigured && !baseUrlMissing;
+  const manualZernioPlatform = provider === "zernio" && ZERNIO_PLATFORMS.includes(channel);
 
   // Flash from the zernio connect callback (?connected=zernio:ig | ?error=…)
   useEffect(() => {
@@ -144,6 +177,17 @@ export function ChannelsView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function changeProvider(next: string) {
+    setProvider(next);
+    // Only replace the reference when it is still empty or an untouched
+    // provider default — never overwrite something the operator typed.
+    setCredentialsRef((current) =>
+      current === "" || Object.values(CREDENTIALS_DEFAULTS).includes(current)
+        ? (CREDENTIALS_DEFAULTS[next] ?? "")
+        : current,
+    );
+  }
+
   function connectZernio(platform: string) {
     startTransition(async () => {
       const res = await startZernioConnect({ platform });
@@ -151,6 +195,7 @@ export function ChannelsView({
         setNotice({ kind: "error", text: res.error ?? "No se pudo iniciar la conexión" });
         return;
       }
+      // Same tab: the callback lands on /admin/canales with a flash param.
       window.location.href = res.authUrl;
     });
   }
@@ -185,7 +230,7 @@ export function ChannelsView({
       setProviderAccountId("");
       setSenderAddress("");
       setDisplayName("");
-      setCredentialsRef("");
+      setCredentialsRef(CREDENTIALS_DEFAULTS[provider] ?? "");
       router.refresh();
     });
   }
@@ -220,11 +265,57 @@ export function ChannelsView({
         </p>
       )}
 
-      <Card title="Conectar cuenta">
+      <Card title="Conexión rápida con Zernio">
+        <p className="mb-4 text-sm text-on-surface-variant">
+          OAuth / WhatsApp Embedded Signup: cada botón te lleva directo al flujo de autorización de Zernio.
+          Al volver se crea la fila automáticamente con credenciales vía{" "}
+          <code className="data-mono text-xs">env:ZERNIO_</code>. Facebook incluye la selección de página
+          dentro del flujo.
+        </p>
+        {!zernioConfigured && (
+          <p className="mb-3 text-xs text-status-warning">
+            Falta <code className="data-mono">ZERNIO_API_KEY</code> en el entorno — la conexión embebida
+            queda deshabilitada hasta configurarla.
+          </p>
+        )}
+        {baseUrlMissing && (
+          <p className="mb-3 text-xs text-status-warning">
+            Falta <code className="data-mono">NEXT_PUBLIC_APP_URL</code> o{" "}
+            <code className="data-mono">RENDER_EXTERNAL_URL</code> para armar la URL de retorno.
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {ZERNIO_CONNECT.map((c) => (
+            <Button
+              key={c.platform}
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={pending || !embeddedReady}
+              onClick={() => connectZernio(c.platform)}
+            >
+              <Plug className="w-3.5 h-3.5" />
+              {c.action}
+            </Button>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-on-surface-variant">
+          ¿Preferís API key propia? Usá el formulario manual de abajo con{" "}
+          <code className="data-mono text-xs">env:ZERNIO_</code>: ambos caminos conviven y actualizan la
+          misma cuenta.
+        </p>
+        <p className="mt-3 text-xs text-status-warning">
+          Ojo: las cuentas conectadas por Zernio o Kapso guardan los mensajes, pero el agente todavía no
+          responde automáticamente en esos canales — hoy el auto-reply solo funciona con WhatsApp vía YCloud
+          y Telegram.
+        </p>
+      </Card>
+
+      <Card title="Conectar cuenta manual (API key)">
         <form onSubmit={submit}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <Field label="Proveedor">
-              <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
+              <Select value={provider} onChange={(e) => changeProvider(e.target.value)}>
                 {PROVIDERS.map((p) => (
                   <option key={p.value} value={p.value}>
                     {p.label}
@@ -276,46 +367,39 @@ export function ChannelsView({
               <Input
                 value={credentialsRef}
                 onChange={(e) => setCredentialsRef(e.target.value)}
-                placeholder="env:ZERNIO_"
+                placeholder={CREDENTIALS_DEFAULTS[provider] ?? "env:PREFIX"}
               />
             </Field>
           </div>
 
-          <div className="mt-4">
-            <Button type="submit" disabled={pending || !providerAccountId.trim() || !senderAddress.trim()}>
-              <Plug className="w-4 h-4" /> {pending ? "Conectando..." : "Conectar"}
+          {MANUAL_PROVIDER_NOTES[provider] && (
+            <p className="mt-3 text-xs text-on-surface-variant">
+              {MANUAL_PROVIDER_NOTES[provider]}
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {manualZernioPlatform && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => connectZernio(channel)}
+                disabled={pending || !embeddedReady}
+              >
+                <Plug className="w-4 h-4" />
+                Usar conexión embebida de {CHANNEL_LABELS[channel] ?? channel}
+              </Button>
+            )}
+            <Button
+              type="submit"
+              variant={manualZernioPlatform ? "ghost" : "primary"}
+              disabled={pending || !providerAccountId.trim() || !senderAddress.trim()}
+            >
+              <Plug className="w-4 h-4" />{" "}
+              {pending ? "Conectando..." : manualZernioPlatform ? "Guardar cuenta manual" : "Conectar"}
             </Button>
           </div>
         </form>
-      </Card>
-
-      <Card title="Conexión rápida con Zernio">
-        <p className="mb-4 text-sm text-on-surface-variant">
-          Requiere <code className="data-mono text-xs">ZERNIO_API_KEY</code> en el entorno. Te redirige a
-          Zernio para autorizar la cuenta; al volver se crea la fila automáticamente (credenciales vía{" "}
-          <code className="data-mono text-xs">env:ZERNIO_</code>). Facebook incluye la selección de página
-          dentro del flujo.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {ZERNIO_CONNECT.map((c) => (
-            <Button
-              key={c.platform}
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={pending}
-              onClick={() => connectZernio(c.platform)}
-            >
-              <Plug className="w-3.5 h-3.5" />
-              {c.label}
-            </Button>
-          ))}
-        </div>
-        <p className="mt-3 text-xs text-status-warning">
-          Ojo: las cuentas conectadas por Zernio o Kapso guardan los mensajes, pero el agente todavía no
-          responde automáticamente en esos canales — hoy el auto-reply solo funciona con WhatsApp vía YCloud
-          y Telegram.
-        </p>
       </Card>
 
       <Card title="Webhooks entrantes" action={<Webhook className="w-4 h-4 text-on-surface-variant" />}>
