@@ -41,10 +41,12 @@ const {
   verifyAndResolveEvents,
 } = require("./ingress") as typeof import("./ingress");
 const {
+  channelEventKey,
   deliveryMarkerKey,
   isChannelDeliveryRecorded,
   persistChannelEvent,
   releaseChannelDeliveryMarker,
+  releaseChannelEventMarker,
 } = require("./channel-events") as typeof import("./channel-events");
 const { ChannelAccountResolutionError } = require("@/lib/messaging/accounts") as typeof import("@/lib/messaging/accounts");
 
@@ -334,7 +336,8 @@ describe("handlePassiveChannelEvent — delivery marker claim", () => {
   it("claims the delivery marker BEFORE any message write", async () => {
     const response = await handlePassiveChannelEvent(passiveEvent(), ctx);
     assert.equal(response.status, 200);
-    assert.equal(fake.rows("idempotency_keys").length, 1);
+    // delivery marker (claimed first) + canonical-intake idempotency key
+    assert.equal(fake.rows("idempotency_keys").length, 2);
     assert.equal(
       fake.rows("idempotency_keys")[0].key,
       deliveryMarkerKey("kapso", "del-1", "acct-row-a")
@@ -345,7 +348,7 @@ describe("handlePassiveChannelEvent — delivery marker claim", () => {
     await handlePassiveChannelEvent(passiveEvent(), ctx);
     const again = await handlePassiveChannelEvent(passiveEvent(), ctx);
     assert.equal(again.status, 200);
-    assert.equal(fake.rows("idempotency_keys").length, 1);
+    assert.equal(fake.rows("idempotency_keys").length, 2);
   });
 
   it("never claims a delivery it cannot key to a sender identity", async () => {
@@ -375,29 +378,32 @@ describe("handlePassiveChannelEvent — delivery marker claim", () => {
 
   it("keeps only the durable marker for channels outside the persistence enum", async () => {
     const response = await handlePassiveChannelEvent(
-      passiveEvent({ raw: { channel: "instagram" } }),
-      { channel: "instagram", account, channelAccountId: "acct-row-a" }
+      passiveEvent({ raw: { channel: "sms" } }),
+      { channel: "sms", account, channelAccountId: "acct-row-a" }
     );
     assert.equal(response.status, 200);
     assert.equal(fake.rows("chat_messages").length, 0);
     assert.equal(fake.rows("idempotency_keys").length, 1);
   });
 
-  // KNOWN BUG (reported, not fixed): inbound/comment passive events reach
-  // `persistCanonicalMessage` WITHOUT `direction`/`senderKind`, so canonical
-  // intake rejects them as invalid_input. The handler acks 200 and only the
-  // durable delivery marker survives — the message itself is lost. This test
-  // pins the CURRENT (lossy) behavior so the fix flips it deliberately.
-  it("currently drops an inbound passive message (marker only) — missing direction/senderKind", async () => {
+  it("persists an inbound passive message as a customer fact", async () => {
     const response = await handlePassiveChannelEvent(passiveEvent(), ctx);
     assert.equal(response.status, 200);
-    assert.equal(fake.rows("chat_messages").length, 0);
-    assert.equal(fake.rows("idempotency_keys").length, 1);
+    const message = fake.rows("chat_messages")[0];
+    assert.equal(message.direction, "inbound");
+    assert.equal(message.senderKind, "customer");
+    assert.equal(message.channelAccountId, "acct-row-a");
+    // delivery marker + canonical-intake idempotency key
+    assert.equal(fake.rows("idempotency_keys").length, 2);
   });
 
-  it("currently drops a comment the same way", async () => {
-    await handlePassiveChannelEvent(passiveEvent({ kind: "comment.received", platformMessageId: "comment-1" }), ctx);
-    assert.equal(fake.rows("chat_messages").length, 0);
+  it("persists a comment as a customer inbound fact", async () => {
+    const response = await handlePassiveChannelEvent(passiveEvent({ kind: "comment.received", platformMessageId: "comment-1" }), ctx);
+    assert.equal(response.status, 200);
+    const message = fake.rows("chat_messages")[0];
+    assert.equal(message.direction, "inbound");
+    assert.equal(message.senderKind, "customer");
+    assert.equal(message.content, "[Comentario]: hola");
   });
 });
 
@@ -420,5 +426,26 @@ describe("delivery marker release", () => {
   it("is idempotent: releasing an absent marker does not throw", async () => {
     await releaseChannelDeliveryMarker("kapso", "never-claimed", "acct-row-a");
     assert.equal(await isChannelDeliveryRecorded("kapso", "never-claimed", "acct-row-a"), false);
+  });
+
+  it("releases an id-less delivery by its channelEventKey — the platform-keyed marker is not leaked", async () => {
+    const idless = event({
+      provider: "kapso",
+      deliveryId: "",
+      kind: "message.status",
+      status: "delivered",
+      raw: { channel: "whatsapp" },
+    });
+    const first = await persistChannelEvent(idless, ctx);
+    assert.equal(first.kind, "persisted");
+    // The claim was keyed by platform/kind/status, not provider:delivery:.
+    assert.equal(channelEventKey(idless).includes(":platform:"), true);
+    assert.equal(fake.rows("idempotency_keys").length, 1);
+
+    await releaseChannelEventMarker(idless, "acct-row-a");
+    assert.equal(fake.rows("idempotency_keys").length, 0);
+
+    const retried = await persistChannelEvent(idless, ctx);
+    assert.equal(retried.kind, "persisted");
   });
 });

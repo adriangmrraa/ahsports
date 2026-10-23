@@ -17,12 +17,12 @@ import {
 } from "./accounts";
 import {
   persistChannelEvent,
-  releaseChannelDeliveryMarker,
+  releaseChannelEventMarker,
 } from "./channel-events";
 import { canonicalExternalUserId } from "./conversation-identity";
 import { classifyError } from "./errors";
 import { isMessageDuplicate } from "./inbound-pipeline";
-import { ensureLeadIdentity } from "./lead-identity";
+import { ensureLeadIdentity } from "@/lib/channels/lead-identity";
 import { channelForProvider, isChannelKind } from "./registry";
 import type {
   ChannelAccount,
@@ -453,7 +453,7 @@ export async function handlePassiveChannelEvent(
       );
       return NextResponse.json({ ok: true }, { status: 200 });
     }
-    if (await isMessageDuplicate(channel, platformMessageId)) {
+    if (await isMessageDuplicate(channel, platformMessageId, ctx.channelAccountId ?? null)) {
       console.log(
         `[ingress] duplicate ${event.kind} ${platformMessageId} on ${channel} — skipping`
       );
@@ -473,10 +473,24 @@ export async function handlePassiveChannelEvent(
         : persistCanonicalMessage;
     const outcome = await persist({
       channel,
+      channelAccountId: ctx.channelAccountId ?? null,
       externalThreadId,
       platformMessageId,
-      ...(event.direction === "outbound" && event.kind !== "message.echo"
-        ? { direction: "outbound" as const, senderKind: "operator" as const }
+      // Non-echo kinds must carry direction+senderKind or canonical intake
+      // rejects them as invalid_input (the row was silently dropped, marker
+      // only). Inbound/comments persist as customer facts; business-originated
+      // outbound non-echo events import as operator facts.
+      ...(event.kind !== "message.echo"
+        ? {
+            direction:
+              event.direction === "outbound"
+                ? ("outbound" as const)
+                : ("inbound" as const),
+            senderKind:
+              event.direction === "outbound"
+                ? ("operator" as const)
+                : ("customer" as const),
+          }
         : {}),
       senderRef: event.sender.phone ?? event.sender.username ?? undefined,
       contentType: passiveContentType(event),
@@ -495,9 +509,8 @@ export async function handlePassiveChannelEvent(
     if (!outcome.ok) {
       if (outcome.error === "persistence_failed") {
         if (deliveryClaimed) {
-          await releaseChannelDeliveryMarker(
-            event.provider,
-            event.deliveryId,
+          await releaseChannelEventMarker(
+            event,
             ctx.channelAccountId ?? null
           );
           deliveryClaimed = false;
@@ -535,9 +548,8 @@ export async function handlePassiveChannelEvent(
   } catch (error) {
     // Transient persistence failures must be retried, not acked/dropped.
     if (deliveryClaimed) {
-      await releaseChannelDeliveryMarker(
-        event.provider,
-        event.deliveryId,
+      await releaseChannelEventMarker(
+        event,
         ctx.channelAccountId ?? null
       );
     }

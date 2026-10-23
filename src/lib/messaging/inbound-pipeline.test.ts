@@ -12,7 +12,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { conversations, chatMessages } from "@/db/schema";
+import { agentMemories, conversations, chatMessages } from "@/db/schema";
 import type { ChannelAccountRow } from "@/lib/messaging/accounts";
 import type { ChannelAccount, NormalizedInboundEvent } from "@/lib/messaging/types";
 
@@ -150,6 +150,25 @@ describe("isMessageDuplicate", () => {
   it("treats an empty id as not duplicate (no anchor to compare)", async () => {
     assert.equal(await isMessageDuplicate("whatsapp", ""), false);
   });
+
+  it("dedups per account partition — the same pmid under another account is NOT a duplicate", async () => {
+    fake.seed(chatMessages, [
+      {
+        id: "m-b",
+        conversationId: "conv-b",
+        channel: "whatsapp",
+        channelAccountId: "acct-b",
+        platformMessageId: "wamid.shared",
+        direction: "inbound",
+        senderKind: "customer",
+        content: "hola",
+        createdAt: new Date(),
+      },
+    ]);
+    assert.equal(await isMessageDuplicate("whatsapp", "wamid.shared", "acct-b"), true);
+    assert.equal(await isMessageDuplicate("whatsapp", "wamid.shared", "acct-a"), false);
+    assert.equal(await isMessageDuplicate("whatsapp", "wamid.shared", null), false);
+  });
 });
 
 describe("handleNormalizedEvent — inbound", () => {
@@ -241,6 +260,90 @@ describe("handleNormalizedEvent — inbound", () => {
     const response = await handleNormalizedEvent(inbound({ sender: { phone }, platformMessageId: "wamid.in.6" }), ctx);
     assert.equal(response.status, 200);
     assert.equal(await BufferManager.hasNewMessages("whatsapp", phone), true);
+  });
+
+  it("does NOT suppress on a recent automated send — agent rows never count as operator activity", async () => {
+    const phone = "+15550000005";
+    const normalized = "15550000005";
+    fake.seed(conversations, [
+      { id: "conv-auto", channel: "whatsapp", channelAccountId: null, externalThreadId: normalized, createdAt: new Date() },
+    ]);
+    fake.seed(chatMessages, [
+      {
+        id: "m-notify",
+        conversationId: "conv-auto",
+        channel: "whatsapp",
+        platformMessageId: "order-status:1:en_produccion",
+        direction: "outbound",
+        senderKind: "agent",
+        senderRef: "order-status-notify",
+        content: "Tu pedido entró a producción",
+        createdAt: new Date(),
+      },
+    ]);
+    const response = await handleNormalizedEvent(inbound({ sender: { phone }, platformMessageId: "wamid.in.5" }), ctx);
+    assert.equal(response.status, 200);
+    assert.equal(await BufferManager.hasNewMessages("whatsapp", phone), true);
+  });
+
+  it("clears the operator mute at handoff.resolvedAt — rows before the boundary do not count", async () => {
+    const phone = "+15550000004";
+    const normalized = "15550000004";
+    fake.seed(conversations, [
+      { id: "conv-resolved", channel: "whatsapp", channelAccountId: null, externalThreadId: normalized, createdAt: new Date() },
+    ]);
+    fake.seed(chatMessages, [
+      {
+        id: "m-during-handoff",
+        conversationId: "conv-resolved",
+        channel: "whatsapp",
+        platformMessageId: "op-reply:during",
+        direction: "outbound",
+        senderKind: "operator",
+        content: "Lo veo yo",
+        // One minute ago — inside the 2h window but BEFORE the resolution.
+        createdAt: new Date(Date.now() - 60_000),
+      },
+    ]);
+    fake.seed(agentMemories, [
+      {
+        scope: "customer",
+        key: "whatsapp-handoff-resolved:conv-resolved",
+        value: { resolvedAt: new Date().toISOString() },
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    ]);
+    const response = await handleNormalizedEvent(inbound({ sender: { phone }, platformMessageId: "wamid.in.4" }), ctx);
+    assert.equal(response.status, 200);
+    assert.equal(await BufferManager.hasNewMessages("whatsapp", phone), true);
+  });
+
+  it("re-arms the durable turn job on a redelivery whose persist crashed before enqueue", async () => {
+    const phone = "+15550000003";
+    const normalized = "15550000003";
+    fake.seed(conversations, [
+      { id: "conv-orphan", channel: "whatsapp", channelAccountId: null, externalThreadId: normalized, createdAt: new Date() },
+    ]);
+    fake.seed(chatMessages, [
+      {
+        id: "m-orphan",
+        conversationId: "conv-orphan",
+        channel: "whatsapp",
+        platformMessageId: "wamid.in.3",
+        direction: "inbound",
+        senderKind: "customer",
+        content: "siguen ahí?",
+        createdAt: new Date(),
+      },
+    ]);
+    const response = await handleNormalizedEvent(
+      inbound({ sender: { phone }, platformMessageId: "wamid.in.3", deliveryId: "del-redelivered" }),
+      ctx
+    );
+    assert.equal(response.status, 200);
+    const jobs = fake.rows("agent_inbound_jobs");
+    assert.equal(jobs.length, 1);
+    assert.equal(jobs[0].dedupKey, "turn:conv-orphan");
   });
 });
 
