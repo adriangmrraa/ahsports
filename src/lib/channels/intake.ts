@@ -146,13 +146,14 @@ export function persistAgentOutbound(input: Record<string, unknown>): Promise<In
 }
 
 /**
- * P1.4 — persist an imported WhatsApp Business operator outbound message.
- * Observe/import only: no WhatsApp provider client and no send path exist.
+ * P1.4 — persist an imported operator outbound message. `channel` defaults
+ * to whatsapp but an explicit input channel wins (instagram/facebook echoes
+ * persist on their own channel). Observe/import only.
  */
 export function importOperatorOutbound(input: Record<string, unknown>): Promise<IntakeOutcome> {
   return persistCanonicalMessage({
-    ...input,
     channel: "whatsapp",
+    ...input,
     direction: "outbound",
     senderKind: "operator",
     deliveryState: "imported",

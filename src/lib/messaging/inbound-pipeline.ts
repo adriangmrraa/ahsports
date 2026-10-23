@@ -102,7 +102,7 @@ const INBOUND_RATE_LIMIT = 30;
  * intake; this pre-check skips the transaction entirely on replay.
  */
 export async function isMessageDuplicate(
-  channel: "whatsapp" | "telegram",
+  channel: ChannelKind,
   platformMessageId: string
 ): Promise<boolean> {
   if (!platformMessageId) return false;
