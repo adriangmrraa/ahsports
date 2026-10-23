@@ -165,7 +165,10 @@ async function sendWhatsAppTo(phone: string, message: string, context: AgentTool
     externalThreadId: digits,
     platformMessageId,
     direction: "outbound",
-    senderKind: "operator",
+    // Bulk sends are automated: stamping them "operator" would mute the
+    // agent for 2h on every broadcast recipient that replies. Only the
+    // send-as-operator path (human, confirmed, one-off) is operator work.
+    senderKind: keyPrefix.startsWith("bc") ? "agent" : "operator",
     senderRef: context.actorRef ?? null,
     contentType: "text",
     content: message,
