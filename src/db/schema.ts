@@ -1022,6 +1022,54 @@ export const agentInboundJobs = pgTable(
   }),
 );
 
+/**
+ * Marketing/attribution leads (W6 port of SocialCRM `leads`). Distinct from
+ * `contacts`: a lead is a top-of-funnel capture (ad click, wa.me ref link,
+ * public signup) carrying UTM/ad attribution; it links to a contact once the
+ * conversation materializes.
+ *
+ * `channelAccountId` is the FIRST-attribution account: set once at capture
+ * and only ever filled while NULL — traffic on another account never migrates
+ * ownership. `phone` is the dedup key for messaging leads; social leads may
+ * keep NULL phone with the identity in `lead_identities`.
+ */
+export const leads = pgTable(
+  "leads",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    name: varchar("name", { length: 255 }),
+    phone: varchar("phone", { length: 64 }).unique(),
+    channel: channel("channel"),
+    externalUserId: text("external_user_id"),
+    channelAccountId: varchar("channel_account_id", { length: 36 }).references(() => channelAccounts.id, { onDelete: "set null" }),
+    contactId: varchar("contact_id", { length: 36 }).references(() => contacts.id, { onDelete: "set null" }),
+    email: varchar("email", { length: 255 }),
+    firstMessage: text("first_message"),
+    lastMessage: text("last_message"),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+    refCode: varchar("ref_code", { length: 255 }),
+    utmSource: varchar("utm_source", { length: 255 }),
+    utmMedium: varchar("utm_medium", { length: 255 }),
+    utmCampaign: varchar("utm_campaign", { length: 255 }),
+    utmContent: varchar("utm_content", { length: 255 }),
+    adId: varchar("ad_id", { length: 255 }),
+    campaignId: varchar("campaign_id", { length: 255 }),
+    adsetId: varchar("adset_id", { length: 255 }),
+    platform: varchar("platform", { length: 100 }),
+    status: leadStatus("status").notNull().default("nuevo"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    channelExternalUq: uniqueIndex("leads_channel_external_uq")
+      .on(t.channel, t.externalUserId)
+      .where(sql`${t.externalUserId} is not null`),
+    channelAccountIdx: index("leads_channel_account_idx").on(t.channelAccountId),
+    contactIdx: index("leads_contact_idx").on(t.contactId),
+    createdIdx: index("leads_created_idx").on(t.createdAt),
+  }),
+);
+
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
   customer: one(contacts, { fields: [conversations.customerId], references: [contacts.id] }),
   organization: one(organizations, { fields: [conversations.organizationId], references: [organizations.id] }),
