@@ -4206,5 +4206,15 @@
   "docs_07_deployment_6_seed_inicial_una_sola_vez": "Section \"6. Seed inicial (una sola vez)\" in docs/07-DEPLOYMENT.md.",
   "docs_07_deployment_7_custom_domain_opcional": "Section \"7. Custom domain (opcional)\" in docs/07-DEPLOYMENT.md.",
   "docs_07_deployment_8_monitoreo_mínimo": "Section \"8. Monitoreo mínimo\" in docs/07-DEPLOYMENT.md.",
-  "docs_07_deployment_9_backups": "Section \"9. Backups\" in docs/07-DEPLOYMENT.md."
+  "docs_07_deployment_9_backups": "Section \"9. Backups\" in docs/07-DEPLOYMENT.md.",
+  "docs_review_r3": "Markdown document docs/review-r3.md: \"Review R3 — Leads, attribution, Meta pixel/CAPI, analytics (W6)\".",
+  "docs_review_r3_findings": "Section \"Findings\" in docs/review-r3.md.",
+  "docs_review_r3_notes_for_the_fix_wave": "Section \"Notes for the fix wave\" in docs/review-r3.md.",
+  "docs_review_r3_review_r3_leads_attribution_meta_pixel_capi_analytics_w6": "Section \"Review R3 — Leads, attribution, Meta pixel/CAPI, analytics (W6)\" in docs/review-r3.md.",
+  "docs_review_r3_verified_ok": "Section \"Verified OK\" in docs/review-r3.md.",
+  "docs_review_r4": "Markdown document docs/review-r4.md: \"REVIEW R4 — Agent config, providers, zernio embedded connect\".",
+  "docs_review_r4_findings": "Section \"Findings\" in docs/review-r4.md.",
+  "docs_review_r4_notas_de_cobertura": "Section \"Notas de cobertura\" in docs/review-r4.md.",
+  "docs_review_r4_review_r4_agent_config_providers_zernio_embedded_connect": "Section \"REVIEW R4 — Agent config, providers, zernio embedded connect\" in docs/review-r4.md.",
+  "docs_review_r4_verificado_ok": "Section \"Verificado OK\" in docs/review-r4.md."
 }
