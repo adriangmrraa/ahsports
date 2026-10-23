@@ -12,6 +12,8 @@ import {
   SENDER_LABEL,
   deliveryTone,
 } from "@/lib/agent/inbox-labels";
+import { encodeStreamCursor } from "@/lib/live/events";
+import { useEventStream } from "@/lib/live/useEventStream";
 import { formatDateTime } from "@/lib/utils";
 import type { ChatMessageItem, MessageCursor } from "@/lib/agent/inbox";
 
@@ -34,6 +36,25 @@ export function MessagesTimeline({
   const [failed, setFailed] = useState(false);
   const [pending, startTransition] = useTransition();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Stream cursor is fixed at mount from the newest rendered message: the
+  // server emits only rows strictly newer, and id-dedup absorbs any re-emit
+  // after an EventSource reconnect. Fixed => the endpoint never changes, so
+  // the connection never churns.
+  const [streamEndpoint] = useState(() => {
+    const newest = initialMessages[0];
+    const query = newest
+      ? `?cursor=${encodeURIComponent(encodeStreamCursor(newest.createdAt, newest.id))}`
+      : "";
+    return `/api/events/conversations/${conversationId}${query}`;
+  });
+
+  useEventStream(streamEndpoint, (data) => {
+    const message = data as ChatMessageItem;
+    if (typeof message?.id !== "string" || typeof message?.createdAt !== "string") return;
+    // Timeline renders newest-first — live rows prepend.
+    setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [message, ...prev]));
+  });
 
   const loadMore = useCallback(() => {
     if (!hasMore || pending) return;
