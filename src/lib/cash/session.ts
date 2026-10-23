@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { db } from "@/db/client";
 import { cashMovements, cashSessions, payments } from "@/db/schema";
 import { toCents } from "@/lib/payments";
@@ -63,6 +63,10 @@ export async function getOpenSession(): Promise<CashSession | null> {
  * closedAt of the last closed session (now when there is no history) and
  * openingCash = its actualCash (0 otherwise) — payments taken "with the
  * drawer closed" still land inside the next window.
+ *
+ * Race-safe: the partial unique index `cash_sessions_open_uq` allows at most
+ * one `status='open'` row, so a concurrent insert loses the conflict and this
+ * function re-reads and returns the winner instead of creating an orphan.
  */
 export async function ensureOpenSession(): Promise<CashSession> {
   const open = await getOpenSession();
@@ -82,32 +86,72 @@ export async function ensureOpenSession(): Promise<CashSession> {
       openedAt: lastClosed?.closedAt ?? new Date(),
       openingCash: lastClosed?.actualCash ?? "0",
     })
+    .onConflictDoNothing()
     .returning();
-  return created;
+  if (created) return created;
+
+  // Lost the race: the winning session is committed and visible now.
+  const winner = await getOpenSession();
+  if (!winner) throw new Error("No se pudo abrir la sesión de caja.");
+  return winner;
 }
 
 /**
- * Explicit open (operator-facing). Unlike ensureOpenSession it does NOT
- * backdate — openedAt = now. Refuses when a session is already open.
+ * Explicit open (operator-facing). Opens where the last session closed so the
+ * chain stays continuous: openedAt = previous closedAt and, when no fondo is
+ * passed, openingCash = previous actualCash. A counted fondo that differs from
+ * the previous actualCash is accepted only with an audit note, so the drawer
+ * cannot drift silently. Refuses when a session is already open; the partial
+ * unique index makes that guard race-safe.
  */
-export async function openSession(openingCash: number, openedBy?: string): Promise<CashSession> {
-  if (!Number.isFinite(openingCash) || openingCash < 0) {
+export async function openSession(
+  openingCash?: number,
+  openedBy?: string,
+  note?: string,
+): Promise<CashSession> {
+  const [lastClosed] = await db
+    .select()
+    .from(cashSessions)
+    .where(eq(cashSessions.status, "closed"))
+    .orderBy(desc(cashSessions.closedAt))
+    .limit(1);
+
+  const priorCash = lastClosed?.actualCash ?? "0";
+  const resolvedOpeningCash = openingCash ?? toCents(priorCash) / 100;
+
+  if (!Number.isFinite(resolvedOpeningCash) || resolvedOpeningCash < 0) {
     throw new Error("El fondo inicial de caja tiene que ser un número mayor o igual a 0.");
   }
+
+  const reason = note?.trim();
+  if (lastClosed && toCents(resolvedOpeningCash.toFixed(2)) !== toCents(priorCash) && !reason) {
+    throw new Error(
+      "El fondo inicial no coincide con el efectivo real del último cierre. Si es intencional, agregá una nota con el motivo.",
+    );
+  }
+
   const existing = await getOpenSession();
   if (existing) {
     throw new Error(`Ya hay una sesión de caja abierta. Cerrala antes de abrir otra.`);
   }
+
+  const notes = [`[open] Abierta por ${openedBy?.trim() || "sistema"}`, reason ? `Motivo: ${reason}` : null]
+    .filter(Boolean)
+    .join("\n");
+
   const [created] = await db
     .insert(cashSessions)
     .values({
       status: "open",
-      openedAt: new Date(),
-      openingCash: openingCash.toFixed(2),
-      ...(openedBy ? { notes: `Abierta por ${openedBy}` } : {}),
+      openedAt: lastClosed?.closedAt ?? new Date(),
+      openingCash: resolvedOpeningCash.toFixed(2),
+      notes,
     })
+    .onConflictDoNothing()
     .returning();
-  return created;
+  if (created) return created;
+
+  throw new Error(`Ya hay una sesión de caja abierta. Cerrala antes de abrir otra.`);
 }
 
 /** Manual in/out inside the CURRENT session (e.g. retiro de cambio, gasto). */
@@ -228,9 +272,18 @@ export async function closeSession(
     return { error: "No hay ninguna sesión de caja abierta para cerrar." };
   }
 
-  const snapshot = await getSnapshot(session.id);
   const closedAt = new Date();
+  const snapshot = await getSnapshot(session.id, closedAt);
   const difference = round2(actualCash - snapshot.expectedCash);
+
+  // Preserve the open provenance in the frozen audit seat: a close note is
+  // appended instead of replacing who opened the drawer.
+  const closeNote = notes?.trim();
+  const mergedNotes = closeNote
+    ? session.notes
+      ? `${session.notes}\n[close] ${closeNote}`
+      : `[close] ${closeNote}`
+    : session.notes;
 
   const [updated] = await db
     .update(cashSessions)
@@ -242,7 +295,7 @@ export async function closeSession(
       difference: difference.toFixed(2),
       closedBy: closedBy?.trim() || "sistema",
       report: snapshot as unknown as Record<string, unknown>,
-      ...(notes !== undefined ? { notes } : {}),
+      notes: mergedNotes,
     })
     .where(and(eq(cashSessions.id, session.id), eq(cashSessions.status, "open")))
     .returning();

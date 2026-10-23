@@ -8,7 +8,6 @@ import { sumActivePaymentsCents, toCents } from "@/lib/payments";
 import {
   addMovement,
   closeSession,
-  ensureOpenSession,
   getOpenSession,
   getSnapshot,
   openSession,
@@ -252,10 +251,14 @@ export const getCashSessionStatusTool: AgentTool<z.infer<typeof cashSessionStatu
   effect: "read",
   inputSchema: cashSessionStatusInput,
   async handler() {
-    const session = await ensureOpenSession();
+    const session = await getOpenSession();
+    if (!session) {
+      return { ok: true as const, open: false as const, message: "No hay caja abierta" };
+    }
     const snapshot = await getSnapshot(session.id);
     return {
       ok: true as const,
+      open: true as const,
       sessionId: session.id,
       openedAt: session.openedAt.toISOString(),
       openedAtLabel: formatDateTimeAr(session.openedAt),
@@ -272,17 +275,23 @@ export const getCashSessionStatusTool: AgentTool<z.infer<typeof cashSessionStatu
 
 const openCashSessionInput = z.object({
   openingCash: z.number().min(0).max(100000000).describe("Fondo inicial de efectivo en el cajón"),
+  note: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .describe("Motivo cuando el fondo contado difiere del efectivo real del último cierre"),
 });
 
 const openCashSessionInner: AgentTool<z.infer<typeof openCashSessionInput>> = {
   id: "openCashSession",
   description:
-    "Abre la sesión de caja física con el fondo inicial contado. Falla si ya hay una abierta — primero cerrala con closeCashSession. Requiere confirmación.",
+    "Abre la sesión de caja física con el fondo inicial contado. La sesión arranca donde cerró la anterior; si el fondo contado difiere del efectivo real del último cierre, pasá una nota con el motivo. Falla si ya hay una abierta — primero cerrala con closeCashSession. Requiere confirmación.",
   effect: "draft",
   inputSchema: openCashSessionInput,
   async handler(input, context) {
     try {
-      const session = await openSession(input.openingCash, context.actorRef ?? undefined);
+      const session = await openSession(input.openingCash, context.actorRef ?? undefined, input.note);
       await auditOperatorAction({ toolId: "openCashSession", phase: "executed", args: {}, context, result: { sessionId: session.id } });
       await db.insert(auditEvents).values({
         action: "agent.cash_session.opened",
@@ -290,7 +299,7 @@ const openCashSessionInner: AgentTool<z.infer<typeof openCashSessionInput>> = {
         actorRef: context.actorRef ?? null,
         entityType: "cash_session",
         entityId: session.id,
-        payload: { after: { openingCash: input.openingCash, openedAt: session.openedAt.toISOString() } },
+        payload: { after: { openingCash: input.openingCash, openedAt: session.openedAt.toISOString(), note: input.note ?? null } },
       });
       return { ok: true as const, sessionId: session.id, openedAt: session.openedAt.toISOString(), openingCash: input.openingCash };
     } catch (error) {

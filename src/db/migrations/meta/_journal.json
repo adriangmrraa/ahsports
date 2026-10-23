@@ -134,6 +134,13 @@
       "when": 1786400000005,
       "tag": "0023_contacts_marketing_opt_out",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786400000006,
+      "tag": "0024_cash_open_unique",
+      "breakpoints": true
     }
   ]
 }
