@@ -21,6 +21,13 @@ export const WORKSHOP_SETTING_KEYS = [
   "taller_contacto_phone",
   "taller_direccion",
   "meta_pixel_id",
+  // A-11 — leídas por las tools del agente de ventas (getBusinessHours,
+  // checkAvailability, getPaymentAlias). taller_horarios es jsonb:
+  // [{ day: "Lunes", open: true, openTime: "08:00", closeTime: "17:00" }, ...]
+  "taller_horarios",
+  "taller_plazo",
+  "taller_alias",
+  "taller_banco",
 ] as const;
 
 /** Claves de identidad del negocio (A-16) — públicas vía /api/business. */

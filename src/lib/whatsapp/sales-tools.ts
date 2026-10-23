@@ -37,12 +37,21 @@ import {
   productBundleItems,
   productBundles,
   products,
+  promotions,
+  settings,
   sizes,
   techniques,
 } from "@/db/schema";
 import type { DbTransaction } from "@/lib/db-transaction";
 import { OrderDraftDomainError } from "@/lib/orders/draft-order";
 import { fromCents, toCents } from "@/lib/payments";
+import {
+  addOrderContextItem,
+  clearOrderContext,
+  getOrderContextSummary,
+  markOrderContextOrdered,
+  removeOrderContextItem,
+} from "@/lib/order-context";
 import { quoteOrder, type QuoteResult, type SizeQuantity } from "@/lib/pricing";
 import type { AgentTool, AgentToolContext } from "@/lib/agents/tools/types";
 import { getStatusSemantic } from "./status-utils";
@@ -1202,6 +1211,856 @@ export const transferToHumanTool: AgentTool<z.infer<typeof transferInput>> = {
   },
 };
 
+// ─── A-09 · Conversation cart (order context) ───────────────────────────────
+//
+// Transient cart the agent fills BEFORE formalizing. Rows live 30 minutes and
+// belong to this conversation only — `context.conversationId` scopes every
+// read/write, the model can never touch another customer's cart. No prices
+// are stored or shown here: pricing stays server-authoritative at draft time.
+
+const addCartItemInput = z.object({
+  productName: z.string().trim().min(1).max(255).describe("Nombre del producto mencionado por el cliente"),
+  quantity: z.number().int().min(1).max(100000).describe("Cantidad de prendas"),
+  sizeLabel: z.string().trim().min(1).max(32).nullish().describe("Talle si el cliente lo indicó (S, M, L, XL...)"),
+  techniqueName: z.string().trim().min(1).max(128).nullish().describe("Técnica si la indicó (sublimado, DTF, bordado...)"),
+  notes: z.string().trim().max(500).nullish().describe("Aclaraciones del cliente para este ítem"),
+});
+
+export const addCartItemTool: AgentTool<z.infer<typeof addCartItemInput>> = {
+  id: "addCartItem",
+  description:
+    "Agrega un producto al carrito de esta conversación (dura 30 minutos). Usá esto a medida que el cliente pide cosas para no perder el detalle. Después draftOrderFromCart formaliza todo junto.",
+  effect: "draft",
+  inputSchema: addCartItemInput,
+  async handler(input, context) {
+    const customer = await resolveConversationCustomer(context);
+    if ("error" in customer) {
+      return { ok: false as const, error: "no_conversation", message: "No pude identificar la conversación." };
+    }
+    // Resolve on the server so the cart holds real catalog references; an
+    // unresolved name is still storable (the draft step re-resolves and can
+    // offer candidates) — but we flag it so the agent can fix it early.
+    const product = await resolveProductByName(input.productName);
+    const resolvedName = product.ok ? product.value.name : input.productName.trim();
+    if (input.sizeLabel && product.ok) {
+      const resolved = await resolveSizeQuantities(product.value.id, [{ label: input.sizeLabel, quantity: input.quantity }]);
+      if (!resolved.ok) {
+        return {
+          ok: false as const,
+          error: resolved.error,
+          message: `El talle "${input.sizeLabel}" no existe para ${product.value.name}.`,
+          availableSizes: resolved.candidates,
+        };
+      }
+    }
+    await addOrderContextItem({
+      conversationId: customer.conversationId,
+      phone: customer.phone ?? "",
+      productId: product.ok ? product.value.id : null,
+      productName: resolvedName,
+      sizeLabel: input.sizeLabel?.trim() || null,
+      techniqueName: input.techniqueName?.trim() || null,
+      quantity: input.quantity,
+      notes: input.notes ?? null,
+    });
+    const cart = await getOrderContextSummary(customer.conversationId);
+    return {
+      ok: true as const,
+      added: `${input.quantity}x ${resolvedName}`,
+      resolvedToCatalog: product.ok,
+      cartSize: cart.length,
+      note: product.ok
+        ? "Item agregado al carrito. Cuando el cliente cierre, usá draftOrderFromCart."
+        : "Guardado, pero no pude resolver el producto en el catálogo — verificá el nombre antes de formalizar.",
+    };
+  },
+};
+
+const getCartInput = z.object({});
+
+export const getCartTool: AgentTool<z.infer<typeof getCartInput>> = {
+  id: "getCart",
+  description:
+    "Muestra el carrito actual de esta conversación (ítems pendientes de formalizar, con su id para poder quitarlos).",
+  effect: "read",
+  inputSchema: getCartInput,
+  async handler(_input, context) {
+    const customer = await resolveConversationCustomer(context);
+    if ("error" in customer) {
+      return { ok: false as const, error: "no_conversation", message: "No pude identificar la conversación." };
+    }
+    const items = await getOrderContextSummary(customer.conversationId);
+    return {
+      ok: true as const,
+      count: items.length,
+      items: items.map((item) => ({
+        itemId: item.id,
+        productName: item.productName,
+        quantity: item.quantity,
+        sizeLabel: item.sizeLabel,
+        techniqueName: item.techniqueName,
+        notes: item.notes,
+      })),
+      note: items.length === 0 ? "El carrito está vacío." : "Para formalizar todo junto usá draftOrderFromCart; para quitar un ítem, removeCartItem.",
+    };
+  },
+};
+
+const removeCartItemInput = z.object({
+  itemId: z.string().trim().min(1).max(64).describe("itemId devuelto por getCart"),
+});
+
+export const removeCartItemTool: AgentTool<z.infer<typeof removeCartItemInput>> = {
+  id: "removeCartItem",
+  description: "Quita un ítem del carrito de esta conversación por su itemId (lo devuelve getCart).",
+  effect: "draft",
+  inputSchema: removeCartItemInput,
+  async handler(input, context) {
+    const customer = await resolveConversationCustomer(context);
+    if ("error" in customer) {
+      return { ok: false as const, error: "no_conversation", message: "No pude identificar la conversación." };
+    }
+    const removed = await removeOrderContextItem(customer.conversationId, input.itemId);
+    return removed
+      ? { ok: true as const, removed: true as const }
+      : { ok: false as const, error: "item_not_found", message: "Ese ítem no está en el carrito o ya expiró." };
+  },
+};
+
+const clearCartInput = z.object({});
+
+export const clearCartTool: AgentTool<z.infer<typeof clearCartInput>> = {
+  id: "clearCart",
+  description: "Vacía el carrito de esta conversación cuando el cliente quiere empezar de nuevo.",
+  effect: "draft",
+  inputSchema: clearCartInput,
+  async handler(_input, context) {
+    const customer = await resolveConversationCustomer(context);
+    if ("error" in customer) {
+      return { ok: false as const, error: "no_conversation", message: "No pude identificar la conversación." };
+    }
+    const removed = await clearOrderContext(customer.conversationId);
+    return { ok: true as const, removed };
+  },
+};
+
+const draftFromCartInput = z.object({
+  organizationName: z.string().trim().min(1).max(255).nullish()
+    .describe("Club/colegio/empresa si el cliente lo mencionó"),
+  notes: z.string().trim().max(4000).nullish(),
+  urgent: z.boolean().optional(),
+});
+
+/**
+ * Formalizes the live cart into ONE borrador order. Each cart row re-resolves
+ * its product/technique/size server-side and the whole order re-prices through
+ * quoteOrder() — the cart is a convenience, never a price source.
+ */
+export const draftOrderFromCartTool: AgentTool<z.infer<typeof draftFromCartInput>> = {
+  id: "draftOrderFromCart",
+  description:
+    "Convierte el carrito completo de esta conversación en UN pedido BORRADOR con precio del motor. Requiere carrito no vacío. Requiere confirmación humana — no aprueba ni cobra.",
+  effect: "draft",
+  inputSchema: draftFromCartInput,
+  async handler(input, context) {
+    const customer = await resolveConversationCustomer(context);
+    if ("error" in customer) {
+      return { ok: false as const, error: "no_conversation", message: "No pude identificar la conversación." };
+    }
+    const cart = await getOrderContextSummary(customer.conversationId);
+    if (cart.length === 0) {
+      return {
+        ok: false as const,
+        draft: false as const,
+        error: "empty_cart" as const,
+        message: "El carrito está vacío — primero agregá productos con addCartItem.",
+      };
+    }
+
+    // Re-resolve every row server-side. A row that no longer resolves (or
+    // never did) aborts the whole draft with a fixable list — a partial draft
+    // would silently drop items the client believes are included.
+    const resolvedLines: Array<{
+      product: ResolvedProduct;
+      techniqueId: string | null;
+      quantity: number;
+      sizeQuantities: SizeQuantity[];
+      notes: string | null;
+    }> = [];
+    const failures: string[] = [];
+    for (const item of cart) {
+      const product = await resolveProductByName(item.productName);
+      if (!product.ok) {
+        failures.push(`${item.productName} (${product.error === "ambiguous" ? "ambiguë" : "no existe"})`);
+        continue;
+      }
+      let techniqueId: string | null = null;
+      if (item.techniqueName) {
+        const technique = await resolveTechniqueByName(item.techniqueName);
+        if (!technique.ok) {
+          failures.push(`técnica "${item.techniqueName}" en ${item.productName}`);
+          continue;
+        }
+        techniqueId = technique.value.id;
+      }
+      let sizeQuantities: SizeQuantity[] = [];
+      if (item.sizeLabel) {
+        const resolved = await resolveSizeQuantities(product.value.id, [{ label: item.sizeLabel, quantity: item.quantity }]);
+        if (!resolved.ok) {
+          failures.push(`talle "${item.sizeLabel}" en ${item.productName}`);
+          continue;
+        }
+        sizeQuantities = resolved.sizeQuantities;
+      }
+      resolvedLines.push({
+        product: product.value,
+        techniqueId,
+        quantity: item.quantity,
+        sizeQuantities,
+        notes: item.notes,
+      });
+    }
+    if (failures.length > 0) {
+      return {
+        ok: false as const,
+        draft: false as const,
+        error: "unresolved_cart_items" as const,
+        message: `No pude resolver: ${failures.join(", ")}. Corregí el carrito (getCart/removeCartItem/addCartItem) y reintentá.`,
+        requiresHumanConfirmation: HUMAN_CONFIRMATION_REQUIRED,
+      };
+    }
+
+    let quote: QuoteResult;
+    try {
+      quote = await quoteOrder({
+        urgent: input.urgent,
+        lines: resolvedLines.map((line) => ({
+          productId: line.product.id,
+          quantity: line.quantity,
+          techniqueId: line.techniqueId,
+          sizeQuantities: line.sizeQuantities.length > 0 ? line.sizeQuantities : undefined,
+        })),
+      });
+    } catch (error) {
+      return {
+        ok: false as const,
+        draft: false as const,
+        error: "quote_failed" as const,
+        reason: quoteFailureReason(error),
+        message: "No se pudo cotizar el carrito — probablemente falte receta/BOM o regla de precios. No se guardó nada.",
+        requiresHumanConfirmation: HUMAN_CONFIRMATION_REQUIRED,
+      };
+    }
+
+    const { totals } = quote;
+    const result = await runInTransaction(async (tx) => {
+      const bound = await ensureConversationContact(tx, customer);
+
+      let organizationId = bound.organizationId;
+      if (input.organizationName) {
+        const [existingOrg] = await tx
+          .select({ id: organizations.id })
+          .from(organizations)
+          .where(ilike(organizations.name, input.organizationName))
+          .limit(1);
+        if (existingOrg) {
+          organizationId = existingOrg.id;
+        } else {
+          const [createdOrg] = await tx
+            .insert(organizations)
+            .values({ name: input.organizationName, kind: "club", notes: "Creada desde el agente de WhatsApp" })
+            .returning({ id: organizations.id });
+          if (!createdOrg) throw new OrderDraftDomainError("No se pudo crear la organización");
+          organizationId = createdOrg.id;
+        }
+      }
+
+      const publicToken = randomBytes(24).toString("base64url");
+      const [order] = await tx
+        .insert(orders)
+        .values({
+          publicToken,
+          organizationId,
+          contactId: bound.contactId,
+          status: "borrador",
+          urgent: input.urgent ?? false,
+          notes: input.notes ?? null,
+          pricingRuleId: quote.rule.id,
+          snapshot: quote.snapshot,
+          totalQuoted: money(totals.price),
+          totalCost: money(totals.cost),
+          marginPercent: money(totals.marginPercent),
+        })
+        .returning({ id: orders.id, number: orders.number });
+      if (!order) throw new OrderDraftDomainError("No se pudo crear el pedido borrador");
+
+      const insertedLines = await tx
+        .insert(orderLines)
+        .values(
+          quote.lines.map((line, i) => ({
+            orderId: order.id,
+            productId: line.productId,
+            techniqueId: resolvedLines[i]?.techniqueId ?? null,
+            quantity: line.quantity,
+            unitPrice: money(line.unitPrice),
+            unitCost: money(line.unitCost),
+            notes: resolvedLines[i]?.notes ?? null,
+          })),
+        )
+        .returning({ id: orderLines.id });
+
+      // Expand per-unit rows for sized lines (same shape draftOrder produces).
+      const expandedItems: Array<{ orderLineId: string; sizeId: string | null }> = [];
+      quote.lines.forEach((_line, i) => {
+        const lineRow = insertedLines[i];
+        const resolved = resolvedLines[i];
+        if (!lineRow || !resolved) return;
+        if (resolved.sizeQuantities.length > 0) {
+          for (const sq of resolved.sizeQuantities) {
+            for (let k = 0; k < sq.quantity; k++) expandedItems.push({ orderLineId: lineRow.id, sizeId: sq.sizeId });
+          }
+        }
+      });
+      if (expandedItems.length > 0) {
+        await tx.insert(orderItems).values(
+          expandedItems.map((item) => ({
+            orderLineId: item.orderLineId,
+            sizeId: item.sizeId,
+            individualName: null,
+            individualNumber: null,
+          })),
+        );
+      }
+
+      await tx.insert(auditEvents).values({
+        actorKind: "agent",
+        actorRef: "whatsapp-sales-agent",
+        action: "whatsapp.draft_order.from_cart",
+        entityType: "order",
+        entityId: order.id,
+        correlationId: customer.conversationId,
+        payload: { after: { orderNumber: order.number, totalQuoted: totals.price, cartItems: cart.length } },
+      });
+
+      return { orderId: order.id, number: order.number };
+    });
+
+    await markOrderContextOrdered(customer.conversationId);
+
+    const totalQuantity = resolvedLines.reduce((sum, line) => sum + line.quantity, 0);
+    return {
+      ok: true as const,
+      draft: true as const,
+      entity: "order" as const,
+      orderId: result.orderId,
+      number: result.number,
+      status: "borrador" as const,
+      cartItems: cart.length,
+      totalQuantity,
+      totalPrice: totals.price,
+      requiresHumanConfirmation: HUMAN_CONFIRMATION_REQUIRED,
+      note: "Borrador creado desde el carrito con precio del motor (estado 'borrador'). El carrito quedó consumido. Un humano debe confirmarlo: no está aprobado ni se cobró nada.",
+    };
+  },
+};
+
+// ─── A-11 · Business info tools (settings-backed) ────────────────────────────
+//
+// Read-only business configuration the customer may ask about. Every value
+// comes from the `settings` table — when a key is absent the tool says so
+// plainly instead of inventing hours, deadlines or payment data.
+
+async function readSetting<T>(key: string): Promise<T | null> {
+  const [row] = await db.select({ value: settings.value }).from(settings).where(eq(settings.key, key)).limit(1);
+  return (row?.value as T | undefined) ?? null;
+}
+
+type BusinessHourDay = { day: string; open: boolean; openTime: string; closeTime: string };
+
+const AR_DAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+function argentinaNow(): { dayIndex: number; minutes: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const weekday = parts.find((p) => p.type === "weekday")?.value ?? "Sun";
+  const dayIndex = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekday);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 0) % 24;
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+  return { dayIndex, minutes: hour * 60 + minute };
+}
+
+const toMin = (t: string): number => {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + (m || 0);
+};
+
+const businessHoursInput = z.object({});
+
+export const getBusinessHoursTool: AgentTool<z.infer<typeof businessHoursInput>> = {
+  id: "getBusinessHours",
+  description:
+    "Horarios de atención del taller y si está abierto ahora. Usar cuando el cliente pregunte por horarios, si atienden hoy, o cuándo pueden pasar.",
+  effect: "read",
+  inputSchema: businessHoursInput,
+  async handler() {
+    const hours = await readSetting<BusinessHourDay[]>("taller_horarios");
+    if (!Array.isArray(hours) || hours.length === 0) {
+      return {
+        ok: true as const,
+        configured: false as const,
+        message: "No hay horarios configurados. Decile al cliente que el equipo confirma disponibilidad por este medio.",
+      };
+    }
+    const { dayIndex, minutes } = argentinaNow();
+    const todayName = AR_DAYS[dayIndex];
+    const today = hours.find((h) => h.day === todayName);
+
+    // Overnight shifts carry into early morning (same rule as SocialCRM).
+    const yesterdayName = AR_DAYS[(dayIndex + 6) % 7];
+    const yesterday = hours.find((h) => h.day === yesterdayName);
+    let isOpenNow = false;
+    if (yesterday?.open && toMin(yesterday.closeTime) < toMin(yesterday.openTime) && minutes < toMin(yesterday.closeTime)) {
+      isOpenNow = true;
+    }
+    if (!isOpenNow && today?.open) {
+      const openMin = toMin(today.openTime);
+      const closeMin = toMin(today.closeTime);
+      isOpenNow = closeMin < openMin ? minutes >= openMin : minutes >= openMin && minutes < closeMin;
+    }
+
+    return {
+      ok: true as const,
+      configured: true as const,
+      isOpenNow,
+      today: today?.open ? `${today.openTime}–${today.closeTime}` : "cerrado",
+      schedule: hours.filter((h) => h.open).map((h) => `${h.day}: ${h.openTime}–${h.closeTime}`),
+    };
+  },
+};
+
+const checkAvailabilityInput = z.object({
+  productName: z.string().trim().min(1).max(255).describe("Nombre del producto a consultar"),
+});
+
+export const checkAvailabilityTool: AgentTool<z.infer<typeof checkAvailabilityInput>> = {
+  id: "checkAvailability",
+  description:
+    "Verifica si un producto del catálogo está activo para pedir y devuelve su pedido mínimo y el plazo de producción configurado. AH Sports fabrica a pedido — no hay stock físico.",
+  effect: "read",
+  inputSchema: checkAvailabilityInput,
+  async handler(input) {
+    const resolved = await resolveProductByName(input.productName);
+    if (!resolved.ok) {
+      return {
+        ok: false as const,
+        error: resolved.error === "ambiguous" ? "product_ambiguous" : "product_not_found",
+        candidates: resolved.candidates,
+        message: "No encontré ese producto activo en el catálogo.",
+      };
+    }
+    const turnaround = await readSetting<string>("taller_plazo");
+    return {
+      ok: true as const,
+      available: true as const,
+      productName: resolved.value.name,
+      productKind: resolved.value.productKind,
+      minOrder: resolved.value.minOrder,
+      zones: resolved.value.zones,
+      productionTurnaround: typeof turnaround === "string" && turnaround.trim() ? turnaround.trim() : null,
+      note:
+        "El producto está activo y se fabrica a pedido. " +
+        (turnaround
+          ? "El plazo indicado es el configurado por el taller."
+          : "No hay plazo de producción configurado — el equipo confirma el plazo al formalizar.") +
+        " Para precio exacto usá quoteGarment.",
+    };
+  },
+};
+
+const paymentAliasInput = z.object({});
+
+export const getPaymentAliasTool: AgentTool<z.infer<typeof paymentAliasInput>> = {
+  id: "getPaymentAlias",
+  description:
+    "Datos de pago del taller (alias/CBU/banco) leídos de la configuración. Usar cuando el cliente pida cómo pagar la seña o el saldo. Si no hay datos configurados, decíselo y derivá.",
+  effect: "read",
+  inputSchema: paymentAliasInput,
+  async handler() {
+    const [alias, cbu, bank] = await Promise.all([
+      readSetting<string>("taller_alias"),
+      readSetting<string>("taller_cbu"),
+      readSetting<string>("taller_banco"),
+    ]);
+    const data = {
+      alias: typeof alias === "string" && alias.trim() ? alias.trim() : null,
+      cbu: typeof cbu === "string" && cbu.trim() ? cbu.trim() : null,
+      bank: typeof bank === "string" && bank.trim() ? bank.trim() : null,
+    };
+    if (!data.alias && !data.cbu) {
+      return {
+        ok: true as const,
+        configured: false as const,
+        message: "No hay datos de pago configurados. Derivá al cliente con el equipo (transferToHuman) para coordinar la seña.",
+      };
+    }
+    return {
+      ok: true as const,
+      configured: true as const,
+      ...data,
+      note: "Estos son los datos configurados del taller. La acreditación la confirma siempre una persona — si el cliente avisa que pagó usá recordPaymentIntent.",
+    };
+  },
+};
+
+// ─── A-12 · Draft order management (customer, borrador-only) ────────────────
+//
+// The customer can modify or cancel THEIR OWN orders — but only while they
+// are still `borrador`. Anything past that (presupuesto enviado, aprobado,
+// señas, producción, entregado, cancelado) is rejected with a human-handoff
+// hint. Ownership comes from the conversation's bound contact, never from
+// model input. Re-pricing stays with quoteOrder().
+
+type OwnedDraft =
+  | {
+      ok: true;
+      order: {
+        id: string;
+        number: number;
+        snapshot: (typeof orders.$inferSelect)["snapshot"];
+        snapshotHistory: (typeof orders.$inferSelect)["snapshotHistory"];
+      };
+    }
+  | { ok: false; response: Record<string, unknown> };
+
+async function resolveOwnedDraft(context: AgentToolContext, orderNumber: number): Promise<OwnedDraft> {
+  const customer = await resolveConversationCustomer(context);
+  if ("error" in customer) {
+    return { ok: false, response: { ok: false, error: "no_conversation", message: "No pude identificar la conversación." } };
+  }
+  if (!customer.contactId) {
+    return { ok: false, response: { ok: false, error: "no_orders", message: "Este número todavía no tiene pedidos registrados." } };
+  }
+  const [order] = await db
+    .select({
+      id: orders.id,
+      number: orders.number,
+      status: orders.status,
+      snapshot: orders.snapshot,
+      snapshotHistory: orders.snapshotHistory,
+    })
+    .from(orders)
+    .where(and(eq(orders.number, orderNumber), eq(orders.contactId, customer.contactId)))
+    .limit(1);
+  if (!order) {
+    return {
+      ok: false,
+      response: { ok: false, error: "order_not_found", message: "No encontré ese número de pedido para este cliente." },
+    };
+  }
+  if (order.status !== "borrador") {
+    return {
+      ok: false,
+      response: {
+        ok: false,
+        error: "not_a_draft",
+        status: order.status,
+        message:
+          "Ese pedido ya no es un borrador — ya fue enviado o confirmado y no puedo modificarlo. Si necesitás cambiarlo, derivo al equipo (transferToHuman).",
+        requiresHumanConfirmation: true,
+      },
+    };
+  }
+  return {
+    ok: true,
+    order: { id: order.id, number: order.number, snapshot: order.snapshot, snapshotHistory: order.snapshotHistory },
+  };
+}
+
+const draftLineInput = z.object({
+  productName: z.string().trim().min(1).max(255),
+  quantity: z.number().int().min(1).max(100000).nullish(),
+  sizeQuantities: z
+    .array(z.object({ label: z.string().trim().min(1).max(32), quantity: z.number().int().min(1).max(10000) }))
+    .max(32)
+    .nullish(),
+  techniqueName: z.string().trim().min(1).max(128).nullish(),
+  notes: z.string().trim().max(500).nullish(),
+});
+
+const updateDraftLinesInput = z.object({
+  orderNumber: z.number().int().positive().max(999999999).describe("Número de pedido borrador del cliente"),
+  lines: z.array(draftLineInput).min(1).max(50).describe("Nuevo contenido COMPLETO del pedido (reemplaza las líneas actuales)"),
+  urgent: z.boolean().optional(),
+});
+
+export const updateDraftLinesTool: AgentTool<z.infer<typeof updateDraftLinesInput>> = {
+  id: "updateDraftLines",
+  description:
+    "Reemplaza las líneas de un pedido BORRADOR del cliente con un nuevo contenido completo y lo re-cotiza con el motor. Solo funciona en estado 'borrador' — pedidos ya confirmados no se tocan.",
+  effect: "draft",
+  inputSchema: updateDraftLinesInput,
+  async handler(input, context) {
+    const owned = await resolveOwnedDraft(context, input.orderNumber);
+    if (!owned.ok) return owned.response;
+    const customer = await resolveConversationCustomer(context);
+    if ("error" in customer) {
+      return { ok: false as const, error: "no_conversation", message: "No pude identificar la conversación." };
+    }
+
+    // Resolve every new line server-side before touching anything.
+    const resolvedLines: Array<{
+      product: ResolvedProduct;
+      techniqueId: string | null;
+      quantity: number;
+      sizeQuantities: SizeQuantity[];
+      notes: string | null;
+    }> = [];
+    for (const line of input.lines) {
+      const resolved = await resolveGarmentLine(line);
+      if (!resolved.ok) return resolved.response;
+      resolvedLines.push({
+        product: resolved.product,
+        techniqueId: resolved.techniqueId,
+        quantity: resolved.quantity,
+        sizeQuantities: resolved.sizeQuantities,
+        notes: line.notes?.trim() || null,
+      });
+    }
+
+    let quote: QuoteResult;
+    try {
+      quote = await quoteOrder({
+        urgent: input.urgent,
+        lines: resolvedLines.map((line) => ({
+          productId: line.product.id,
+          quantity: line.quantity,
+          techniqueId: line.techniqueId,
+          sizeQuantities: line.sizeQuantities.length > 0 ? line.sizeQuantities : undefined,
+        })),
+      });
+    } catch (error) {
+      return {
+        ok: false as const,
+        draft: false as const,
+        error: "quote_failed" as const,
+        reason: quoteFailureReason(error),
+        message: "No se pudo re-cotizar el pedido — probablemente falte receta/BOM o regla de precios. No se modificó nada.",
+        requiresHumanConfirmation: HUMAN_CONFIRMATION_REQUIRED,
+      };
+    }
+
+    const { totals } = quote;
+    await runInTransaction(async (tx) => {
+      // Re-verify inside the transaction: status could have flipped between
+      // the read and now.
+      const [stillDraft] = await tx
+        .select({ id: orders.id })
+        .from(orders)
+        .where(and(eq(orders.id, owned.order.id), eq(orders.status, "borrador")))
+        .limit(1);
+      if (!stillDraft) throw new OrderDraftDomainError("El pedido ya no está en borrador");
+
+      const oldLines = await tx.select({ id: orderLines.id }).from(orderLines).where(eq(orderLines.orderId, owned.order.id));
+      if (oldLines.length > 0) {
+        await tx.delete(orderItems).where(inArray(orderItems.orderLineId, oldLines.map((l) => l.id)));
+        await tx.delete(orderLines).where(eq(orderLines.orderId, owned.order.id));
+      }
+
+      const insertedLines = await tx
+        .insert(orderLines)
+        .values(
+          quote.lines.map((line, i) => ({
+            orderId: owned.order.id,
+            productId: line.productId,
+            techniqueId: resolvedLines[i]?.techniqueId ?? null,
+            quantity: line.quantity,
+            unitPrice: money(line.unitPrice),
+            unitCost: money(line.unitCost),
+            notes: resolvedLines[i]?.notes ?? null,
+          })),
+        )
+        .returning({ id: orderLines.id });
+
+      const expandedItems: Array<{ orderLineId: string; sizeId: string | null }> = [];
+      quote.lines.forEach((_line, i) => {
+        const lineRow = insertedLines[i];
+        const resolved = resolvedLines[i];
+        if (!lineRow || !resolved) return;
+        for (const sq of resolved.sizeQuantities) {
+          for (let k = 0; k < sq.quantity; k++) expandedItems.push({ orderLineId: lineRow.id, sizeId: sq.sizeId });
+        }
+      });
+      if (expandedItems.length > 0) {
+        await tx.insert(orderItems).values(
+          expandedItems.map((item) => ({
+            orderLineId: item.orderLineId,
+            sizeId: item.sizeId,
+            individualName: null,
+            individualNumber: null,
+          })),
+        );
+      }
+
+      // Supersede the old snapshot into history — never lose the prior quote.
+      const snapshotHistory = [...owned.order.snapshotHistory];
+      if (owned.order.snapshot) {
+        snapshotHistory.push({
+          snapshot: owned.order.snapshot,
+          supersededAt: new Date().toISOString(),
+          reason: "re-quote",
+        });
+      }
+
+      await tx
+        .update(orders)
+        .set({
+          snapshot: quote.snapshot,
+          snapshotHistory,
+          pricingRuleId: quote.rule.id,
+          urgent: input.urgent ?? false,
+          totalQuoted: money(totals.price),
+          totalCost: money(totals.cost),
+          marginPercent: money(totals.marginPercent),
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, owned.order.id));
+
+      await tx.insert(auditEvents).values({
+        actorKind: "agent",
+        actorRef: "whatsapp-sales-agent",
+        action: "whatsapp.draft.lines_updated",
+        entityType: "order",
+        entityId: owned.order.id,
+        correlationId: customer.conversationId,
+        payload: { after: { orderNumber: owned.order.number, totalQuoted: totals.price, lines: quote.lines.length } },
+      });
+    });
+
+    const totalQuantity = resolvedLines.reduce((sum, line) => sum + line.quantity, 0);
+    return {
+      ok: true as const,
+      draft: true as const,
+      updated: true as const,
+      orderId: owned.order.id,
+      number: owned.order.number,
+      status: "borrador" as const,
+      lines: quote.lines.length,
+      totalQuantity,
+      totalPrice: totals.price,
+      requiresHumanConfirmation: HUMAN_CONFIRMATION_REQUIRED,
+      note: "Borrador actualizado y re-cotizado con el motor. Sigue siendo borrador — un humano debe confirmar cualquier cambio antes de que valga.",
+    };
+  },
+};
+
+const cancelDraftInput = z.object({
+  orderNumber: z.number().int().positive().max(999999999).describe("Número de pedido borrador a cancelar"),
+  reason: z.string().trim().max(500).nullish(),
+});
+
+export const cancelDraftTool: AgentTool<z.infer<typeof cancelDraftInput>> = {
+  id: "cancelDraft",
+  description:
+    "Cancela un pedido BORRADOR del cliente (pasa a estado 'cancelado'). Solo borradores — si ya fue enviado/confirmado, derivá al equipo. Confirmá con el cliente antes de usarla.",
+  effect: "draft",
+  inputSchema: cancelDraftInput,
+  async handler(input, context) {
+    const owned = await resolveOwnedDraft(context, input.orderNumber);
+    if (!owned.ok) return owned.response;
+    const customer = await resolveConversationCustomer(context);
+    if ("error" in customer) {
+      return { ok: false as const, error: "no_conversation", message: "No pude identificar la conversación." };
+    }
+
+    const cancelled = await runInTransaction(async (tx) => {
+      const updated = await tx
+        .update(orders)
+        .set({
+          status: "cancelado",
+          notes: input.reason ? `[Cancelado por el cliente: ${input.reason.trim().slice(0, 200)}]` : "[Cancelado por el cliente]",
+          updatedAt: new Date(),
+        })
+        .where(and(eq(orders.id, owned.order.id), eq(orders.status, "borrador")))
+        .returning({ id: orders.id });
+      if (updated.length === 0) return false;
+      await tx.insert(auditEvents).values({
+        actorKind: "agent",
+        actorRef: "whatsapp-sales-agent",
+        action: "whatsapp.draft.cancelled",
+        entityType: "order",
+        entityId: owned.order.id,
+        correlationId: customer.conversationId,
+        payload: { after: { orderNumber: owned.order.number, reason: input.reason ?? null } },
+      });
+      return true;
+    });
+
+    if (!cancelled) {
+      return {
+        ok: false as const,
+        error: "not_a_draft" as const,
+        message: "El pedido ya no está en borrador — no pude cancelarlo. Derivá al equipo si el cliente insiste.",
+        requiresHumanConfirmation: HUMAN_CONFIRMATION_REQUIRED,
+      };
+    }
+    return {
+      ok: true as const,
+      cancelled: true as const,
+      number: owned.order.number,
+      message: `Borrador #${owned.order.number} cancelado. No quedó ningún compromiso — el cliente puede armar uno nuevo cuando quiera.`,
+    };
+  },
+};
+
+// ─── A-14 · Promotions exposure ─────────────────────────────────────────────
+//
+// The catalog summary never carries prices and the pricing engine stays the
+// only authority — promotions are offered as NAMES + content so the agent can
+// mention them; `customPrice` is admin-configured (not model-invented) and is
+// safe to surface as informational.
+
+const getPromotionsInput = z.object({});
+
+export const getPromotionsTool: AgentTool<z.infer<typeof getPromotionsInput>> = {
+  id: "getPromotions",
+  description:
+    "Lista las promociones activas del taller (nombre, contenido, precio promocional si está configurado). Usar cuando el cliente pregunte por ofertas o promos.",
+  effect: "read",
+  inputSchema: getPromotionsInput,
+  async handler() {
+    const rows = await db
+      .select({
+        id: promotions.id,
+        name: promotions.name,
+        description: promotions.description,
+        items: promotions.items,
+        customPrice: promotions.customPrice,
+      })
+      .from(promotions)
+      .where(eq(promotions.active, true))
+      .orderBy(desc(promotions.createdAt))
+      .limit(10);
+    if (rows.length === 0) {
+      return { ok: true as const, promotions: [] as const, message: "No hay promociones activas en este momento." };
+    }
+    return {
+      ok: true as const,
+      promotions: rows.map((row) => ({
+        name: row.name,
+        description: row.description?.slice(0, 300) ?? null,
+        items: (row.items ?? []).map((item) => `${item.quantity}x ${item.productName}`),
+        promotionalPrice: row.customPrice ? Number(row.customPrice) : null,
+      })),
+      note: "Los precios promocionales son configurados por el taller. Para cotizar un pedido normal usá siempre quoteGarment — no extrapoles precios de promo.",
+    };
+  },
+};
+
 // ─── Tool set ────────────────────────────────────────────────────────────────
 
 /**
@@ -1216,6 +2075,17 @@ export const WHATSAPP_SALES_TOOLS: readonly AgentTool[] = [
   quoteGarmentTool,
   getMyOrdersTool,
   getMyOrderStatusTool,
+  addCartItemTool,
+  getCartTool,
+  removeCartItemTool,
+  clearCartTool,
+  draftOrderFromCartTool,
+  getBusinessHoursTool,
+  checkAvailabilityTool,
+  getPaymentAliasTool,
+  updateDraftLinesTool,
+  cancelDraftTool,
+  getPromotionsTool,
   draftQuoteWhatsAppTool,
   draftOrderWhatsAppTool,
   recordPaymentIntentTool,

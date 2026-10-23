@@ -106,6 +106,34 @@
       "when": 1786400000001,
       "tag": "0014_leads",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786400000002,
+      "tag": "0020_order_context_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786400000003,
+      "tag": "0021_promotions",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786400000004,
+      "tag": "0022_cash_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786400000005,
+      "tag": "0023_contacts_marketing_opt_out",
+      "breakpoints": true
     }
   ]
 }

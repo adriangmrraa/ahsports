@@ -123,6 +123,7 @@ export const contacts = pgTable("contacts", {
   role: varchar("role", { length: 128 }),
   notes: text("notes"),
   status: leadStatus("status").notNull().default("nuevo"),
+  marketingOptOut: boolean("marketing_opt_out").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -1116,4 +1117,120 @@ export const agentInboundJobsRelations = relations(agentInboundJobs, ({ one }) =
 
 export const leadIdentitiesRelations = relations(leadIdentities, ({ one }) => ({
   contact: one(contacts, { fields: [leadIdentities.contactId], references: [contacts.id] }),
+}));
+
+// ---------------------------------------------------------------------------
+// Wave 9 — SocialCRM parity (additive; see docs/12-SOCIALCRM-PARITY-AUDIT.md)
+// ---------------------------------------------------------------------------
+
+export const orderContextStatus = pgEnum("order_context_status", ["active", "ordered", "removed"]);
+export const cashSessionStatus = pgEnum("cash_session_status", ["open", "closed"]);
+
+/**
+ * A-09: conversation-scoped pre-draft cart. Rows are transient: each add
+ * refreshes `expiresAt` (30 min TTL) and the sales agent drafts an order from
+ * the active, unexpired rows only. `productName`/`techniqueName` are snapshots
+ * so a deleted catalog row can't corrupt pending context.
+ */
+export const orderContextItems = pgTable(
+  "order_context_items",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    conversationId: varchar("conversation_id", { length: 36 })
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    phone: varchar("phone", { length: 64 }).notNull().default(""),
+    productId: varchar("product_id", { length: 36 }).references(() => products.id, { onDelete: "set null" }),
+    productName: varchar("product_name", { length: 255 }).notNull(),
+    sizeLabel: varchar("size_label", { length: 32 }),
+    techniqueName: varchar("technique_name", { length: 128 }),
+    quantity: integer("quantity").notNull().default(1),
+    notes: text("notes"),
+    status: orderContextStatus("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    convStatusIdx: index("order_context_items_conv_status_idx").on(t.conversationId, t.status, t.expiresAt),
+  }),
+);
+
+/**
+ * A-14/C-04: named promotions composed of real catalog products. `items`
+ * denormalizes productId+productName+quantity so the row survives renames;
+ * `customPrice` is a full-promo override (NULL = sum of live prices).
+ */
+export const promotions = pgTable(
+  "promotions",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    imageUrl: text("image_url"),
+    items: jsonb("items").$type<Array<{ productId: string; productName: string; quantity: number }>>().notNull().default(sql`'[]'::jsonb`),
+    customPrice: numeric("custom_price", { precision: 12, scale: 2 }),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    activeIdx: index("promotions_active_idx").on(t.active, t.createdAt),
+  }),
+);
+
+/**
+ * A-13: physical cash drawer for in-person pickup payments. Sessions chain:
+ * each opens where the previous closed (openingCash = previous actualCash,
+ * openedAt = previous closedAt). A closed session is immutable — the app layer
+ * exposes no update/delete path, and `report` is the frozen audit seat.
+ */
+export const cashSessions = pgTable(
+  "cash_sessions",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    status: cashSessionStatus("status").notNull().default("open"),
+    openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    openingCash: numeric("opening_cash", { precision: 12, scale: 2 }).notNull().default("0"),
+    expectedCash: numeric("expected_cash", { precision: 12, scale: 2 }),
+    actualCash: numeric("actual_cash", { precision: 12, scale: 2 }),
+    difference: numeric("difference", { precision: 12, scale: 2 }),
+    closedBy: varchar("closed_by", { length: 100 }),
+    report: jsonb("report").$type<Record<string, unknown>>(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    statusIdx: index("cash_sessions_status_idx").on(t.status, t.openedAt),
+  }),
+);
+
+/** A-13: manual cash in/out inside a session (payments also count — see lib). */
+export const cashMovements = pgTable(
+  "cash_movements",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    sessionId: varchar("session_id", { length: 36 }).notNull().references(() => cashSessions.id, { onDelete: "cascade" }),
+    direction: varchar("direction", { length: 10 }).notNull(), // 'in' | 'out'
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    reason: text("reason").notNull(),
+    createdBy: varchar("created_by", { length: 100 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    sessionIdx: index("cash_movements_session_idx").on(t.sessionId, t.createdAt),
+  }),
+);
+
+export const orderContextItemsRelations = relations(orderContextItems, ({ one }) => ({
+  conversation: one(conversations, { fields: [orderContextItems.conversationId], references: [conversations.id] }),
+  product: one(products, { fields: [orderContextItems.productId], references: [products.id] }),
+}));
+
+export const cashSessionsRelations = relations(cashSessions, ({ many }) => ({
+  movements: many(cashMovements),
+}));
+
+export const cashMovementsRelations = relations(cashMovements, ({ one }) => ({
+  session: one(cashSessions, { fields: [cashMovements.sessionId], references: [cashSessions.id] }),
 }));
