@@ -662,6 +662,37 @@ function sendDocumentWithAccount(
   });
 }
 
+/**
+ * YCloud sendDirectly template body — same Meta-shaped template object the
+ * docs use (`name`, `language.code` + `policy`, optional `components`).
+ * Returns a validation error instead of a request when the caller did not
+ * provide an approved template name + language.
+ */
+function buildTemplateBody(
+  msg: OutboundMessage,
+): { ok: true; body: Record<string, unknown> } | { ok: false; error: string } {
+  const template = msg.template;
+  if (!template?.name || !template.language) {
+    return {
+      ok: false,
+      error: "template message requires msg.template.name and msg.template.language",
+    };
+  }
+  return {
+    ok: true,
+    body: {
+      to: msg.to,
+      type: "template",
+      template: {
+        name: template.name,
+        language: { code: template.language, policy: "deterministic" },
+        ...(template.components ? { components: template.components } : {}),
+      },
+      ...(msg.idempotencyKey ? { externalId: msg.idempotencyKey } : {}),
+    },
+  };
+}
+
 export const ycloudProvider: MessagingProvider = {
   id: "ycloud",
   signatureScheme: "timestamped-hmac",
@@ -775,6 +806,20 @@ export const ycloudProvider: MessagingProvider = {
           retryable: false,
         };
     }
+  },
+
+  async sendTemplate(account, msg) {
+    if (isRealChannelAccount(account) && !account.credentials.apiKey) {
+      return scopedCredentialsFailure(account);
+    }
+    const built = buildTemplateBody(msg);
+    if (!built.ok) {
+      return { ok: false, error: built.error, retryable: false };
+    }
+    if (accountHasCredentials(account)) {
+      return sendDirectlyWithAccount(account, built.body);
+    }
+    return toSendResult(await legacySend(built.body));
   },
 
   async resolveMedia(account, ref) {

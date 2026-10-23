@@ -33,10 +33,33 @@ export async function registerPayment(input: unknown) {
     revalidatePath(`/admin/pedidos/${d.orderId}/pagos`);
     revalidatePath("/admin/pagos");
     revalidatePath("/admin/caja");
+    // A-04: the payment gate may have moved the order to aprobado. Best-effort.
+    if (result.statusChanged) {
+      await notifyStatusQuietly(d.orderId, result.status);
+    }
     return { ok: true as const, ...result };
   } catch (error) {
     if (error instanceof PaymentDomainError) return { ok: false as const, error: error.message };
     return { ok: false as const, error: "No se pudo registrar el pago" };
+  }
+}
+
+/**
+ * A-04 best-effort customer notification after a payment-driven status change.
+ * The financial write already committed; never surface a send failure to the
+ * caller (the status itself is what the UI must report).
+ */
+async function notifyStatusQuietly(orderId: string, status: string): Promise<void> {
+  try {
+    const { notifyOrderStatusChange } = await import("@/lib/whatsapp/order-status-notify");
+    const notified = await notifyOrderStatusChange(orderId, status);
+    if (!notified.ok) {
+      console.warn(
+        `[payments] customer notification not sent for order ${orderId.slice(0, 8)}… (${notified.error})`,
+      );
+    }
+  } catch {
+    console.warn(`[payments] customer notification failed for order ${orderId.slice(0, 8)}…`);
   }
 }
 
@@ -53,6 +76,10 @@ export async function cancelPayment(input: unknown) {
     revalidatePath(`/admin/pedidos/${result.orderId}/pagos`);
     revalidatePath("/admin/pagos");
     revalidatePath("/admin/caja");
+    // A-04: cancelling a payment may re-block the order (bloqueado_pago).
+    if (result.statusChanged) {
+      await notifyStatusQuietly(result.orderId, result.status);
+    }
     return { ok: true as const, ...result };
   } catch (error) {
     if (error instanceof PaymentDomainError) return { ok: false as const, error: error.message };

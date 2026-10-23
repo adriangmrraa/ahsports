@@ -106,6 +106,8 @@ async function releaseRunLock(): Promise<void> {
 export async function runReconcileCandidates(options: {
   limit?: number;
   lookbackHours?: number;
+  /** Minimum unseen customer messages before a conversation is a target. */
+  minNewMessages?: number;
   maxSteps?: number;
   now?: Date;
 } = {}): Promise<CandidatesReconcileSummary> {
@@ -136,6 +138,7 @@ export async function runReconcileCandidates(options: {
     const targets = await findConversationsNeedingReconcile({
       now,
       lookbackHours: options.lookbackHours,
+      minNewMessages: options.minNewMessages,
       limit: options.limit,
     });
 

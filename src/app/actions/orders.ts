@@ -218,6 +218,23 @@ export async function confirmQuote(input: unknown): Promise<{ ok: true; status: 
 
   revalidatePath(`/admin/pedidos/${orderId}`);
   revalidatePath(`/admin/pedidos/${orderId}/cotizar`);
+
+  // A-04: notify the customer only when the confirmation actually moved the
+  // status. Best-effort — a failed WhatsApp send must not undo the quote.
+  if (nextStatus !== order.status) {
+    try {
+      const { notifyOrderStatusChange } = await import("@/lib/whatsapp/order-status-notify");
+      const notified = await notifyOrderStatusChange(orderId, nextStatus);
+      if (!notified.ok) {
+        console.warn(
+          `[orders/confirmQuote] customer notification not sent for order ${orderId.slice(0, 8)}… (${notified.error})`,
+        );
+      }
+    } catch {
+      console.warn(`[orders/confirmQuote] customer notification failed for order ${orderId.slice(0, 8)}…`);
+    }
+  }
+
   return { ok: true as const, status: nextStatus };
 }
 

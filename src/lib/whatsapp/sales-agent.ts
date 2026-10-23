@@ -14,12 +14,14 @@
  *  - anti-loop + non-commercial directives (anti-loop),
  *  - temporal day segmentation + turn-intent guard (temporal-context),
  *  - server-side identity + re-priced quote/order tools (sales-tools),
- *  - idempotent human handoff (human-handoff).
+ *  - idempotent human handoff (human-handoff),
+ *  - 24h customer-service window gating (outbound-window): outside the window
+ *    the reply goes through the configured fallback template; with no
+ *    template configured the text send is attempted and the outcome recorded
+ *    honestly on the canonical outbound fact.
  *
- * NOT ported (documented in the wave report): 24h-window template gating —
- * AH's messenger facade has no template/window contract yet; the customer
- * reply is sent as a normal text message. Media downloads/uploads are also
- * out of scope (the media pipeline belongs to another wave).
+ * Media downloads/uploads remain out of scope (the media pipeline belongs to
+ * another wave).
  */
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -57,6 +59,7 @@ import {
 } from "./temporal-context";
 import { getStatusSemantic } from "./status-utils";
 import { resolveWhatsAppSalesTools } from "./sales-tools";
+import { decideCustomerWindowSend } from "./outbound-window";
 
 // ─── Fixed replies (es-AR, customer-facing) ──────────────────────────────────
 
@@ -174,6 +177,16 @@ async function deliverAgentReply(
   channelAccountId: string | null,
   contactId: string | null,
 ): Promise<void> {
+  // F-02: inside the 24h customer window a free-form text reply is valid;
+  // outside it only an approved template is deliverable. A settings/DB hiccup
+  // never blocks the reply — it degrades to the text path.
+  const windowDecision = await decideCustomerWindowSend(turn.conversationId).catch(
+    () => ({ kind: "text" as const, windowOpen: true as const }),
+  );
+  const sendAsTemplate = windowDecision.kind === "template";
+  const windowClosedWithoutTemplate =
+    windowDecision.kind === "text" && !windowDecision.windowOpen;
+
   const persisted = await persistAgentOutbound({
     channel: "whatsapp",
     channelAccountId: channelAccountId ?? undefined,
@@ -184,7 +197,15 @@ async function deliverAgentReply(
     content: content.slice(0, 20000),
     deliveryState: "queued",
     customerId: contactId ?? undefined,
-    rawPayload: { inReplyTo: inReplyToMessageIdOrNull(inReplyTo) },
+    rawPayload: {
+      inReplyTo: inReplyToMessageIdOrNull(inReplyTo),
+      ...(sendAsTemplate
+        ? { sentAs: "template", template: windowDecision.template }
+        : {}),
+      ...(windowClosedWithoutTemplate
+        ? { windowClosed: true, templateFallback: "not_configured" }
+        : {}),
+    },
   });
   if (!persisted.ok) {
     // Fail closed like the router path: a reply that cannot be persisted is
@@ -195,16 +216,33 @@ async function deliverAgentReply(
     return;
   }
   const send = await messenger.send(
-    {
-      to: turn.to,
-      type: "text",
-      text: content,
-      ...(turn.providerConversationId ? { providerConversationId: turn.providerConversationId } : {}),
-      idempotencyKey: `wa-reply:${persisted.messageId}`,
-    },
+    sendAsTemplate
+      ? {
+          to: turn.to,
+          type: "template",
+          template: windowDecision.template,
+          ...(turn.providerConversationId
+            ? { providerConversationId: turn.providerConversationId }
+            : {}),
+          idempotencyKey: `wa-reply:${persisted.messageId}`,
+        }
+      : {
+          to: turn.to,
+          type: "text",
+          text: content,
+          ...(turn.providerConversationId
+            ? { providerConversationId: turn.providerConversationId }
+            : {}),
+          idempotencyKey: `wa-reply:${persisted.messageId}`,
+        },
     turn.account ? { channel: "whatsapp", account: turn.account } : { channel: "whatsapp" },
   );
   await updateMessageDelivery(persisted.messageId, send.ok ? "sent" : "failed");
+  if (windowClosedWithoutTemplate) {
+    console.warn(
+      `[whatsapp/sales-agent] 24h window closed and wa_template_fallback is not configured — text reply attempted, delivery may be rejected — conversation=${turn.conversationId}`,
+    );
+  }
   if (!send.ok) {
     console.warn(
       `[whatsapp/sales-agent] reply send failed — retryable=${send.retryable} conversation=${turn.conversationId}: ${send.error}`,
