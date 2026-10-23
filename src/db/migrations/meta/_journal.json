@@ -85,6 +85,34 @@
       "when": 1786396800008,
       "tag": "0011_channel_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786396800009,
+      "tag": "0020_order_context_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786396800010,
+      "tag": "0021_promotions",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786396800011,
+      "tag": "0022_cash_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786396800012,
+      "tag": "0023_contacts_marketing_opt_out",
+      "breakpoints": true
     }
   ]
 }
