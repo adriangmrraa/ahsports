@@ -310,11 +310,27 @@ export async function resolveAgentConfigStrict(
 
 /**
  * Legacy-shaped read for un-migrated deploys: selects every column EXCEPT the
- * new scope columns, which don't exist pre-migration.
+ * scope columns and the wave-7 operational columns, which don't exist
+ * pre-migration. Callers must treat the absent fields as their defaults
+ * (enabled → true, feature flags → off, provider creds → unset).
  */
 function legacyColumns() {
-  const { channel: _channel, channelAccountId: _account, ...rest } =
-    getTableColumns(agentConfig);
+  const {
+    channel: _channel,
+    channelAccountId: _account,
+    enabled: _enabled,
+    autoReply24h: _autoReply,
+    autoReply24hMessage: _autoReplyMessage,
+    webOrderRedirectEnabled: _redirectEnabled,
+    webOrderRedirectMessage: _redirectMessage,
+    ycloudApiKeyEnc: _ycloudKey,
+    ycloudWebhookSecretEnc: _ycloudSecret,
+    kapsoApiKeyEnc: _kapsoKey,
+    kapsoWebhookSecretEnc: _kapsoSecret,
+    zernioApiKeyEnc: _zernioKey,
+    zernioWebhookSecretEnc: _zernioSecret,
+    ...rest
+  } = getTableColumns(agentConfig);
   return rest;
 }
 
