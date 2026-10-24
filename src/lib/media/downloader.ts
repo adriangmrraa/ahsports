@@ -1,8 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { promises as fs } from "node:fs";
 import path from "node:path";
-import { assertMediaBytes } from "@/lib/media/signatures";
-import { MAX_MEDIA_BYTES, privateUploadsDir } from "@/lib/storage";
+import { assertMediaBytes, sniffMediaMime } from "@/lib/media/signatures";
+import { activePrivateStorage, MAX_MEDIA_BYTES, privateUploadsDir } from "@/lib/storage";
 
 const ALLOWED_DOMAINS = [
   "api.ycloud.com",
@@ -35,7 +34,8 @@ function isAllowedDomain(url: string, extraAllowedDomains: readonly string[] = [
 }
 
 function sanitizeFilename(name: string): string {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
+  // `..` must collapse: the saved relPath goes through assertSafePath.
+  return name.replace(/\.{2,}/g, ".").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
 }
 
 function sanitizeScope(scope: string): string {
@@ -89,9 +89,11 @@ export async function downloadMedia(
 }
 
 /**
- * Persists an inbound buffer under the private uploads dir, scoped by an
+ * Persists an inbound buffer through `activePrivateStorage`, scoped by an
  * opaque id (conversation id, upload session id, etc). Returns the
  * session-gated `/api/media/<scope>/<file>` URL — never a public path.
+ * STORAGE_PROVIDER decides where the bytes land: disk (default) or
+ * `stored_files` (db).
  */
 export async function saveMediaLocally(
   buffer: Buffer,
@@ -100,17 +102,19 @@ export async function saveMediaLocally(
   mimeType?: string
 ): Promise<string> {
   assertMediaBytes(buffer, mimeType);
-  const dir = path.join(mediaUploadsDir(), sanitizeScope(scope));
-  await fs.mkdir(dir, { recursive: true });
-
   const ext = mimeType ? mimeTypeToExt(mimeType) : path.extname(filename) || ".bin";
   const safeName = `${Date.now()}-${randomBytes(4).toString("hex")}-${sanitizeFilename(filename)}`;
   const finalName = safeName.endsWith(ext) ? safeName : `${safeName}${ext}`;
 
-  const filePath = path.join(dir, finalName);
-  await fs.writeFile(filePath, buffer);
-
-  return `/api/media/${sanitizeScope(scope)}/${finalName}`;
+  // assertMediaBytes guarantees a sniffable container, so the fallback is
+  // unreachable but keeps the declared-mime contract of the adapter.
+  const declared = mimeType ?? sniffMediaMime(buffer)?.mime ?? "application/octet-stream";
+  const stored = await activePrivateStorage.upload(
+    buffer,
+    `${sanitizeScope(scope)}/${finalName}`,
+    declared
+  );
+  return stored.url;
 }
 
 function mimeTypeToExt(mime: string): string {

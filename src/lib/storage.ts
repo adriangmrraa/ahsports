@@ -1,11 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { and, eq } from "drizzle-orm";
+import { storedFiles } from "@/db/schema";
 import { assertMediaBytes, mimeKind } from "@/lib/media/signatures";
 
 /**
  * F4-01 — Contrato de almacenamiento conmutable (D11).
- * MVP: `localStorageAdapter` en `public/uploads/`. S3 en F5.
+ * `local` (default): disco. `db`: bytea en Postgres (`stored_files`,
+ * migración 0025) para el fs efímero de Render. `s3`: stub honesto.
  */
 
 export const ALLOWED_MIMES = [
@@ -70,13 +73,28 @@ export function buildAttachmentPath({
   return `${scope}/${rand}-${sanitizeFileName(originalName)}`;
 }
 
-function assertSafePath(p: string) {
+export function assertSafePath(p: string) {
   if (!p || p.includes("..") || p.startsWith("/") || path.isAbsolute(p) || p.includes("\\")) {
     throw new Error("Ruta de archivo inválida");
   }
 }
 
-const UPLOADS_DIR = path.resolve(process.cwd(), "public", "uploads");
+/** Read path for the db adapter and for local dirs outside `public/`. */
+export const PUBLIC_FILES_URL_PREFIX = "/api/files/";
+
+const DEFAULT_PUBLIC_UPLOADS_DIR = path.resolve(process.cwd(), "public", "uploads");
+
+/**
+ * Public attachments (order files, product images) live under
+ * `public/uploads` by default so Next serves them statically at
+ * `/uploads/*`. `UPLOADS_DIR` overrides the dir for deploys that mount
+ * persistent storage elsewhere — outside `public/` the same files are
+ * streamed by `/api/files/[...path]` instead.
+ */
+export function publicUploadsDir(): string {
+  const configured = process.env.UPLOADS_DIR;
+  return configured ? path.resolve(configured) : DEFAULT_PUBLIC_UPLOADS_DIR;
+}
 
 export const localStorageAdapter: StorageAdapter = {
   async upload(file: File | Buffer, relPath: string, mimeType: string) {
@@ -88,22 +106,32 @@ export const localStorageAdapter: StorageAdapter = {
     if (buffer.length > MAX_FILE_BYTES) {
       throw new Error("El archivo supera los 5MB");
     }
-    const dest = path.resolve(UPLOADS_DIR, relPath);
-    if (dest !== UPLOADS_DIR && !dest.startsWith(UPLOADS_DIR + path.sep)) {
+    const uploadsDir = publicUploadsDir();
+    const dest = path.resolve(uploadsDir, relPath);
+    if (dest !== uploadsDir && !dest.startsWith(uploadsDir + path.sep)) {
       throw new Error("Ruta de archivo inválida");
     }
     await fs.mkdir(path.dirname(dest), { recursive: true });
     await fs.writeFile(dest, buffer);
-    const url = `/uploads/${relPath.split(path.sep).join("/")}`;
+    const rel = relPath.split(path.sep).join("/");
+    const url =
+      uploadsDir === DEFAULT_PUBLIC_UPLOADS_DIR
+        ? `/uploads/${rel}`
+        : `${PUBLIC_FILES_URL_PREFIX}${rel}`;
     return { url, size: buffer.length };
   },
 
   async delete(url: string) {
-    if (!url.startsWith("/uploads/")) return;
-    const rel = url.replace(/^\/uploads\//, "");
+    const rel = url.startsWith("/uploads/")
+      ? url.slice("/uploads/".length)
+      : url.startsWith(PUBLIC_FILES_URL_PREFIX)
+        ? url.slice(PUBLIC_FILES_URL_PREFIX.length)
+        : null;
+    if (rel === null) return;
     assertSafePath(rel);
-    const target = path.resolve(UPLOADS_DIR, rel);
-    if (target !== UPLOADS_DIR && !target.startsWith(UPLOADS_DIR + path.sep)) {
+    const uploadsDir = publicUploadsDir();
+    const target = path.resolve(uploadsDir, rel);
+    if (target !== uploadsDir && !target.startsWith(uploadsDir + path.sep)) {
       throw new Error("Ruta de archivo inválida");
     }
     try {
@@ -194,5 +222,95 @@ export const s3StorageAdapter: StorageAdapter = {
   },
 };
 
-export const activeStorage: StorageAdapter =
-  process.env.STORAGE_PROVIDER === "s3" ? s3StorageAdapter : localStorageAdapter;
+/**
+ * STORAGE_PROVIDER=db — bytes en `stored_files` (migración 0025). El import
+ * de `@/db/client` es perezoso: storage.ts también se carga en tests y
+ * tooling sin DATABASE_URL, y client.ts lanza al evaluarse sin ella.
+ */
+async function dbClient() {
+  const { db } = await import("@/db/client");
+  return db;
+}
+
+async function insertStoredFile(
+  scope: "public" | "media",
+  relPath: string,
+  mime: string,
+  buffer: Buffer,
+) {
+  const db = await dbClient();
+  await db
+    .insert(storedFiles)
+    .values({ path: relPath, scope, mime, bytes: buffer, size: buffer.length })
+    .onConflictDoNothing();
+}
+
+async function deleteStoredFile(scope: "public" | "media", url: string, urlPrefix: string) {
+  if (!url.startsWith(urlPrefix)) return;
+  const rel = url.slice(urlPrefix.length);
+  assertSafePath(rel);
+  const db = await dbClient();
+  await db
+    .delete(storedFiles)
+    .where(and(eq(storedFiles.path, rel), eq(storedFiles.scope, scope)));
+}
+
+/** Public attachments in Postgres; streamed back by /api/files/[...path]. */
+export const dbStorageAdapter: StorageAdapter = {
+  async upload(file: File | Buffer, relPath: string, mimeType: string) {
+    assertSafePath(relPath);
+    if (!mimeType || !(ALLOWED_MIMES as readonly string[]).includes(mimeType)) {
+      throw new Error(`Tipo de archivo no permitido: ${mimeType || "desconocido"}`);
+    }
+    const buffer = Buffer.isBuffer(file) ? file : Buffer.from(await (file as File).arrayBuffer());
+    if (buffer.length > MAX_FILE_BYTES) {
+      throw new Error("El archivo supera los 5MB");
+    }
+    await insertStoredFile("public", relPath, mimeType, buffer);
+    return { url: `${PUBLIC_FILES_URL_PREFIX}${relPath.split(path.sep).join("/")}`, size: buffer.length };
+  },
+
+  async delete(url: string) {
+    await deleteStoredFile("public", url, PUBLIC_FILES_URL_PREFIX);
+  },
+};
+
+/** Inbound customer media in Postgres; streamed back by session-gated /api/media/[...path]. */
+export const dbPrivateStorageAdapter: StorageAdapter = {
+  async upload(file: File | Buffer, relPath: string, mimeType: string) {
+    assertSafePath(relPath);
+    const normalized = normalizeMime(mimeType);
+    if (!normalized || !mimeKind(normalized)) {
+      throw new Error(`Tipo de archivo no permitido: ${mimeType || "desconocido"}`);
+    }
+    const buffer = Buffer.isBuffer(file) ? file : Buffer.from(await (file as File).arrayBuffer());
+    if (buffer.length > MAX_MEDIA_BYTES) {
+      throw new Error("El archivo supera los 25MB");
+    }
+    assertMediaBytes(buffer, normalized);
+    await insertStoredFile("media", relPath, normalized, buffer);
+    return { url: `${PRIVATE_MEDIA_URL_PREFIX}${relPath.split(path.sep).join("/")}`, size: buffer.length };
+  },
+
+  async delete(url: string) {
+    await deleteStoredFile("media", url, PRIVATE_MEDIA_URL_PREFIX);
+  },
+};
+
+function resolveStorageAdapter(kind: "public" | "media"): StorageAdapter {
+  const provider = process.env.STORAGE_PROVIDER;
+  if (provider === "s3") return s3StorageAdapter;
+  if (provider === "db") {
+    return kind === "media" ? dbPrivateStorageAdapter : dbStorageAdapter;
+  }
+  return kind === "media" ? privateStorageAdapter : localStorageAdapter;
+}
+
+export const activeStorage: StorageAdapter = resolveStorageAdapter("public");
+
+/**
+ * El path de media privada sigue el mismo switch de provider — con
+ * STORAGE_PROVIDER=db la media entrante tampoco puede quedar en el disco
+ * efímero. `saveMediaLocally` escribe a través de esta seam.
+ */
+export const activePrivateStorage: StorageAdapter = resolveStorageAdapter("media");

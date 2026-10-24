@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   index,
   primaryKey,
+  customType,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
@@ -1240,3 +1241,40 @@ export const cashSessionsRelations = relations(cashSessions, ({ many }) => ({
 export const cashMovementsRelations = relations(cashMovements, ({ one }) => ({
   session: one(cashSessions, { fields: [cashMovements.sessionId], references: [cashSessions.id] }),
 }));
+
+/**
+ * File bytes for STORAGE_PROVIDER=db — migration 0025_stored_files.
+ * neon-http has no binary params: `toDriver` ships bytea as a `\x` hex
+ * literal; `fromDriver` tolerates both the `\x…` hex string the driver
+ * returns and a raw Uint8Array in case the wire format ever changes.
+ */
+const bytea = customType<{
+  data: Buffer;
+  driverData: string | Uint8Array;
+}>({
+  dataType() {
+    return "bytea";
+  },
+  toDriver(value) {
+    return `\\x${value.toString("hex")}`;
+  },
+  fromDriver(value) {
+    if (typeof value !== "string") return Buffer.from(value);
+    return Buffer.from(value.startsWith("\\x") ? value.slice(2) : value, "hex");
+  },
+});
+
+export const storedFiles = pgTable(
+  "stored_files",
+  {
+    path: text("path").primaryKey(),
+    scope: text("scope").notNull(),
+    mime: text("mime").notNull(),
+    bytes: bytea("bytes").notNull(),
+    size: integer("size").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    scopeIdx: index("stored_files_scope_idx").on(t.scope),
+  }),
+);
