@@ -66,8 +66,17 @@ const MANUAL_PROVIDER_NOTES: Record<string, string> = {
 };
 
 /** Zernio embedded-connect buttons (OAuth / WhatsApp Embedded Signup). */
-const ZERNIO_CONNECT: { platform: string; action: string }[] = [
-  { platform: "whatsapp", action: "Conectar WhatsApp (Zernio)" },
+const ZERNIO_CONNECT: { platform: string; action: string; onboarding?: "api" | "business_app" }[] = [
+  {
+    platform: "whatsapp",
+    action: "WhatsApp — coexistencia (tu app actual)",
+    onboarding: "business_app",
+  },
+  {
+    platform: "whatsapp",
+    action: "WhatsApp — número nuevo / Cloud API",
+    onboarding: "api",
+  },
   { platform: "instagram", action: "Conectar Instagram (Zernio)" },
   { platform: "facebook", action: "Conectar Facebook (Zernio)" },
 ];
@@ -188,9 +197,9 @@ export function ChannelsView({
     );
   }
 
-  function connectZernio(platform: string) {
+  function connectZernio(platform: string, onboarding?: "api" | "business_app") {
     startTransition(async () => {
-      const res = await startZernioConnect({ platform });
+      const res = await startZernioConnect({ platform, onboarding });
       if (!res.ok || !res.authUrl) {
         setNotice({ kind: "error", text: res.error ?? "No se pudo iniciar la conexión" });
         return;
@@ -269,8 +278,10 @@ export function ChannelsView({
         <p className="mb-4 text-sm text-on-surface-variant">
           OAuth / WhatsApp Embedded Signup: cada botón te lleva directo al flujo de autorización de Zernio.
           Al volver se crea la fila automáticamente con credenciales vía{" "}
-          <code className="data-mono text-xs">env:ZERNIO_</code>. Facebook incluye la selección de página
-          dentro del flujo.
+          <code className="data-mono text-xs">env:ZERNIO_</code>. WhatsApp ofrece dos modos:{" "}
+          <strong>coexistencia</strong> (tu número sigue funcionando en la app WhatsApp Business del celu —
+          Meta te muestra un QR para escanear) o <strong>Cloud API</strong> (número nuevo o ya migrado, sin
+          app). Facebook incluye la selección de página dentro del flujo.
         </p>
         {!zernioConfigured && (
           <p className="mb-3 text-xs text-status-warning">
@@ -293,7 +304,7 @@ export function ChannelsView({
               variant="secondary"
               size="sm"
               disabled={pending || !embeddedReady}
-              onClick={() => connectZernio(c.platform)}
+              onClick={() => connectZernio(c.platform, c.onboarding)}
             >
               <Plug className="w-3.5 h-3.5" />
               {c.action}

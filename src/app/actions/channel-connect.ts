@@ -13,6 +13,7 @@ import {
   isZernioConnectPlatform,
   registerZernioWebhook,
   resolveZernioProfileId,
+  ZERNIO_WHATSAPP_ONBOARDING,
 } from "@/lib/messaging/providers/zernio-connect";
 
 /**
@@ -37,7 +38,10 @@ import {
 const ZERNIO_CALLBACK_PATH = "/admin/canales/conectar/zernio";
 
 const startConnectSchema = z
-  .object({ platform: z.string().trim().min(1).max(32) })
+  .object({
+    platform: z.string().trim().min(1).max(32),
+    onboarding: z.enum(ZERNIO_WHATSAPP_ONBOARDING).optional(),
+  })
   .strict();
 
 export async function startZernioConnect(input: unknown) {
@@ -46,7 +50,7 @@ export async function startZernioConnect(input: unknown) {
   if (!parsed.success) {
     return { ok: false as const, error: "Datos inválidos" };
   }
-  const { platform } = parsed.data;
+  const { platform, onboarding } = parsed.data;
   if (!isZernioConnectPlatform(platform)) {
     return { ok: false as const, error: `Conexión embebida no disponible para '${platform}'` };
   }
@@ -81,6 +85,7 @@ export async function startZernioConnect(input: unknown) {
     profileId: profile.profileId,
     redirectUrl: `${baseUrl}${ZERNIO_CALLBACK_PATH}?state=${state}`,
     apiKey,
+    onboarding,
   });
   if (!connect.ok) {
     // No authUrl to return — drop the nonce instead of leaving a dead
