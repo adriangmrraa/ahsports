@@ -4282,14 +4282,16 @@
   "src_lib_storage_dbstorageadapter": "dbStorageAdapter — StorageAdapter storing public attachment bytes in stored_files scope 'public', with ALLOWED_MIMES and 5MB cap; returns /api/files/ URLs.",
   "src_lib_storage_default_public_uploads_dir": "DEFAULT_PUBLIC_UPLOADS_DIR — resolved <cwd>/public/uploads baseline used to decide whether /uploads/ static URLs remain valid.",
   "src_lib_storage_public_files_url_prefix": "PUBLIC_FILES_URL_PREFIX — '/api/files/', the URL prefix for db-stored public files and local dirs outside public/.",
-  "src_lib_storage_test": "src/lib/storage.test.ts — node:test suite covering env dir overrides, assertSafePath, local adapter URL prefixes, db-adapter guards and the saveMediaLocally seam.",
+  "src_lib_storage_test": "src/lib/storage.test.ts — Storage path/URL seam tests — no DB required: every assertion either resolves before the lazy @/db/client import or writes to a tmp dir.",
   "src_lib_storage_test_png_bytes": "PNG_BYTES — minimal PNG-signature buffer used across storage adapter tests.",
   "src_lib_storage_test_savedenv": "savedEnv — map of original env values captured by setEnv for per-test restore.",
   "src_lib_storage_activeprivatestorage": "activePrivateStorage — provider-resolved private media adapter: dbPrivateStorageAdapter under STORAGE_PROVIDER=db, else disk privateStorageAdapter.",
-  "src_db_migrations_0025_stored_files": "0025_stored_files.sql — idempotent migration creating the stored_files bytea table for STORAGE_PROVIDER=db.",
+  "src_db_migrations_0025_stored_files": "Source file src/db/migrations/0025_stored_files.sql in src/db/migrations.",
   "src_db_migrations_0025_stored_files_stored_files": "stored_files — table holding file bytes keyed by adapter relPath with scope, mime, size and created_at.",
   "feat_prompt_feat_db_backed_file_storage_neon_bytea_for_uploads_private_media": "feat-prompt.md — mission brief for DB-backed file storage via Neon bytea under STORAGE_PROVIDER=db.",
   "feat_prompt_implementation": "Implementation — the brief's section listing migration 0025, the db adapters, the /api/files route and the deployment docs updates.",
   "docs_07_deployment_storage_de_archivos": "Storage de archivos — deployment doc section explaining STORAGE_PROVIDER modes (db on Neon vs local disk with UPLOADS_DIR/MEDIA_UPLOADS_DIR).",
-  "src_db_schema_bytea": "bytea — drizzle customType mapping bytea: hex \\x literal on write, hex string or Uint8Array to Buffer on read."
+  "src_db_schema_bytea": "bytea — drizzle customType mapping bytea: hex \\x literal on write, hex string or Uint8Array to Buffer on read.",
+  "src_lib_messaging_providers_zernio_connect_zerniowhatsapponboarding": "ZernioWhatsappOnboarding — type alias exported from src/lib/messaging/providers/zernio-connect.ts (line 60).",
+  "src_lib_messaging_providers_zernio_connect_zernio_whatsapp_onboarding": "ZERNIO_WHATSAPP_ONBOARDING — constant exported from src/lib/messaging/providers/zernio-connect.ts: onboarding picks which screen Meta shows during WhatsApp Embedded Signup: api = WABA/number picker (Cloud API only — new numbers, numbers already on Cloud A."
 }
