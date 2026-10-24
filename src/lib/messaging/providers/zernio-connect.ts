@@ -106,12 +106,13 @@ export async function resolveZernioProfileId(
 ): Promise<{ ok: true; profileId: string } | { ok: false; error: string }> {
   const envProfile = process.env.ZERNIO_PROFILE_ID?.trim();
   if (envProfile) return { ok: true, profileId: envProfile };
-  const res = await zernioGet<{ profiles?: { id?: string }[] }>(
-    "/profiles",
-    apiKey
-  );
+  const res = await zernioGet<{
+    profiles?: { id?: string; _id?: string; isDefault?: boolean }[];
+  }>("/profiles", apiKey);
   if (!res.ok) return { ok: false, error: res.error ?? "profiles list failed" };
-  const profileId = res.data?.profiles?.[0]?.id;
+  const profile =
+    res.data?.profiles?.find((p) => p.isDefault) ?? res.data?.profiles?.[0];
+  const profileId = profile?.id ?? profile?._id;
   if (!profileId) {
     return {
       ok: false,
