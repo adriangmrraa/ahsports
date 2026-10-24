@@ -4,7 +4,7 @@
   "source": "default-auto",
   "root": ".",
   "git_root": ".",
-  "head": "c3470665c7a626fb895a65d2df5ca8f50bb2fbf8",
-  "node_count": 3523,
+  "head": "1f3dbbc0aa43bdd77f9a2503a2ad08cd7e626e95",
+  "node_count": 3796,
   "generated_by": "graphify 0.9.46 -> graphify-out/, mirrored to .graphify/ by reapply-descriptions.mjs"
 }
