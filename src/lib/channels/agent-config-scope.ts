@@ -468,6 +468,7 @@ function legacyColumns() {
     kapsoWebhookSecretEnc: _kapsoSecret,
     zernioApiKeyEnc: _zernioKey,
     zernioWebhookSecretEnc: _zernioSecret,
+    providerEndpointUrl: _providerEndpoint,
     ...rest
   } = getTableColumns(agentConfig);
   return rest;

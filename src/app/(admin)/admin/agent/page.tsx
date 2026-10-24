@@ -91,6 +91,7 @@ export default async function AgentConfigPage({
             initial={{
               provider: config?.provider ?? "",
               model: config?.model ?? "",
+              providerEndpointUrl: config?.providerEndpointUrl ?? "",
               systemPrompt: config?.systemPrompt ?? "",
               enabledTools: config?.enabledTools ?? [],
               // G-01: undefined on a pre-migration row means enabled (default true).

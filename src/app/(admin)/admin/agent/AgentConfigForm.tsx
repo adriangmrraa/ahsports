@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { copyAgentConfig, saveAgentConfig } from "@/app/actions/agent-config";
+import { copyAgentConfig, listAiProviderModels, saveAgentConfig } from "@/app/actions/agent-config";
 import type { AgentConfigScopeOption } from "@/lib/channels/agent-config-scope";
+import { AI_PROVIDERS, findAiProvider, type AiProviderCatalogEntry } from "@/lib/ai/providers-catalog";
 import { Badge, Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea } from "@/components/ui/Input";
@@ -14,6 +15,8 @@ import { Field, Input, Select, Textarea } from "@/components/ui/Input";
  * server-only, so the literal is duplicated here; both sides must agree.
  */
 const SECRET_CLEAR = "CLEAR";
+const CUSTOM_PROVIDER = "__custom__";
+const CUSTOM_MODEL = "__other__";
 
 export type AgentToolOption = {
   id: string;
@@ -24,6 +27,7 @@ export type AgentToolOption = {
 export type AgentConfigInitial = {
   provider: string;
   model: string;
+  providerEndpointUrl: string;
   systemPrompt: string;
   enabledTools: string[];
   enabled: boolean;
@@ -87,7 +91,19 @@ export function AgentConfigForm({
   const [copyFrom, setCopyFrom] = useState("");
 
   const [provider, setProvider] = useState(initial.provider);
+  const [providerChoice, setProviderChoice] = useState(() =>
+    initial.provider === "" ? "" : findAiProvider(initial.provider) ? initial.provider : CUSTOM_PROVIDER,
+  );
+  const [customProvider, setCustomProvider] = useState(
+    () => (initial.provider && !findAiProvider(initial.provider) ? initial.provider : ""),
+  );
+  const [endpointUrl, setEndpointUrl] = useState(initial.providerEndpointUrl);
   const [model, setModel] = useState(initial.model);
+  const [modelCustom, setModelCustom] = useState(false);
+  const [modelList, setModelList] = useState<{ source: "live" | "static"; models: string[] }>({
+    source: "static",
+    models: findAiProvider(initial.provider)?.staticModels ?? [],
+  });
   const [systemPrompt, setSystemPrompt] = useState(initial.systemPrompt);
   const [enabledTools, setEnabledTools] = useState<string[]>(initial.enabledTools);
   const [enabled, setEnabled] = useState(initial.enabled);
@@ -112,6 +128,64 @@ export function AgentConfigForm({
   const readTools = tools.filter((tool) => tool.effect === "read");
   const draftTools = tools.filter((tool) => tool.effect === "draft");
 
+  const catalogEntry: AiProviderCatalogEntry | undefined =
+    providerChoice === CUSTOM_PROVIDER ? undefined : findAiProvider(provider);
+  const isCatalogDefaultEndpoint = (value: string) =>
+    AI_PROVIDERS.some((entry) => entry.defaultBaseUrl.toLowerCase() === value.trim().replace(/\/+$/, "").toLowerCase());
+
+  // Live model listing — refetches when provider/endpoint/key change (debounced).
+  // The action resolves the key server-side: typed value → scope's stored key → env.
+  const providerKeyValue = secrets.providerKey;
+  useEffect(() => {
+    const p = provider.trim();
+    if (!p) {
+      setModelList({ source: "static", models: [] });
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const res = await listAiProviderModels({
+        provider: p,
+        endpointUrl: endpointUrl.trim() || undefined,
+        apiKey: providerKeyValue.trim() || undefined,
+        scope: scopeKey,
+      });
+      if (cancelled) return;
+      setModelList(
+        res.ok
+          ? { source: res.source, models: res.models }
+          : { source: "static", models: findAiProvider(p)?.staticModels ?? [] },
+      );
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [provider, endpointUrl, providerKeyValue, scopeKey]);
+
+  function onProviderSelect(value: string) {
+    setProviderChoice(value);
+    if (value === CUSTOM_PROVIDER) {
+      setProvider(customProvider);
+      return;
+    }
+    if (value === "") {
+      setProvider("");
+      return;
+    }
+    const entry = findAiProvider(value);
+    setProvider(value);
+    // Auto-fill the endpoint only when the field is empty or still holds
+    // another catalog default — never clobber a manual URL.
+    if (entry && (!endpointUrl.trim() || isCatalogDefaultEndpoint(endpointUrl))) {
+      setEndpointUrl(entry.defaultBaseUrl);
+    }
+    if (entry && (!model.trim() || modelList.models.includes(model))) {
+      setModel(entry.defaultModel);
+      setModelCustom(false);
+    }
+  }
+
   function toggleTool(id: string) {
     setEnabledTools((current) =>
       current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
@@ -127,6 +201,7 @@ export function AgentConfigForm({
         scope: scopeKey,
         provider,
         model,
+        providerEndpointUrl: endpointUrl,
         systemPrompt,
         enabledTools,
         botToken: secrets.botToken,
@@ -234,11 +309,99 @@ export function AgentConfigForm({
 
       <form onSubmit={submit} className="flex flex-col gap-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Proveedor" hint="Identificador del proveedor (ej. openai, deepseek). Vacío = sin configurar.">
-            <Input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="openai" />
+          <Field
+            label="Proveedor"
+            hint={
+              providerChoice === CUSTOM_PROVIDER
+                ? "Id libre del proveedor (ej. chat-completions, ollama). Vacío = sin configurar."
+                : "Proveedor del catálogo — completa el endpoint y los modelos."
+            }
+          >
+            <div className="flex flex-col gap-2">
+              <Select value={providerChoice} onChange={(e) => onProviderSelect(e.target.value)}>
+                <option value="">Sin configurar</option>
+                {AI_PROVIDERS.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.label}
+                  </option>
+                ))}
+                <option value={CUSTOM_PROVIDER}>Otro (personalizado)</option>
+              </Select>
+              {providerChoice === CUSTOM_PROVIDER && (
+                <Input
+                  value={customProvider}
+                  onChange={(e) => {
+                    setCustomProvider(e.target.value);
+                    setProvider(e.target.value);
+                  }}
+                  placeholder="chat-completions"
+                />
+              )}
+            </div>
           </Field>
-          <Field label="Modelo" hint="Nombre del modelo tal como lo espera el proveedor.">
-            <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="gpt-4o-mini" />
+          <Field
+            label="Endpoint URL"
+            hint={
+              catalogEntry
+                ? `Base del proveedor. Por defecto: ${catalogEntry.defaultBaseUrl}`
+                : "Base del proveedor o endpoint completo (…/chat/completions)."
+            }
+          >
+            <Input
+              value={endpointUrl}
+              onChange={(e) => setEndpointUrl(e.target.value)}
+              placeholder={catalogEntry?.defaultBaseUrl ?? "https://api.ejemplo.com/v1"}
+            />
+          </Field>
+          <Field
+            label="Modelo"
+            hint={
+              modelList.source === "live"
+                ? "Lista obtenida en vivo del proveedor."
+                : "Lista del catálogo — se actualiza en vivo con la API key."
+            }
+          >
+            {(() => {
+              const listed = model !== "" && modelList.models.includes(model);
+              const showInput = modelCustom || (model !== "" && !listed) || modelList.models.length === 0;
+              if (showInput) {
+                return (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      placeholder={catalogEntry?.defaultModel || "nombre del modelo"}
+                    />
+                    {modelList.models.length > 0 && (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setModelCustom(false)}>
+                        Lista
+                      </Button>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <Select
+                  value={model}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === CUSTOM_MODEL) {
+                      setModelCustom(true);
+                      return;
+                    }
+                    setModel(value);
+                  }}
+                >
+                  <option value="">Elegir modelo…</option>
+                  {modelList.models.map((id) => (
+                    <option key={id} value={id}>
+                      {id}
+                    </option>
+                  ))}
+                  <option value={CUSTOM_MODEL}>Otro…</option>
+                </Select>
+              );
+            })()}
           </Field>
         </div>
 

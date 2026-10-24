@@ -835,6 +835,11 @@ export const agentConfig = pgTable(
     providerKeyEnc: text("provider_key_enc"),
     webhookSecretEnc: text("webhook_secret_enc"),
     /**
+     * Provider endpoint/base URL chosen in /admin/agent (catalog default or
+     * manual). Not a secret — the API key stays in `providerKeyEnc`.
+     */
+    providerEndpointUrl: text("provider_endpoint_url"),
+    /**
      * Kill-switch (G-01): the scoped dispatcher replies only while enabled.
      * Defaults true so existing installs keep their behavior after migration.
      */

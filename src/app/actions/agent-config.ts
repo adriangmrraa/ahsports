@@ -16,9 +16,14 @@ import {
   type AgentConfigScope,
 } from "@/lib/channels/agent-config-scope";
 import { isSchemaNotReady } from "@/lib/channels/errors";
-import { resolveSecretUpdate } from "@/lib/crypto/secret-box";
+import { decryptIfEncrypted, resolveSecretUpdate } from "@/lib/crypto/secret-box";
 import { ALL_AGENT_TOOLS } from "@/lib/agents/tools/registry";
-import { AGENT_CONFIG_ID } from "@/lib/ai/config";
+import { AGENT_CONFIG_ID, providerEnv } from "@/lib/ai/config";
+import {
+  fetchProviderModels,
+  findAiProvider,
+  providerBaseUrl,
+} from "@/lib/ai/providers-catalog";
 
 /**
  * P4.1 / P4 — server actions for the agent admin surface.
@@ -48,6 +53,8 @@ const saveAgentConfigSchema = z
     scope: z.string().trim().max(64).optional(),
     provider: z.string().max(64),
     model: z.string().max(128),
+    // Base/endpoint URL of the AI provider (catalog default or manual). Not a secret.
+    providerEndpointUrl: z.string().max(2048),
     systemPrompt: z.string().max(20_000),
     enabledTools: z.array(z.string().trim().min(1).max(64)).max(64),
     // Write-only secret fields. Empty = keep, `CLEAR` = wipe, otherwise set.
@@ -144,6 +151,7 @@ export async function saveAgentConfig(input: unknown) {
     const values = {
       provider: nullable(data.provider),
       model: nullable(data.model),
+      providerEndpointUrl: nullable(data.providerEndpointUrl),
       systemPrompt: data.systemPrompt.trim() ? data.systemPrompt : null,
       enabledTools,
       botTokenEnc: resolveSecretUpdate(data.botToken, current?.botTokenEnc ?? null).stored,
@@ -223,6 +231,7 @@ export async function copyAgentConfig(input: unknown) {
     const data: Record<string, unknown> = {
       provider: source.provider,
       model: source.model,
+      providerEndpointUrl: source.providerEndpointUrl,
       systemPrompt: source.systemPrompt,
       enabledTools: source.enabledTools,
       botTokenEnc: source.botTokenEnc,
@@ -298,4 +307,59 @@ export async function bindAgentOperator(input: unknown) {
 
   revalidatePath("/admin/agent");
   return { ok: true as const, bindingKey: operatorBindingKey(channel, transportId) };
+}
+
+// ─── Live model listing ─────────────────────────────────────────────────────
+
+const listProviderModelsSchema = z
+  .object({
+    provider: z.string().trim().min(1).max(64),
+    endpointUrl: z.string().trim().max(2048).optional(),
+    apiKey: z.string().max(4096).optional(),
+    scope: scopeKeySchema.optional(),
+  })
+  .strict();
+
+export type ListAiProviderModelsResult =
+  | { ok: true; source: "live" | "static"; models: string[] }
+  | { ok: false; error: string };
+
+/**
+ * Lists a provider's real models for the /admin/agent selector. The probe key
+ * resolves as: typed value → the edited scope's stored `provider_key_enc`
+ * (decrypted in place, never returned) → `AGENT_AI_<PROVIDER>_API_KEY` →
+ * `AGENT_AI_API_KEY`. Falls back to the catalog's static list when the live
+ * call fails or returns nothing.
+ */
+export async function listAiProviderModels(input: unknown): Promise<ListAiProviderModelsResult> {
+  await requireAgentAdmin();
+  const parsed = listProviderModelsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Datos inválidos" };
+  const { provider, endpointUrl, apiKey } = parsed.data;
+  const scope = parseScopeKey(parsed.data.scope ?? "global");
+  if (scope == null) return { ok: false as const, error: "Ámbito de configuración inválido." };
+
+  const typedKey = apiKey?.trim();
+  let storedKey: string | undefined;
+  if (!typedKey) {
+    try {
+      const row = await findAgentConfigForScope(scope);
+      storedKey = decryptIfEncrypted(row?.providerKeyEnc).trim() || undefined;
+    } catch {
+      // Un-migrated/transient read — the probe just falls back to env.
+    }
+  }
+  const resolvedKey =
+    typedKey ||
+    storedKey ||
+    providerEnv(process.env, provider, "API_KEY") ||
+    process.env.AGENT_AI_API_KEY?.trim() ||
+    undefined;
+
+  const entry = findAiProvider(provider);
+  const result = await fetchProviderModels(provider, providerBaseUrl(endpointUrl) ?? entry?.defaultBaseUrl, resolvedKey);
+  if (result.ok && result.models.length > 0) {
+    return { ok: true as const, source: "live" as const, models: result.models };
+  }
+  return { ok: true as const, source: "static" as const, models: [...(entry?.staticModels ?? [])] };
 }

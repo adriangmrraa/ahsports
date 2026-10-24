@@ -144,7 +144,8 @@ Es la pantalla central. Tiene dos bloques:
 
 | Campo | Qué es | Notas |
 |-------|--------|-------|
-| `provider` | Id del **protocolo** del runtime (p. ej. `chat-completions`), no una marca. | Se resuelve contra el registry de adapters. |
+| `provider` | Id de proveedor del catálogo (openai, deepseek, …) o id libre/"custom" (p. ej. `chat-completions`). | El registry mapea id de catálogo → protocolo → adapter. |
+| `providerEndpointUrl` | Base/endpoint del proveedor de IA (se auto-completa desde el catálogo). | No es secreto; el runtime le concatena el path del protocolo. |
 | `model` | Nombre del modelo que se pasa tal cual al proveedor. | No se mapea. |
 | `systemPrompt` | System prompt del agente. | Si se deja vacío se usa el prompt por defecto del código. |
 | `enabledTools` | Subconjunto de ids de herramientas habilitadas. | Solo se aceptan ids del registry cerrado. |
