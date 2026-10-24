@@ -10,7 +10,7 @@ import { z } from "zod";
  */
 
 // Kept in sync with the `channel` pgEnum in src/db/schema.ts.
-export const channelValues = ["telegram", "whatsapp", "instagram", "facebook", "sms", "reddit"] as const;
+export const channelValues = ["telegram", "whatsapp", "instagram", "facebook", "sms", "reddit", "linkedin", "tiktok", "youtube", "threads", "pinterest", "discord", "slack"] as const;
 export const messageDirectionValues = ["inbound", "outbound"] as const;
 export const senderKindValues = ["customer", "agent", "operator"] as const;
 export const contentTypeValues = ["text", "image", "document", "system"] as const;

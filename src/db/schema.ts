@@ -79,6 +79,13 @@ export const channel = pgEnum("channel", [
   "facebook",
   "sms",
   "reddit",
+  "linkedin",
+  "tiktok",
+  "youtube",
+  "threads",
+  "pinterest",
+  "discord",
+  "slack",
 ]);
 export const messageDirection = pgEnum("message_direction", ["inbound", "outbound"]);
 export const messageSenderKind = pgEnum("message_sender_kind", ["customer", "agent", "operator"]);

@@ -148,6 +148,13 @@
       "when": 1786400000007,
       "tag": "0025_stored_files",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1786400000008,
+      "tag": "0026_zernio_channels",
+      "breakpoints": true
     }
   ]
 }

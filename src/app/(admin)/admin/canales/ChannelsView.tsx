@@ -31,8 +31,15 @@ const CHANNELS = [
   { value: "telegram", label: "Telegram" },
   { value: "instagram", label: "Instagram" },
   { value: "facebook", label: "Facebook" },
-  { value: "sms", label: "SMS" },
   { value: "reddit", label: "Reddit" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "youtube", label: "YouTube" },
+  { value: "threads", label: "Threads" },
+  { value: "pinterest", label: "Pinterest" },
+  { value: "discord", label: "Discord" },
+  { value: "slack", label: "Slack" },
+  { value: "sms", label: "SMS" },
 ];
 
 const PROVIDER_HINTS: Record<string, string> = {
@@ -63,6 +70,8 @@ const CREDENTIALS_DEFAULTS: Record<string, string> = {
 const MANUAL_PROVIDER_NOTES: Record<string, string> = {
   kapso:
     "Kapso no ofrece conexión embebida. Cargá el phone_number_id de Meta, apuntá la referencia a env:KAPSO_ y pegá la URL de webhook en el dashboard de Kapso.",
+  zernio:
+    "Para conexión embebida usá los botones de arriba (WhatsApp tiene los dos modos: coexistencia y Cloud API). Este formulario es para cargar una cuenta Zernio a mano con su accountId.",
 };
 
 /** Zernio embedded-connect buttons (OAuth / WhatsApp Embedded Signup). */
@@ -77,8 +86,15 @@ const ZERNIO_CONNECT: { platform: string; action: string; onboarding?: "api" | "
     action: "WhatsApp — número nuevo / Cloud API",
     onboarding: "api",
   },
-  { platform: "instagram", action: "Conectar Instagram (Zernio)" },
-  { platform: "facebook", action: "Conectar Facebook (Zernio)" },
+  { platform: "instagram", action: "Conectar Instagram" },
+  { platform: "facebook", action: "Conectar Facebook" },
+  { platform: "linkedin", action: "Conectar LinkedIn" },
+  { platform: "tiktok", action: "Conectar TikTok" },
+  { platform: "youtube", action: "Conectar YouTube" },
+  { platform: "threads", action: "Conectar Threads" },
+  { platform: "pinterest", action: "Conectar Pinterest" },
+  { platform: "discord", action: "Conectar Discord" },
+  { platform: "slack", action: "Conectar Slack" },
 ];
 
 const ZERNIO_PLATFORMS = ZERNIO_CONNECT.map((c) => c.platform);
@@ -173,7 +189,7 @@ export function ChannelsView({
   const [displayName, setDisplayName] = useState("");
   const [credentialsRef, setCredentialsRef] = useState(CREDENTIALS_DEFAULTS.zernio);
   const embeddedReady = zernioConfigured && !baseUrlMissing;
-  const manualZernioPlatform = provider === "zernio" && ZERNIO_PLATFORMS.includes(channel);
+  const manualZernioPlatform = provider === "zernio" && ZERNIO_PLATFORMS.includes(channel) && channel !== "whatsapp";
 
   // Flash from the zernio connect callback (?connected=zernio:ig | ?error=…)
   useEffect(() => {
@@ -276,12 +292,13 @@ export function ChannelsView({
 
       <Card title="Conexión rápida con Zernio">
         <p className="mb-4 text-sm text-on-surface-variant">
-          OAuth / WhatsApp Embedded Signup: cada botón te lleva directo al flujo de autorización de Zernio.
+          OAuth / Embedded Signup: cada botón te lleva directo al flujo de autorización de Zernio.
           Al volver se crea la fila automáticamente con credenciales vía{" "}
           <code className="data-mono text-xs">env:ZERNIO_</code>. WhatsApp ofrece dos modos:{" "}
           <strong>coexistencia</strong> (tu número sigue funcionando en la app WhatsApp Business del celu —
           Meta te muestra un QR para escanear) o <strong>Cloud API</strong> (número nuevo o ya migrado, sin
-          app). Facebook incluye la selección de página dentro del flujo.
+          app). Facebook incluye la selección de página dentro del flujo. Telegram se conecta por bot
+          propio (formulario de abajo); Reddit vuelve cuando Zernio lo rehabilite.
         </p>
         {!zernioConfigured && (
           <p className="mb-3 text-xs text-status-warning">
@@ -299,7 +316,7 @@ export function ChannelsView({
         <div className="flex flex-wrap gap-2">
           {ZERNIO_CONNECT.map((c) => (
             <Button
-              key={c.platform}
+              key={`${c.platform}:${c.onboarding ?? "default"}`}
               type="button"
               variant="secondary"
               size="sm"
@@ -316,10 +333,10 @@ export function ChannelsView({
           <code className="data-mono text-xs">env:ZERNIO_</code>: ambos caminos conviven y actualizan la
           misma cuenta.
         </p>
-        <p className="mt-3 text-xs text-status-warning">
-          Ojo: las cuentas conectadas por Zernio o Kapso guardan los mensajes, pero el agente todavía no
-          responde automáticamente en esos canales — hoy el auto-reply solo funciona con WhatsApp vía YCloud
-          y Telegram.
+        <p className="mt-3 text-xs text-on-surface-variant">
+          El agente responde automáticamente en WhatsApp (cualquier provider: YCloud, Zernio o Kapso) y
+          Telegram. El resto de los canales (Instagram, Facebook, LinkedIn, TikTok, etc.) guarda los
+          mensajes en el inbox sin auto-reply — respondés a mano desde ahí.
         </p>
       </Card>
 

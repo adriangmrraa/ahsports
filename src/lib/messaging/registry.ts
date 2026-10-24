@@ -34,6 +34,14 @@ export const CHANNEL_KINDS: ChannelKind[] = [
   "facebook",
   "telegram",
   "sms",
+  "reddit",
+  "linkedin",
+  "tiktok",
+  "youtube",
+  "threads",
+  "pinterest",
+  "discord",
+  "slack",
 ];
 
 export function isProviderId(value: string): value is ProviderId {

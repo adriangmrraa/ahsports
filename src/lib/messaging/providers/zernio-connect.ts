@@ -35,15 +35,24 @@ export function connectStateCookieName(platform: string): string {
 }
 
 /**
- * Platforms offered a one-click connect button. Telegram etc. are
- * credential-connect platforms (bot token), not OAuth — they stay on the
- * manual form. `reddit` is omitted: it is not part of the AH channel
- * contract.
+ * Platforms offered a one-click connect button — verified live against
+ * `GET /v1/connect/{platform}`: each returns an OAuth authUrl on this account.
+ * Telegram stays on the manual form (bot-token connect, no OAuth authUrl, and
+ * AH runs its own bot). Excluded by upstream state, not choice: `reddit`
+ * (503 temporarily unavailable), `twitter` (402 billing pass-through),
+ * `snapchat` (403 beta), `google`/`messenger` (400 unsupported).
  */
 export const ZERNIO_CONNECT_PLATFORMS = [
   "whatsapp",
   "instagram",
   "facebook",
+  "linkedin",
+  "tiktok",
+  "youtube",
+  "threads",
+  "pinterest",
+  "discord",
+  "slack",
 ] as const satisfies readonly ChannelKind[];
 
 export type ZernioConnectPlatform = (typeof ZERNIO_CONNECT_PLATFORMS)[number];

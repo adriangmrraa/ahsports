@@ -7,8 +7,9 @@
  * schema/resolver concern (not a contract field) and `senderAddress` covers
  * the display role.
  *
- * AH adaptation: `reddit` is dropped from `ChannelKind` — the AH channel set is
- * whatsapp, instagram, facebook, telegram, sms (task contract). `comment` and
+ * AH adaptation: `ChannelKind` mirrors the `channel` pgEnum — the original
+ * five plus reddit and the remaining Zernio connect platforms (linkedin,
+ * tiktok, youtube, threads, pinterest, discord, slack). `comment` and
  * `messenger` remain event kinds, never channel values.
  */
 
@@ -20,7 +21,15 @@ export type ChannelKind =
   | "instagram"
   | "facebook"
   | "telegram"
-  | "sms";
+  | "sms"
+  | "reddit"
+  | "linkedin"
+  | "tiktok"
+  | "youtube"
+  | "threads"
+  | "pinterest"
+  | "discord"
+  | "slack";
 
 export interface ChannelAccount {
   id: string;

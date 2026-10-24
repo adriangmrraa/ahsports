@@ -357,14 +357,22 @@ const PASSIVE_PERSISTED_KINDS = new Set<NormalizedInboundEvent["kind"]>([
 ]);
 
 /** Channels that persist a canonical conversation + message passively.
- *  instagram/facebook events resolve conversations through the same
- *  channel-agnostic intake; sms/reddit stay marker-only until a provider
- *  emits them with verifiable normalization. */
+ *  Social channels resolve conversations through the same channel-agnostic
+ *  intake; sms stays marker-only until a provider emits it with verifiable
+ *  normalization. */
 const PERSISTABLE_CHANNELS = new Set<ChannelKind>([
   "whatsapp",
   "telegram",
   "instagram",
   "facebook",
+  "reddit",
+  "linkedin",
+  "tiktok",
+  "youtube",
+  "threads",
+  "pinterest",
+  "discord",
+  "slack",
 ]);
 
 /**
