@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { storedFiles } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { checkRateLimit, clientIpFromRequest } from "@/lib/infra/rate-limit";
-import { privateUploadsDir } from "@/lib/storage";
+import { assertSafePath, privateUploadsDir } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -68,9 +71,36 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const cleanSegments = segments.map((s) => s.replace(/\.\./g, ""));
+
+  // STORAGE_PROVIDER=db: bytes live in stored_files (scope 'media'), still
+  // behind the same session gate — nothing private becomes public.
+  if (process.env.STORAGE_PROVIDER === "db") {
+    const rel = cleanSegments.join("/");
+    try {
+      assertSafePath(rel);
+    } catch {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const [row] = await db
+      .select({ mime: storedFiles.mime, bytes: storedFiles.bytes })
+      .from(storedFiles)
+      .where(and(eq(storedFiles.path, rel), eq(storedFiles.scope, "media")))
+      .limit(1);
+    if (!row) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return new NextResponse(new Uint8Array(row.bytes), {
+      headers: {
+        "Content-Type": row.mime,
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+
   // Prevent directory traversal — resolve fully, then require confinement.
   const uploadsDir = path.resolve(privateUploadsDir());
-  const cleanSegments = segments.map((s) => s.replace(/\.\./g, ""));
   const filePath = path.resolve(uploadsDir, ...cleanSegments);
 
   if (filePath !== uploadsDir && !filePath.startsWith(uploadsDir + path.sep)) {

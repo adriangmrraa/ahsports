@@ -57,6 +57,35 @@ Canales del agente IA (opcionales; por nombre, nunca valores acá):
 > `src/lib/env.ts`. Si usás el cron, cargala en Render; conviene agregarla a
 > `.env.example` en un cambio de código aparte.
 
+### Storage de archivos
+
+El filesystem de Render es **efímero** — cualquier archivo en disco muere en
+cada redeploy. `STORAGE_PROVIDER` elige dónde viven los bytes (adjuntos de
+pedidos/productos y media entrante de clientes):
+
+| Modo | Config | Dónde quedan los bytes |
+|------|--------|------------------------|
+| `db` (recomendado en Render) | `STORAGE_PROVIDER=db` | Tabla `stored_files` (bytea) en Neon — sobrevive redeploys. Se sirven por `/api/files/*` (público) y `/api/media/*` (session-gated). Sin dependencias externas |
+| `local` (default) | `STORAGE_PROVIDER=local` + `UPLOADS_DIR`/`MEDIA_UPLOADS_DIR` opcionales | Disco. Default `public/uploads` (estático `/uploads/*`) y `private/uploads` |
+
+Opción con disco persistente de Render (si se monta un Disk):
+
+```
+STORAGE_PROVIDER=local
+UPLOADS_DIR=/var/data/uploads
+MEDIA_UPLOADS_DIR=/var/data/media
+```
+
+Con `UPLOADS_DIR` fuera de `public/` los adjuntos públicos se sirven por
+`/api/files/*` (los URLs `/uploads/*` solo existen bajo `public/`).
+
+Notas:
+- La migración `0025_stored_files` crea la tabla (idempotente, corre con
+  `npm run db:migrate` en el build).
+- Adjuntos subidos antes de este cambio con URLs `/uploads/...` no resuelven
+  en modo `db` — los bytes ya no existen en el disco efímero viejo.
+- Tope por archivo: 5MB adjuntos públicos, 25MB media entrante.
+
 > 📖 **Guía completa de los canales** (setup, webhooks, operadores, permisos, pruebas,
 > rollback y notas de privacidad): [`10-AGENT-CHANNELS-GUIDE.md`](./10-AGENT-CHANNELS-GUIDE.md).
 
