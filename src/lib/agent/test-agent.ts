@@ -191,6 +191,8 @@ export async function runAgentConfigTest(): Promise<AgentTestReport> {
           model: row.model,
           systemPrompt: row.systemPrompt,
           enabledTools: row.enabledTools,
+          providerKeyEnc: row.providerKeyEnc,
+          providerEndpointUrl: row.providerEndpointUrl,
         }
       : null
   );

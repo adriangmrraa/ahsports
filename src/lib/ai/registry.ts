@@ -1,5 +1,6 @@
 import { CHAT_COMPLETIONS_PROTOCOL, createChatCompletionsProvider } from "@/lib/ai/adapters/chat-completions";
 import { ChatProviderError, type ChatProvider } from "@/lib/ai/provider";
+import { findAiProvider } from "@/lib/ai/providers-catalog";
 import type { ResolvedAgentRuntime } from "@/lib/ai/config";
 
 /**
@@ -29,7 +30,13 @@ export function listRegisteredProtocols(): string[] {
 }
 
 export function createChatProvider(runtime: ResolvedAgentRuntime): ChatProvider {
-  const protocol = runtime.provider.trim().toLowerCase();
+  const provider = runtime.provider.trim().toLowerCase();
+  // `agent_config.provider` may hold a wire-protocol id (chat-completions) or a
+  // catalog vendor id (openai, deepseek, …) — the entry's `protocol` field maps
+  // it to the adapter that speaks its chat API.
+  const protocol = registry.has(provider)
+    ? provider
+    : (findAiProvider(provider)?.protocol ?? provider);
   const factory = registry.get(protocol);
   if (!factory) {
     throw new ChatProviderError(
