@@ -13,6 +13,7 @@ import { HoodieGarment } from "./garments/HoodieGarment";
 import { BottomsGarment } from "./garments/BottomsGarment";
 import { BundleGarment } from "./garments/BundleGarment";
 import { FallbackGarment } from "./garments/FallbackGarment";
+import { AccessoryGarment } from "./garments/AccessoryGarment";
 
 /**
  * Renderer key → model component. Keys come from the pure registry so the
@@ -23,12 +24,14 @@ export const GARMENT_RENDERERS: Record<GarmentRendererKey, ComponentType<Garment
   hoodie: HoodieGarment,
   bottoms: BottomsGarment,
   bundle: BundleGarment,
+  accessory: AccessoryGarment,
   "generic-garment": FallbackGarment,
 };
 
 export type ProductGarmentProps = {
   descriptor?: ProductGarmentDescriptor | null;
   config: GarmentConfig;
+  assetUrls?: Record<string, string>;
   /** Reports the resolution when it changes — useful for debug surfaces. */
   onResolved?: (resolution: RendererResolution) => void;
 };
@@ -42,7 +45,7 @@ export type ProductGarmentProps = {
  * host them. Bundles tag each component inside BundleGarment instead, so the
  * outer wrapper intentionally carries no scope.
  */
-export function ProductGarment({ descriptor, config, onResolved }: ProductGarmentProps) {
+export function ProductGarment({ descriptor, config, assetUrls, onResolved }: ProductGarmentProps) {
   const resolution = useMemo(
     () => resolveGarmentRenderer(descriptor),
     [descriptor],
@@ -56,7 +59,7 @@ export function ProductGarment({ descriptor, config, onResolved }: ProductGarmen
 
   return (
     <group name={`scope-${scope ?? "none"}`} userData={{ scope }}>
-      <Model config={config} descriptor={descriptor} />
+      <Model config={config} descriptor={descriptor} assetUrls={assetUrls} />
     </group>
   );
 }

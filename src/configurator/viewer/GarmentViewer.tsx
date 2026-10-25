@@ -43,15 +43,21 @@ export type GarmentViewerProps = {
   className?: string;
 };
 
-type WebGLSupport = "unknown" | "supported" | "unsupported";
+type WebGLSupport = "unknown" | "supported" | "unsupported" | "lost";
 
 function detectWebGLSupport(): boolean {
   try {
     const canvas = document.createElement("canvas");
-    return !!(
+    const context = (
       window.WebGLRenderingContext &&
       (canvas.getContext("webgl2") ?? canvas.getContext("webgl"))
     );
+    if (!context) return false;
+    // Safari/iOS enforces a much tighter WebGL-context budget than desktop
+    // browsers. The capability probe must release its throw-away context or
+    // it can starve the real viewer that mounts immediately afterwards.
+    context.getExtension("WEBGL_lose_context")?.loseContext();
+    return true;
   } catch {
     return false;
   }
@@ -69,6 +75,7 @@ export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>
   ) {
     const normalized = normalizeGarmentConfig(config);
     const [support, setSupport] = useState<WebGLSupport>("unknown");
+    const [viewerNonce, setViewerNonce] = useState(0);
     const [internalView, setInternalView] = useState<ViewPreset>(view ?? normalized.view);
     const activeView = view ?? internalView;
     const captureRef = useRef<CaptureImageFn | null>(null);
@@ -99,24 +106,33 @@ export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>
 
     const initialPose = cameraPoseToPosition(VIEW_CAMERA_PRESETS[normalized.view]);
 
+    const retryViewer = () => {
+      setViewerNonce((value) => value + 1);
+      setSupport("unknown");
+      requestAnimationFrame(() => {
+        setSupport(detectWebGLSupport() ? "supported" : "unsupported");
+      });
+    };
+
     return (
       <div
         className={cn(
           "relative touch-none overflow-hidden rounded-lg bg-navy-950 texture-mesh",
-          "min-h-[320px] w-full",
+          "h-[340px] w-full sm:h-[420px] lg:h-[500px]",
           className,
         )}
         data-testid="garment-viewer"
       >
         {support === "supported" && (
           <Canvas
+            key={viewerNonce}
             frameloop="demand"
-            dpr={[1, 1.75]}
-            shadows
+            dpr={[1, 1.5]}
+            shadows="basic"
             gl={{
               antialias: true,
-              preserveDrawingBuffer: true,
-              powerPreference: "high-performance",
+              preserveDrawingBuffer: false,
+              powerPreference: "default",
               alpha: false,
             }}
             camera={{ fov: 32, near: 0.1, far: 20, position: initialPose }}
@@ -127,6 +143,7 @@ export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>
               view={activeView}
               onCaptureBridge={onCaptureBridge}
               assetUrls={assetUrls}
+              onContextLost={() => setSupport("lost")}
             />
           </Canvas>
         )}
@@ -140,6 +157,23 @@ export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>
             <p className="text-xs text-on-navy-variant">
               Tu navegador no soporta WebGL. La configuración elegida se mantiene.
             </p>
+          </div>
+        )}
+
+        {support === "lost" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+            <Shirt className="h-10 w-10 text-on-navy-variant" aria-hidden />
+            <p className="text-sm font-medium text-on-navy">La vista 3D se pausó.</p>
+            <p className="max-w-xs text-xs text-on-navy-variant">
+              Tu diseño sigue guardado. Liberamos la memoria gráfica para que puedas reintentar.
+            </p>
+            <button
+              type="button"
+              onClick={retryViewer}
+              className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 text-xs font-bold text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
+            >
+              Reintentar vista 3D
+            </button>
           </div>
         )}
 

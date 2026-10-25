@@ -13,6 +13,7 @@ export const GARMENT_RENDERER_KEYS = [
   "hoodie",
   "bottoms",
   "bundle",
+  "accessory",
   "generic-garment",
 ] as const;
 export type GarmentRendererKey = (typeof GARMENT_RENDERER_KEYS)[number];
@@ -30,6 +31,7 @@ export const RENDERER_SCOPE: Record<GarmentRendererKey, "upper" | "lower" | "non
   hoodie: "upper",
   bottoms: "lower",
   bundle: "none",
+  accessory: "none",
   "generic-garment": "none",
 };
 
@@ -53,8 +55,8 @@ const HOODIE_GARMENT_TYPES = new Set(["campera", "canguro", "buzo", "camperon"])
  */
 const BOTTOMS_GARMENT_TYPES = new Set(["pantalon", "short", "bermuda", "calza", "legging"]);
 
-/** `garment_type` values that stay on the honest fallback (non-garments). */
-const FALLBACK_GARMENT_TYPES = new Set(["accesorio"]);
+/** `garment_type` values rendered by the dedicated accessory family. */
+const ACCESSORY_GARMENT_TYPES = new Set(["accesorio"]);
 
 /** `garment_family` values that default to the upper-body jersey baseline. */
 const JERSEY_GARMENT_FAMILIES = new Set(["parte_superior"]);
@@ -91,15 +93,14 @@ export function resolveGarmentRenderer(
     if (BOTTOMS_GARMENT_TYPES.has(garmentType)) {
       return { key: "bottoms", matched: true, reason: `garmentType "${garmentType}"` };
     }
-    if (FALLBACK_GARMENT_TYPES.has(garmentType)) {
-      return {
-        key: FALLBACK_RENDERER_KEY,
-        matched: false,
-        reason: `garmentType "${garmentType}" no es una prenda configurable`,
-      };
+    if (ACCESSORY_GARMENT_TYPES.has(garmentType)) {
+      return { key: "accessory", matched: true, reason: `garmentType "${garmentType}"` };
     }
   }
   if (productType) {
+    if (["mochila_infantil", "bolso", "botinera"].includes(productType)) {
+      return { key: "accessory", matched: true, reason: `productType "${productType}"` };
+    }
     if (JERSEY_GARMENT_TYPES.has(productType)) {
       return { key: "sports-jersey", matched: true, reason: `productType "${productType}"` };
     }
@@ -111,6 +112,9 @@ export function resolveGarmentRenderer(
     }
   }
   if (garmentFamily) {
+    if (garmentFamily === "accesorio") {
+      return { key: "accessory", matched: true, reason: `garmentFamily "${garmentFamily}"` };
+    }
     if (JERSEY_GARMENT_FAMILIES.has(garmentFamily)) {
       return { key: "sports-jersey", matched: true, reason: `garmentFamily "${garmentFamily}"` };
     }

@@ -160,9 +160,9 @@ export function productCapabilities(
     };
   }
 
-  // Accessories get colors only — the fallback renderer shows them honestly
-  // without fake garment controls or pretend decal zones.
-  if (type === "accesorio" || family === "accesorio") {
+  // Accessories get colors only — their dedicated bag/backpack renderer does
+  // not expose fake garment controls or pretend body placement zones.
+  if (resolution.key === "accessory" || type === "accesorio" || family === "accesorio") {
     return {
       rendererKey: resolution.key,
       rendererReason: resolution.reason,

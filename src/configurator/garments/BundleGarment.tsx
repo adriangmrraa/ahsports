@@ -19,10 +19,10 @@ const COMPONENT_RENDERERS: Record<string, ComponentType<GarmentModelProps>> = {
 };
 
 /** Renders one bundle component through the registry. */
-function ComponentGarment({ config, descriptor }: GarmentModelProps) {
+function ComponentGarment({ config, descriptor, assetUrls }: GarmentModelProps) {
   const resolution = useMemo(() => resolveGarmentRenderer(descriptor), [descriptor]);
   const Model = COMPONENT_RENDERERS[resolution.key] ?? FallbackGarment;
-  return <Model config={config} descriptor={descriptor} />;
+  return <Model config={config} descriptor={descriptor} assetUrls={assetUrls} />;
 }
 
 /**
@@ -33,7 +33,7 @@ function ComponentGarment({ config, descriptor }: GarmentModelProps) {
  *
  * A component-less bundle falls back honestly instead of drawing empty space.
  */
-export function BundleGarment({ config, descriptor }: GarmentModelProps) {
+export function BundleGarment({ config, descriptor, assetUrls }: GarmentModelProps) {
   const resolved = useMemo(
     () =>
       (descriptor?.components ?? []).map((component) => ({
@@ -43,7 +43,7 @@ export function BundleGarment({ config, descriptor }: GarmentModelProps) {
     [descriptor],
   );
 
-  if (resolved.length === 0) return <FallbackGarment config={config} />;
+  if (resolved.length === 0) return <FallbackGarment config={config} assetUrls={assetUrls} />;
 
   // Side-by-side outfit layout: each garment keeps its own canonical frame
   // (zone aims stay in component-local space; the group offset is absorbed by
@@ -63,7 +63,7 @@ export function BundleGarment({ config, descriptor }: GarmentModelProps) {
             position={[start + i * spread, 0, 0]}
             scale={0.82}
           >
-            <ComponentGarment config={config} descriptor={component} />
+            <ComponentGarment config={config} descriptor={component} assetUrls={assetUrls} />
           </group>
         );
       })}

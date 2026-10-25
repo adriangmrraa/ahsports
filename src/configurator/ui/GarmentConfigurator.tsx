@@ -28,7 +28,15 @@ import {
 import { productCapabilities, type ProductCapabilities } from "../capabilities";
 import { GarmentViewer, type GarmentViewerHandle } from "../viewer/GarmentViewer";
 import { ViewerErrorBoundary } from "../viewer/ViewerErrorBoundary";
-import { AttachmentPanel, ControlSection, SegmentedControl, SelectField, SwatchField, type UploadedAsset } from "./controls";
+import {
+  AttachmentPanel,
+  ControlSection,
+  SegmentedControl,
+  SelectField,
+  SublimationPanel,
+  SwatchField,
+  type UploadedAsset,
+} from "./controls";
 
 /**
  * GarmentConfigurator — the single shared configurator surface for home,
@@ -77,6 +85,8 @@ export type GarmentConfiguratorProps = {
   /** Locks the picker to this product — wizard step 4 designs the priced pick. */
   lockProductId?: string | null;
   onStateChange?: (state: ConfiguratorState) => void;
+  /** Runs before export so public surfaces can durably save the exact design. */
+  beforeExport?: (state: ConfiguratorState) => Promise<void> | void;
   /**
    * Upload implementation. undefined → built-in public upload session
    * (home/wizard). null → attachments hidden. Admin passes its own.
@@ -155,7 +165,10 @@ function usePublicUploader(storageKey: string | undefined, onSession: ((id: stri
         const raw = window.sessionStorage.getItem(storageKey);
         if (raw) {
           const saved = JSON.parse(raw) as { id?: unknown; secret?: unknown };
-          if (typeof saved.id === "string" && typeof saved.secret === "string") return { id: saved.id, secret: saved.secret };
+          if (typeof saved.id === "string" && typeof saved.secret === "string") {
+            onSessionRef.current?.(saved.id);
+            return { id: saved.id, secret: saved.secret };
+          }
         }
       } catch {
         /* corrupted entry → fresh session below */
@@ -213,6 +226,7 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
       initialAssets,
       lockProductId,
       onStateChange,
+      beforeExport,
       uploader,
       onUploadSession,
       storageKey,
@@ -241,6 +255,14 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
     const assetUrls = useMemo(
       () => Object.fromEntries(assets.map((a) => [a.id, a.url])),
       [assets],
+    );
+    const sublimationAsset = useMemo(
+      () => assets.find((asset) => asset.id === config.sublimation?.assetRef) ?? null,
+      [assets, config.sublimation?.assetRef],
+    );
+    const attachmentAssets = useMemo(
+      () => assets.filter((asset) => asset.id !== config.sublimation?.assetRef),
+      [assets, config.sublimation?.assetRef],
     );
     const attachmentsEnabled = showAttachments && uploader !== null;
     const publicUploader = usePublicUploader(storageKey, onUploadSession);
@@ -288,13 +310,24 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
     }, [caps]);
 
     const onUpload = useCallback(
-      async (file: File, kind: string) => {
+      async (file: File, kind: string, purpose: "attachment" | "sublimation" = "attachment") => {
         setUploadBusy(true);
         setUploadError(null);
         try {
           const asset = await upload(file, kind);
-          const nextAssets = [...assets, asset];
+          const nextAssets = purpose === "sublimation"
+            ? [...assets.filter((current) => current.id !== config.sublimation?.assetRef), asset]
+            : [...assets, asset];
           setAssets(nextAssets);
+          if (purpose === "sublimation") {
+            update({
+              sublimation: {
+                assetRef: asset.id,
+                repeat: config.sublimation?.repeat ?? 2,
+              },
+            }, nextAssets);
+            return;
+          }
           // Logo/sponsor uploads auto-create a placement on the first free zone.
           if (IMAGE_ASSET_KINDS.has(kind) && caps.supportsPlacements) {
             const usedZones = new Set(config.placements.map((p) => p.zone));
@@ -319,17 +352,26 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
           setUploadBusy(false);
         }
       },
-      [assets, caps, config.placements, update, upload],
+      [assets, caps, config.placements, config.sublimation, update, upload],
     );
 
     const removeAsset = useCallback(
       (id: string) => {
         const nextAssets = assets.filter((a) => a.id !== id);
         setAssets(nextAssets);
-        update({ placements: config.placements.filter((p) => p.assetRef !== id) }, nextAssets);
+        update({
+          placements: config.placements.filter((p) => p.assetRef !== id),
+          sublimation: config.sublimation?.assetRef === id ? null : config.sublimation,
+        }, nextAssets);
       },
-      [assets, config.placements, update],
+      [assets, config.placements, config.sublimation, update],
     );
+
+    const removeSublimation = useCallback(() => {
+      const assetRef = config.sublimation?.assetRef;
+      const nextAssets = assetRef ? assets.filter((asset) => asset.id !== assetRef) : assets;
+      update({ sublimation: null }, nextAssets);
+    }, [assets, config.sublimation?.assetRef, update]);
 
     const setPlacementZone = useCallback(
       (placementId: string, zone: GarmentZone) => {
@@ -344,6 +386,7 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
       if (!viewerRef.current) return;
       setExporting(true);
       try {
+        await beforeExport?.({ productId, config, assets });
         const blob = await viewerRef.current.captureImage("image/png");
         if (!blob) return;
         const url = URL.createObjectURL(blob);
@@ -355,7 +398,7 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
       } finally {
         setExporting(false);
       }
-    }, [product, config.view]);
+    }, [assets, beforeExport, config, product, productId]);
 
     useImperativeHandle(
       ref,
@@ -399,8 +442,8 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
         </div>
 
         {/* Controls */}
-        <div className="flex flex-col gap-5 rounded-lg border border-navy-line bg-navy-950/60 p-4">
-          <ControlSection title="Producto">
+        <div className="flex flex-col gap-2 rounded-lg border border-navy-line bg-navy-950/60 p-2 sm:p-3">
+          <ControlSection title="Producto" summary={product?.name ?? "Elegí la prenda"} defaultOpen={!lockProductId}>
             {lockProductId ? (
               <p className="rounded-md border border-navy-line bg-navy-900/60 px-3 py-2.5 text-sm font-semibold text-on-navy">
                 {product?.name ?? "Producto"}
@@ -418,7 +461,16 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
             )}
           </ControlSection>
 
-          <ControlSection title="Colores">
+          <ControlSection
+            title="Colores"
+            summary={
+              <span className="inline-flex items-center justify-end gap-1.5" aria-label="Colores elegidos">
+                {caps.colorRoles.map((role) => (
+                  <span key={role} className="h-4 w-4 rounded-full border border-white/20" style={{ backgroundColor: config.colors[role] }} />
+                ))}
+              </span>
+            }
+          >
             {caps.colorRoles.map((role) => (
               <SwatchField
                 key={role}
@@ -430,7 +482,7 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
           </ControlSection>
 
           {caps.supportsFabrics && fabrics.length > 0 && (
-            <ControlSection title="Tela">
+            <ControlSection title="Tela" summary={fabrics.find((fabric) => fabric.id === config.fabricId)?.name ?? "Estándar"}>
               <SelectField
                 label="Material"
                 value={config.fabricId ?? ""}
@@ -447,7 +499,7 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
           )}
 
           {caps.collarVariants.length > 0 && (
-            <ControlSection title="Cuello">
+            <ControlSection title="Cuello" summary={COLLAR_LABELS[config.collar]}>
               <SegmentedControl
                 ariaLabel="Tipo de cuello"
                 value={config.collar}
@@ -458,7 +510,7 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
           )}
 
           {caps.sleeveVariants.length > 0 && (
-            <ControlSection title="Mangas">
+            <ControlSection title="Mangas" summary={SLEEVE_LABELS[config.sleeves]}>
               <SegmentedControl
                 ariaLabel="Tipo de mangas"
                 value={config.sleeves}
@@ -468,8 +520,27 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
             </ControlSection>
           )}
 
+          {attachmentsEnabled && caps.supportsFabrics && (
+            <ControlSection
+              title="Sublimación base"
+              summary={sublimationAsset?.name ?? "patrón frente y espalda"}
+            >
+              <SublimationPanel
+                asset={sublimationAsset}
+                repeat={config.sublimation?.repeat ?? 2}
+                onRepeatChange={(repeat) => {
+                  if (config.sublimation) update({ sublimation: { ...config.sublimation, repeat } });
+                }}
+                onUpload={(file) => void onUpload(file, "diseno_pedido", "sublimation")}
+                onRemove={removeSublimation}
+                busy={uploadBusy}
+                error={uploadError}
+              />
+            </ControlSection>
+          )}
+
           {caps.supportsPlacements && config.placements.length > 0 && (
-            <ControlSection title="Ubicación de logos" hint="zona por archivo">
+            <ControlSection title="Ubicación de logos" summary={`${config.placements.length} ${config.placements.length === 1 ? "ubicación" : "ubicaciones"}`}>
               {config.placements.map((p) => {
                 const asset = assets.find((a) => a.id === p.assetRef);
                 return (
@@ -486,9 +557,9 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
           )}
 
           {attachmentsEnabled && (
-            <ControlSection title="Archivos" hint="logos, sponsors, referencias">
+            <ControlSection title="Archivos" summary={attachmentAssets.length > 0 ? `${attachmentAssets.length} ${attachmentAssets.length === 1 ? "archivo" : "archivos"}` : "logos y referencias"}>
               <AttachmentPanel
-                assets={assets}
+                assets={attachmentAssets}
                 onUpload={(file, kind) => void onUpload(file, kind)}
                 onRemove={removeAsset}
                 busy={uploadBusy}

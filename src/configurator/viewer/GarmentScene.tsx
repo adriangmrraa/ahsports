@@ -20,19 +20,20 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 /** Registers a capture function that renders a frame then reads the canvas. */
 function CaptureBridge({ onBridge }: { onBridge: (fn: CaptureImageFn | null) => void }) {
   const gl = useThree((s) => s.gl);
-  const invalidate = useThree((s) => s.invalidate);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
 
   useEffect(() => {
-    const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     onBridge(async (type = "image/png", quality) => {
-      invalidate();
-      // demand frameloop: let the invalidated frame commit before reading.
-      await nextFrame();
-      await nextFrame();
-      return new Promise<Blob | null>((resolve) => gl.domElement.toBlob(resolve, type, quality));
+      // Render and read synchronously in the same task. This keeps export
+      // deterministic without preserveDrawingBuffer, which is expensive and
+      // particularly unstable on memory-constrained iOS WebGL contexts.
+      gl.render(scene, camera);
+      const dataUrl = gl.domElement.toDataURL(type, quality);
+      return fetch(dataUrl).then((response) => response.blob());
     });
     return () => onBridge(null);
-  }, [gl, invalidate, onBridge]);
+  }, [camera, gl, onBridge, scene]);
 
   return null;
 }
@@ -142,14 +143,22 @@ function StudioEnvironment() {
   const scene = useThree((s) => s.scene);
 
   useEffect(() => {
-    const pmrem = new PMREMGenerator(gl);
-    const envScene = new RoomEnvironment();
-    const envMap = pmrem.fromScene(envScene, 0.04);
-    scene.environment = envMap.texture;
+    let pmrem: PMREMGenerator | null = null;
+    let envMap: ReturnType<PMREMGenerator["fromScene"]> | null = null;
+    try {
+      pmrem = new PMREMGenerator(gl);
+      const envScene = new RoomEnvironment();
+      envMap = pmrem.fromScene(envScene, 0.04);
+      scene.environment = envMap.texture;
+    } catch (error) {
+      // Direct lights still produce a complete, usable scene when an older
+      // mobile GPU cannot allocate the environment-map render targets.
+      console.warn("[garment-viewer] environment map disabled", error);
+    }
     return () => {
       scene.environment = null;
-      envMap.dispose();
-      pmrem.dispose();
+      envMap?.dispose();
+      pmrem?.dispose();
     };
   }, [gl, scene]);
 
@@ -185,15 +194,15 @@ function StageFloor() {
   return (
     <group>
       <mesh rotation-x={-Math.PI / 2} position-y={0} receiveShadow>
-        <circleGeometry args={[2.8, 64]} />
+        <circleGeometry args={[1.55, 64]} />
         <meshStandardMaterial color={SCENE_TOKENS.floor} roughness={0.95} metalness={0} />
       </mesh>
       <mesh rotation-x={-Math.PI / 2} position-y={0.002}>
-        <ringGeometry args={[2.62, 2.68, 96]} />
+        <ringGeometry args={[1.42, 1.47, 96]} />
         <meshBasicMaterial color={SCENE_TOKENS.floorRing} transparent opacity={0.6} />
       </mesh>
       <mesh rotation-x={-Math.PI / 2} position-y={0.004} receiveShadow>
-        <circleGeometry args={[2.8, 64]} />
+        <circleGeometry args={[1.55, 64]} />
         <shadowMaterial transparent opacity={0.4} />
       </mesh>
     </group>
@@ -207,7 +216,22 @@ export type GarmentSceneProps = {
   onCaptureBridge: (fn: CaptureImageFn | null) => void;
   /** attachment id → public URL — feeds the on-mesh decal layer. */
   assetUrls?: Record<string, string>;
+  onContextLost?: () => void;
 };
+
+function ContextLifecycle({ onLost }: { onLost?: () => void }) {
+  const gl = useThree((state) => state.gl);
+  useEffect(() => {
+    const canvas = gl.domElement;
+    const handleLost = (event: Event) => {
+      event.preventDefault();
+      onLost?.();
+    };
+    canvas.addEventListener("webglcontextlost", handleLost, false);
+    return () => canvas.removeEventListener("webglcontextlost", handleLost, false);
+  }, [gl, onLost]);
+  return null;
+}
 
 /**
  * Geometry identity for decal re-projection: every input that changes the
@@ -233,7 +257,7 @@ function shapeKeyFor(
   return parts ? `${head}|${parts}` : head;
 }
 
-export function GarmentScene({ config, descriptor, view, onCaptureBridge, assetUrls }: GarmentSceneProps) {
+export function GarmentScene({ config, descriptor, view, onCaptureBridge, assetUrls, onContextLost }: GarmentSceneProps) {
   const garmentRef = useRef<Group>(null);
   return (
     <>
@@ -244,9 +268,10 @@ export function GarmentScene({ config, descriptor, view, onCaptureBridge, assetU
       <StageFloor />
       <GarmentOrbit view={view} />
       <CaptureBridge onBridge={onCaptureBridge} />
+      <ContextLifecycle onLost={onContextLost} />
       <Suspense fallback={null}>
-        <group ref={garmentRef} position-y={0.1}>
-          <ProductGarment descriptor={descriptor} config={config} />
+        <group ref={garmentRef} position-y={0.1} scale={1.08}>
+          <ProductGarment descriptor={descriptor} config={config} assetUrls={assetUrls} />
         </group>
         <PlacementDecals
           target={garmentRef}

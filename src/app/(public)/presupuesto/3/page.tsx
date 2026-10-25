@@ -28,7 +28,7 @@ export default async function PresupuestoStep3({
   if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
 
   const sp = await searchParams;
-  const { token, payload } = await resolveWizardDraft(3, sp);
+  const { token, payload, items } = await resolveWizardDraft(3, sp);
   if (!payload.productId) redirect(`/presupuesto/2?d=${encodeURIComponent(token)}`);
 
   const [product] = await db.select({ name: products.name }).from(products).where(eq(products.id, payload.productId)).limit(1);
@@ -81,6 +81,7 @@ export default async function PresupuestoStep3({
           total={total}
           noSize={noSize}
           initialRows={payload.lineItems ?? []}
+          hasSavedDesign={items.some((item) => item.productId === payload.productId)}
         />
       </div>
     </>

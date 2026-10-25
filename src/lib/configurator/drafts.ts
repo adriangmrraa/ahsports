@@ -14,7 +14,7 @@ import {
   uploadSessions,
 } from "@/db/schema";
 import { withDbTransaction, type DbTransaction } from "@/lib/db-transaction";
-import { normalizeGarmentConfig, type GarmentConfig, type GarmentConfigInput } from "@/configurator/model";
+import { garmentAssetRefs, normalizeGarmentConfig, type GarmentConfig, type GarmentConfigInput } from "@/configurator/model";
 import {
   draftItemInputSchema,
   draftPayloadSchema,
@@ -370,9 +370,7 @@ export async function saveOrderLineDesign(input: {
 
     // A config can only pin attachments this order owns (admin uploads land
     // on the order) or files still staged in an upload session.
-    const refs = config.placements
-      .map((p) => p.assetRef)
-      .filter((x): x is string => Boolean(x));
+    const refs = garmentAssetRefs(config);
     if (!(await assertPlacementAssetsUsable(refs, line.orderId))) {
       throw new ConfiguratorDraftError("El diseño referencia archivos que no pertenecen a este pedido");
     }

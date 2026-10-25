@@ -26,6 +26,7 @@ export function Step3Form({
   total,
   noSize,
   initialRows,
+  hasSavedDesign = false,
 }: {
   draftToken: string;
   productName: string;
@@ -33,6 +34,8 @@ export function Step3Form({
   total: number;
   noSize?: boolean;
   initialRows?: { sizeId: string | null; sizeLabel?: string; individualName?: string | null; individualNumber?: string | null }[];
+  /** Home handoff already has a durable design for the selected product. */
+  hasSavedDesign?: boolean;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -80,7 +83,7 @@ export function Step3Form({
       setError(res.error);
       return;
     }
-    router.push(`/presupuesto/4?d=${encodeURIComponent(draftToken)}`);
+    router.push(`/presupuesto/${hasSavedDesign ? 5 : 4}?d=${encodeURIComponent(draftToken)}`);
   }
 
   if (total === 0) {

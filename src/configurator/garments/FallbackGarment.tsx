@@ -2,13 +2,14 @@ import { useEffect, useMemo } from "react";
 import type { GarmentModelProps } from "./SportsJersey";
 import { fabricVisualPreset, SCENE_TOKENS } from "../render-tokens";
 import { buildCollarGeometry, buildTorsoGeometry } from "../geometry/jersey-geometry";
+import { useSublimationTexture } from "../sublimation-texture";
 
 /**
  * Explicit fallback renderer: a neutral torso shell in a muted tone so a
  * product without a dedicated model still previews a garment volume — and is
  * visually obvious it is not the final asset.
  */
-export function FallbackGarment({ config }: GarmentModelProps) {
+export function FallbackGarment({ config, assetUrls }: GarmentModelProps) {
   const geometries = useMemo(
     () => ({ torso: buildTorsoGeometry(), collar: buildCollarGeometry("crew") }),
     [],
@@ -23,12 +24,17 @@ export function FallbackGarment({ config }: GarmentModelProps) {
   );
 
   const fabric = fabricVisualPreset(config.fabric);
+  const pattern = useSublimationTexture(
+    config.sublimation ? (assetUrls?.[config.sublimation.assetRef] ?? null) : null,
+    config.sublimation?.repeat ?? 2,
+  );
 
   return (
     <group name="generic-garment">
       <mesh castShadow geometry={geometries.torso}>
         <meshPhysicalMaterial
-          color={SCENE_TOKENS.fallbackGarment}
+          color={pattern ? "#ffffff" : SCENE_TOKENS.fallbackGarment}
+          map={pattern ?? undefined}
           roughness={fabric.roughness}
           sheen={fabric.sheen}
           sheenRoughness={fabric.sheenRoughness}

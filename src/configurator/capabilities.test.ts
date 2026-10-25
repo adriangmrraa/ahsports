@@ -120,12 +120,15 @@ describe("productCapabilities", () => {
     assert.equal(caps.collarVariants.length, 0);
   });
 
-  it("treats accesorios as color-only fallback", () => {
+  it("treats accesorios as a dedicated color-only model", () => {
     const caps = productCapabilities({ garmentType: "accesorio", garmentFamily: "accesorio", productType: "mochila_infantil" });
-    assert.equal(caps.rendererKey, FALLBACK_RENDERER_KEY);
+    assert.equal(caps.rendererKey, "accessory");
     assert.equal(caps.supportsPlacements, false);
-    // Fabric presets still drive the fallback material — honest visual change.
+    // Fabric presets still drive the accessory material.
     assert.equal(caps.supportsFabrics, true);
+    const productTypeOnly = productCapabilities({ productType: "mochila_infantil" });
+    assert.equal(productTypeOnly.rendererKey, "accessory");
+    assert.equal(productTypeOnly.collarVariants.length, 0);
   });
 
   it("falls back to all model zones when the product has no zone list", () => {

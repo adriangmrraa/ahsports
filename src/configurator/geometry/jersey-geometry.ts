@@ -1,11 +1,12 @@
 import {
   BufferGeometry,
   CylinderGeometry,
-  LatheGeometry,
+  ExtrudeGeometry,
   Matrix4,
   Quaternion,
+  Shape,
+  ShapeGeometry,
   TorusGeometry,
-  Vector2,
   Vector3,
 } from "three";
 import type { CollarVariant, SleeveVariant } from "../model";
@@ -51,43 +52,61 @@ export type JerseyGeometryBundle = {
   /** Armhole rib — present only on sleeveless (musculosa). */
   armholeLeft: BufferGeometry | null;
   armholeRight: BufferGeometry | null;
+  /** Layered sublimation graphics on the front face. */
+  graphicPanel: BufferGeometry;
+  accentStripe: BufferGeometry;
 };
 
-const LATHE_SEGMENTS = 48;
-
-/** Torso outline from hem (y=0) to neck opening — radius vs height. */
-const TORSO_PROFILE: readonly [number, number][] = [
-  [0.585, 0.0],
-  [0.578, 0.18],
-  [0.56, 0.42],
-  [0.575, 0.68],
-  [0.63, 0.95],
-  [0.66, 1.14],
-  [0.655, 1.28],
-  [0.6, 1.4],
-  [0.5, 1.51],
-  [0.37, 1.56],
-  [JERSEY_DIMENSIONS.neckRadius, JERSEY_DIMENSIONS.neckY],
-];
-
-function latheFromProfile(profile: readonly [number, number][], scale: number, lift: number): LatheGeometry {
-  const points = profile.map(([r, y]) => new Vector2(r * scale, y + lift));
-  return new LatheGeometry(points, LATHE_SEGMENTS);
+function extrudeGarmentShape(shape: Shape, depth = 0.44, bevelSize = 0.035): BufferGeometry {
+  const geo = new ExtrudeGeometry(shape, {
+    depth,
+    steps: 1,
+    curveSegments: 28,
+    bevelEnabled: true,
+    bevelSegments: 3,
+    bevelSize,
+    bevelThickness: 0.025,
+  });
+  geo.translate(0, 0, -depth / 2);
+  geo.computeVertexNormals();
+  return geo;
 }
 
-/** Curved oval torso: lathe flattened front-to-back into a body section. */
+/** Tailored front silhouette with a real concave neck opening. */
+function torsoShape(scale = 1): Shape {
+  const shape = new Shape();
+  shape.moveTo(-0.57 * scale, 0);
+  shape.quadraticCurveTo(-0.61 * scale, 0.35, -0.57 * scale, 0.62);
+  shape.quadraticCurveTo(-0.55 * scale, 0.9, -0.66 * scale, 1.2);
+  shape.quadraticCurveTo(-0.69 * scale, 1.35, -0.5 * scale, 1.49);
+  shape.quadraticCurveTo(-0.4 * scale, 1.57, -0.3 * scale, 1.6);
+  shape.quadraticCurveTo(0, 1.43, 0.3 * scale, 1.6);
+  shape.quadraticCurveTo(0.4 * scale, 1.57, 0.5 * scale, 1.49);
+  shape.quadraticCurveTo(0.69 * scale, 1.35, 0.66 * scale, 1.2);
+  shape.quadraticCurveTo(0.55 * scale, 0.9, 0.57 * scale, 0.62);
+  shape.quadraticCurveTo(0.61 * scale, 0.35, 0.57 * scale, 0);
+  shape.closePath();
+  return shape;
+}
+
+/** Bevelled apparel shell: readable jersey silhouette instead of a barrel. */
 export function buildTorsoGeometry(): BufferGeometry {
-  const geo = latheFromProfile(TORSO_PROFILE, 1, 0);
-  geo.applyMatrix4(new Matrix4().makeScale(1, 1, JERSEY_DIMENSIONS.flattenZ));
-  return geo;
+  return extrudeGarmentShape(torsoShape());
 }
 
-/** Shoulder yoke: same profile inflated slightly, covering only the top band. */
+/** Shoulder yoke follows the shoulder and neckline contours. */
 function buildYokeGeometry(): BufferGeometry {
-  const yokeProfile = TORSO_PROFILE.slice(6);
-  const geo = latheFromProfile(yokeProfile, 1.012, -0.004);
-  geo.applyMatrix4(new Matrix4().makeScale(1, 1, JERSEY_DIMENSIONS.flattenZ));
-  return geo;
+  const shape = new Shape();
+  shape.moveTo(-0.65, 1.2);
+  shape.quadraticCurveTo(-0.68, 1.35, -0.49, 1.49);
+  shape.quadraticCurveTo(-0.4, 1.57, -0.3, 1.6);
+  shape.quadraticCurveTo(0, 1.43, 0.3, 1.6);
+  shape.quadraticCurveTo(0.4, 1.57, 0.49, 1.49);
+  shape.quadraticCurveTo(0.68, 1.35, 0.65, 1.2);
+  shape.quadraticCurveTo(0.35, 1.12, 0, 1.2);
+  shape.quadraticCurveTo(-0.35, 1.12, -0.65, 1.2);
+  shape.closePath();
+  return extrudeGarmentShape(shape, 0.455, 0.018);
 }
 
 function collarRing(tube: number, raise: number): TorusGeometry {
@@ -156,45 +175,31 @@ const SLEEVE_CUFF_RATIO: Record<SleeveVariant, number> = { sleeveless: 0, short:
 export function buildSleeveGeometry(variant: SleeveVariant, side: "left" | "right"): BufferGeometry | null {
   const length = SLEEVE_LENGTHS[variant];
   if (length === 0) return null;
-  const cuffRadius = SLEEVE_TOP_RADIUS * SLEEVE_CUFF_RATIO[variant];
-  const geo = new CylinderGeometry(SLEEVE_TOP_RADIUS, cuffRadius, length, 32, 12, false);
-
-  // Shift so the shoulder cap sits at y=0 and the tube extends downward.
-  geo.applyMatrix4(new Matrix4().makeTranslation(0, -length / 2, 0));
-
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const t = Math.min(1, Math.max(0, -pos.getY(i) / length));
-    if (variant === "long") {
-      // Elbow pinch at ~55% + forward bend growing quadratically.
-      const pinch = 1 - 0.09 * Math.exp(-(((t - 0.55) / 0.14) ** 2));
-      pos.setX(i, pos.getX(i) * pinch);
-      pos.setZ(i, pos.getZ(i) * pinch + 0.34 * t * t);
-    } else {
-      // Short sleeves flare slightly outward at the cuff opening.
-      const flare = 1 + 0.1 * t;
-      pos.setX(i, pos.getX(i) * flare);
-      pos.setZ(i, pos.getZ(i) * flare + 0.06 * t * t);
-    }
-  }
-  pos.needsUpdate = true;
-  geo.computeVertexNormals();
-
   const mirror = side === "left" ? 1 : -1;
-  const direction = new Vector3(
-    mirror * Math.sin(JERSEY_DIMENSIONS.sleeveTiltZ),
-    -Math.cos(JERSEY_DIMENSIONS.sleeveTiltZ),
-    Math.sin(JERSEY_DIMENSIONS.sleeveTiltX),
-  ).normalize();
-  const quaternion = new Quaternion().setFromUnitVectors(new Vector3(0, -1, 0), direction);
-  geo.applyQuaternion(quaternion);
-  geo.applyMatrix4(
-    new Matrix4().makeTranslation(
-      mirror * JERSEY_DIMENSIONS.sleeveAnchorX,
-      JERSEY_DIMENSIONS.sleeveAnchorY,
-      0,
-    ),
-  );
+  const shoulderInner = 0.47;
+  const shoulderOuter = 0.66;
+  const outerEndX = variant === "long" ? 1.04 : 0.94;
+  const outerEndY = variant === "long" ? 0.3 : 1.02;
+  const innerEndX = variant === "long" ? 0.82 : 0.78;
+  const innerEndY = variant === "long" ? 0.23 : 0.86;
+  const shape = new Shape();
+  shape.moveTo(mirror * shoulderInner, 1.48);
+  shape.quadraticCurveTo(mirror * 0.59, 1.45, mirror * shoulderOuter, 1.34);
+  shape.lineTo(mirror * outerEndX, outerEndY);
+  shape.quadraticCurveTo(mirror * ((outerEndX + innerEndX) / 2), outerEndY - 0.04, mirror * innerEndX, innerEndY);
+  shape.lineTo(mirror * 0.57, 1.13);
+  shape.quadraticCurveTo(mirror * 0.5, 1.32, mirror * shoulderInner, 1.48);
+  shape.closePath();
+  return extrudeGarmentShape(shape, 0.36, 0.025);
+}
+
+function buildFrontGraphic(points: readonly [number, number][], z: number): BufferGeometry {
+  const shape = new Shape();
+  shape.moveTo(points[0][0], points[0][1]);
+  for (const [x, y] of points.slice(1)) shape.lineTo(x, y);
+  shape.closePath();
+  const geo = new ShapeGeometry(shape, 16);
+  geo.translate(0, 0, z);
   return geo;
 }
 
@@ -261,6 +266,18 @@ export function buildJerseyGeometries(options: JerseyGeometryOptions): JerseyGeo
     cuffRight: buildCuffGeometry(options.sleeves, "right"),
     armholeLeft: sleeveless ? buildArmholeRibGeometry("left") : null,
     armholeRight: sleeveless ? buildArmholeRibGeometry("right") : null,
+    graphicPanel: buildFrontGraphic([
+      [-0.56, 0.18],
+      [-0.39, 0.16],
+      [0.62, 1.15],
+      [0.61, 1.34],
+    ], 0.255),
+    accentStripe: buildFrontGraphic([
+      [-0.58, 0.37],
+      [-0.56, 0.29],
+      [0.61, 1.2],
+      [0.62, 1.29],
+    ], 0.262),
   };
 }
 

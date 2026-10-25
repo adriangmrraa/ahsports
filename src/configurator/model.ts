@@ -63,6 +63,17 @@ export type VisualAssetPlacement = {
   rotationDeg: number;
 };
 
+/**
+ * Full-garment artwork used as the sublimated base layer. It is deliberately
+ * separate from placements: logos and sponsors remain independent decals
+ * rendered above this repeated textile pattern.
+ */
+export type SublimationPattern = {
+  assetRef: string;
+  /** Number of horizontal repeats across the garment UV space. */
+  repeat: number;
+};
+
 export type GarmentConfig = {
   colors: GarmentColors;
   /** Renderer fabric preset — drives PBR response. */
@@ -72,6 +83,7 @@ export type GarmentConfig = {
   collar: CollarVariant;
   sleeves: SleeveVariant;
   view: ViewPreset;
+  sublimation: SublimationPattern | null;
   placements: readonly VisualAssetPlacement[];
 };
 
@@ -108,6 +120,7 @@ export type GarmentConfigInput = {
   collar?: unknown;
   sleeves?: unknown;
   view?: unknown;
+  sublimation?: unknown;
   placements?: unknown;
 };
 
@@ -122,6 +135,7 @@ export const DEFAULT_GARMENT_CONFIG: GarmentConfig = {
   collar: "crew",
   sleeves: "short",
   view: "front",
+  sublimation: null,
   placements: [],
 };
 
@@ -165,6 +179,17 @@ function normalizePlacement(value: unknown): VisualAssetPlacement | null {
   };
 }
 
+function normalizeSublimation(value: unknown): SublimationPattern | null {
+  if (typeof value !== "object" || value === null) return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.assetRef !== "string" || raw.assetRef.length === 0) return null;
+  const repeat = typeof raw.repeat === "number" && Number.isFinite(raw.repeat) ? raw.repeat : 2;
+  return {
+    assetRef: raw.assetRef,
+    repeat: Math.min(12, Math.max(1, repeat)),
+  };
+}
+
 /**
  * Merge arbitrary input into a valid GarmentConfig. Unknown enum values fall
  * back to defaults, invalid colors are dropped, malformed placements are
@@ -188,6 +213,16 @@ export function normalizeGarmentConfig(input?: GarmentConfigInput | null): Garme
     collar: pickVariant(COLLAR_VARIANTS, input.collar, base.collar),
     sleeves: pickVariant(SLEEVE_VARIANTS, input.sleeves, base.sleeves),
     view: pickVariant(VIEW_PRESETS, input.view, base.view),
+    sublimation: normalizeSublimation(input.sublimation),
     placements,
   };
+}
+
+/** Every uploaded asset referenced by a design, deduplicated for DB lookups. */
+export function garmentAssetRefs(config: GarmentConfig): string[] {
+  const refs = config.placements
+    .map((placement) => placement.assetRef)
+    .filter((ref): ref is string => Boolean(ref));
+  if (config.sublimation?.assetRef) refs.push(config.sublimation.assetRef);
+  return [...new Set(refs)];
 }

@@ -13,6 +13,7 @@ export {
   GARMENT_ZONES,
   SLEEVE_VARIANTS,
   VIEW_PRESETS,
+  garmentAssetRefs,
   isGarmentZone,
   isHexColor,
   normalizeGarmentConfig,
@@ -25,6 +26,7 @@ export {
   type HexColor,
   type ProductGarmentDescriptor,
   type SleeveVariant,
+  type SublimationPattern,
   type ViewPreset,
   type VisualAssetPlacement,
 } from "./model";

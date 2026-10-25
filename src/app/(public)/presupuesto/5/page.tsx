@@ -10,6 +10,7 @@ import { StepIndicator } from "../_components/StepIndicator";
 import { PageHero } from "@/components/public/PageHero";
 import { WizardEstimateCard } from "../_components/wizard-estimate";
 import { resolveWizardDraft } from "../_components/wizard-draft";
+import { garmentAssetRefs } from "@/configurator/model";
 import {
   WizardRateLimitNotice,
   wizardRateLimitReached,
@@ -109,9 +110,7 @@ export default async function PresupuestoStep5({
 
   // Placements reference attachments by id — resolve their public URLs so the
   // summary viewer draws the same decals the user designed in step 4.
-  const assetRefs = (item?.config.placements ?? [])
-    .map((p) => p.assetRef)
-    .filter((x): x is string => Boolean(x));
+  const assetRefs = item ? garmentAssetRefs(item.config) : [];
   const assetRows = assetRefs.length > 0
     ? await db
         .select({ id: attachments.id, url: attachments.url })

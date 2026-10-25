@@ -21,7 +21,7 @@ export const VIEW_TARGET: readonly [number, number, number] = [0, 0.95, 0];
 export const ORBIT_LIMITS = {
   minPolar: 0.45,
   maxPolar: 1.5,
-  minDistance: 1.8,
+  minDistance: 2.4,
   maxDistance: 4.4,
 } as const;
 
@@ -30,10 +30,10 @@ export const ORBIT_LIMITS = {
  * left sleeve (camera on +X, since the garment faces +Z).
  */
 export const VIEW_CAMERA_PRESETS: Record<ViewPreset, CameraPose> = {
-  front: { azimuth: 0, polar: 1.32, distance: 3.0 },
-  back: { azimuth: Math.PI, polar: 1.32, distance: 3.0 },
-  left: { azimuth: Math.PI / 2, polar: 1.35, distance: 3.0 },
-  right: { azimuth: -Math.PI / 2, polar: 1.35, distance: 3.0 },
+  front: { azimuth: 0, polar: 1.32, distance: 3.55 },
+  back: { azimuth: Math.PI, polar: 1.32, distance: 3.55 },
+  left: { azimuth: Math.PI / 2, polar: 1.35, distance: 3.4 },
+  right: { azimuth: -Math.PI / 2, polar: 1.35, distance: 3.4 },
 };
 
 export const VIEW_PRESET_LABELS: Record<ViewPreset, string> = {

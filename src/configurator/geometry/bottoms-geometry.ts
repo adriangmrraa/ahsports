@@ -1,10 +1,9 @@
 import {
   BufferGeometry,
-  CylinderGeometry,
-  LatheGeometry,
+  ExtrudeGeometry,
   Matrix4,
+  Shape,
   TorusGeometry,
-  Vector2,
 } from "three";
 
 /**
@@ -54,23 +53,31 @@ const LEG_RADII: Record<BottomVariant, [number, number]> = {
   short: [0.26, 0.25],
 };
 
-/** Hip outline: waistband under-hem (y=1.28) up to the waist top. */
-const HIP_PROFILE: readonly [number, number][] = [
-  [0.36, 1.24],
-  [0.46, 1.3],
-  [0.51, 1.38],
-  [0.5, 1.46],
-  [BOTTOM_DIMENSIONS.waistRadius, BOTTOM_DIMENSIONS.waistY],
-];
-
-function ovalize(geo: BufferGeometry): BufferGeometry {
-  geo.applyMatrix4(new Matrix4().makeScale(1, 1, BOTTOM_DIMENSIONS.flattenZ));
+function extrudeBottomShape(shape: Shape, depth = 0.42, bevelSize = 0.025): BufferGeometry {
+  const geo = new ExtrudeGeometry(shape, {
+    depth,
+    steps: 1,
+    curveSegments: 24,
+    bevelEnabled: true,
+    bevelSegments: 3,
+    bevelSize,
+    bevelThickness: 0.02,
+  });
+  geo.translate(0, 0, -depth / 2);
+  geo.computeVertexNormals();
   return geo;
 }
 
 function buildHipGeometry(): BufferGeometry {
-  const points = HIP_PROFILE.map(([r, y]) => new Vector2(r, y));
-  return ovalize(new LatheGeometry(points, 48));
+  const shape = new Shape();
+  shape.moveTo(-0.36, 1.2);
+  shape.quadraticCurveTo(-0.5, 1.28, -0.51, 1.42);
+  shape.lineTo(-0.49, 1.5);
+  shape.lineTo(0.49, 1.5);
+  shape.lineTo(0.51, 1.42);
+  shape.quadraticCurveTo(0.5, 1.28, 0.36, 1.2);
+  shape.closePath();
+  return extrudeBottomShape(shape);
 }
 
 function buildWaistbandGeometry(): BufferGeometry {
@@ -88,42 +95,32 @@ function buildWaistbandGeometry(): BufferGeometry {
 function buildLegGeometry(variant: BottomVariant, side: "left" | "right"): BufferGeometry {
   const hemY = LEG_HEM_Y[variant];
   const topY = 1.26;
-  const length = topY - hemY;
   const [topR, hemR] = LEG_RADII[variant];
-  const geo = new CylinderGeometry(topR, hemR, length, 36, 8, false);
-  geo.applyMatrix4(new Matrix4().makeTranslation(0, hemY + length / 2, 0));
-
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const t = Math.min(1, Math.max(0, (topY - pos.getY(i)) / length));
-    // Gentle taper curve: thighs fuller, hem looser on open variants.
-    const fullness = variant === "slim" ? 1 - 0.05 * t : 1 + 0.04 * t;
-    pos.setX(i, pos.getX(i) * fullness);
-    pos.setZ(i, pos.getZ(i) * fullness + 0.05 * t * t);
-  }
-  pos.needsUpdate = true;
-  geo.computeVertexNormals();
-
   const mirror = side === "left" ? 1 : -1;
-  geo.applyMatrix4(
-    new Matrix4().makeRotationZ(mirror * -0.035),
-  );
-  geo.applyMatrix4(new Matrix4().makeTranslation(mirror * BOTTOM_DIMENSIONS.legCenterX, 0, 0));
-  return geo;
+  const centerTop = mirror * BOTTOM_DIMENSIONS.legCenterX;
+  const centerHem = mirror * (BOTTOM_DIMENSIONS.legCenterX + 0.025);
+  const shape = new Shape();
+  shape.moveTo(centerTop - topR, topY);
+  shape.quadraticCurveTo(centerTop - topR * 1.03, (topY + hemY) / 2, centerHem - hemR, hemY);
+  shape.lineTo(centerHem + hemR, hemY);
+  shape.quadraticCurveTo(centerTop + topR * 1.03, (topY + hemY) / 2, centerTop + topR, topY);
+  shape.closePath();
+  return extrudeBottomShape(shape, 0.4, 0.022);
 }
 
 /** Hem band hugging each leg opening. */
 function buildHemGeometry(variant: BottomVariant, side: "left" | "right"): BufferGeometry {
   const hemY = LEG_HEM_Y[variant];
-  const hemR = LEG_RADII[variant][1] * 1.02 + 0.008;
-  const geo = new CylinderGeometry(hemR, hemR, 0.07, 36, 1, true);
+  const hemR = LEG_RADII[variant][1] * 1.02;
   const mirror = side === "left" ? 1 : -1;
-  // Slight outward tilt mirrors the leg's rotation cant.
-  geo.applyMatrix4(new Matrix4().makeRotationZ(mirror * -0.035));
-  geo.applyMatrix4(
-    new Matrix4().makeTranslation(mirror * (BOTTOM_DIMENSIONS.legCenterX - 0.02), hemY + 0.03, 0.05),
-  );
-  return geo;
+  const center = mirror * (BOTTOM_DIMENSIONS.legCenterX + 0.025);
+  const shape = new Shape();
+  shape.moveTo(center - hemR, hemY);
+  shape.lineTo(center + hemR, hemY);
+  shape.lineTo(center + hemR, hemY + 0.065);
+  shape.lineTo(center - hemR, hemY + 0.065);
+  shape.closePath();
+  return extrudeBottomShape(shape, 0.415, 0.01);
 }
 
 export function buildBottomsGeometries(variant: BottomVariant): BottomsGeometryBundle {

@@ -37,6 +37,11 @@ export const visualAssetPlacementSchema = z.object({
   rotationDeg: z.number().min(-360).max(360),
 });
 
+export const sublimationPatternSchema = z.object({
+  assetRef: z.string().min(1).max(64),
+  repeat: z.number().min(1).max(12),
+});
+
 export const garmentConfigSchema = z.object({
   colors: garmentColorsSchema,
   fabric: z.enum(FABRIC_PRESET_IDS),
@@ -45,6 +50,7 @@ export const garmentConfigSchema = z.object({
   collar: z.enum(COLLAR_VARIANTS),
   sleeves: z.enum(SLEEVE_VARIANTS),
   view: z.enum(VIEW_PRESETS),
+  sublimation: sublimationPatternSchema.nullable().default(null),
   placements: z.array(visualAssetPlacementSchema).max(24),
 });
 

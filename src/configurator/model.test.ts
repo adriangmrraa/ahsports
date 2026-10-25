@@ -9,6 +9,7 @@ import { describe, it } from "node:test";
 
 import {
   DEFAULT_GARMENT_CONFIG,
+  garmentAssetRefs,
   isGarmentZone,
   isHexColor,
   normalizeGarmentConfig,
@@ -102,5 +103,24 @@ describe("normalizeGarmentConfig", () => {
   it("non-array placements resolve to an empty list", () => {
     const config = normalizeGarmentConfig({ placements: "nope" });
     assert.deepEqual(config.placements, []);
+  });
+
+  it("keeps a valid sublimation pattern and clamps its repeat", () => {
+    const config = normalizeGarmentConfig({ sublimation: { assetRef: "att-pattern", repeat: 99 } });
+    assert.deepEqual(config.sublimation, { assetRef: "att-pattern", repeat: 12 });
+    assert.equal(normalizeGarmentConfig({ sublimation: { assetRef: "", repeat: 2 } }).sublimation, null);
+  });
+});
+
+describe("garmentAssetRefs", () => {
+  it("collects the base pattern and decals without duplicates", () => {
+    const config = normalizeGarmentConfig({
+      sublimation: { assetRef: "att-pattern", repeat: 2 },
+      placements: [
+        { id: "logo-1", zone: "chest-left", assetRef: "att-logo", anchor: { u: 0.5, v: 0.5 }, scale: 1, rotationDeg: 0 },
+        { id: "logo-2", zone: "back-upper", assetRef: "att-pattern", anchor: { u: 0.5, v: 0.5 }, scale: 1, rotationDeg: 0 },
+      ],
+    });
+    assert.deepEqual(garmentAssetRefs(config), ["att-logo", "att-pattern"]);
   });
 });

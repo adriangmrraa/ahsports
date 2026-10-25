@@ -15,7 +15,7 @@ import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { ArrowLeft } from "lucide-react";
 import { listFabricVisualProfiles } from "@/lib/configurator/drafts";
 import { loadBundleComponentDescriptors } from "@/lib/configurator/descriptors";
-import { normalizeGarmentConfig } from "@/configurator/model";
+import { garmentAssetRefs, normalizeGarmentConfig } from "@/configurator/model";
 import { OrderDesignEditor } from "./OrderDesignEditor";
 
 export const metadata = { title: "Diseño del pedido · AH Sports" };
@@ -122,9 +122,7 @@ export default async function PedidoDisenoPage({
   const currentConfig = item ? normalizeGarmentConfig(item.config) : null;
 
   // Placement decals resolve through the order's own attachments.
-  const assetRefs = (currentConfig?.placements ?? [])
-    .map((p) => p.assetRef)
-    .filter((x): x is string => Boolean(x));
+  const assetRefs = currentConfig ? garmentAssetRefs(currentConfig) : [];
   const assetRows = assetRefs.length > 0
     ? await db
         .select({ id: attachments.id, url: attachments.url, name: attachments.name, kind: attachments.kind })

@@ -91,10 +91,10 @@ describe("resolveGarmentRenderer — explicit fallback", () => {
     }
   });
 
-  it("non-garment types (accesorios) fall back honestly", () => {
+  it("accessories use their dedicated renderer", () => {
     const res = resolveGarmentRenderer({ garmentType: "accesorio", garmentFamily: "parte_superior" });
-    assert.equal(res.key, FALLBACK_RENDERER_KEY);
-    assert.equal(res.matched, false);
+    assert.equal(res.key, "accessory");
+    assert.equal(res.matched, true);
   });
 
   it("unknown families fall back with a reason", () => {
@@ -116,6 +116,7 @@ describe("resolveGarmentRenderer — explicit fallback", () => {
 describe("registry keys", () => {
   it("every declared key is a valid resolution target", () => {
     assert.ok(GARMENT_RENDERER_KEYS.includes("sports-jersey"));
+    assert.ok(GARMENT_RENDERER_KEYS.includes("accessory"));
     assert.ok(GARMENT_RENDERER_KEYS.includes(FALLBACK_RENDERER_KEY));
   });
 });

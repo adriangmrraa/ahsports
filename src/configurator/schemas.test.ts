@@ -15,6 +15,7 @@ import {
   garmentConfigSchema,
   hexColorSchema,
   isDraftToken,
+  sublimationPatternSchema,
   visualAssetPlacementSchema,
 } from "@/configurator/schemas";
 import { DEFAULT_GARMENT_CONFIG } from "@/configurator/model";
@@ -58,6 +59,14 @@ describe("visualAssetPlacementSchema", () => {
       rotationDeg: -10,
     });
     assert.equal(ok.success, true);
+  });
+});
+
+describe("sublimationPatternSchema", () => {
+  it("accepts an attachment plus repeat and rejects out-of-range values", () => {
+    assert.equal(sublimationPatternSchema.safeParse({ assetRef: "att-pattern", repeat: 2.5 }).success, true);
+    assert.equal(sublimationPatternSchema.safeParse({ assetRef: "att-pattern", repeat: 0.5 }).success, false);
+    assert.equal(sublimationPatternSchema.safeParse({ assetRef: "", repeat: 2 }).success, false);
   });
 });
 

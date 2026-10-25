@@ -1,13 +1,11 @@
 import {
   BufferGeometry,
   CylinderGeometry,
-  LatheGeometry,
   Matrix4,
   SphereGeometry,
   TorusGeometry,
-  Vector2,
 } from "three";
-import { buildSleeveGeometry, JERSEY_DIMENSIONS, sleeveEndTransform } from "./jersey-geometry";
+import { buildSleeveGeometry, buildTorsoGeometry, JERSEY_DIMENSIONS, sleeveEndTransform } from "./jersey-geometry";
 
 /**
  * Procedural hoodie/jacket (campera, canguro): roomier lathe torso, ribbed
@@ -36,24 +34,9 @@ export type HoodieGeometryBundle = {
   drawstringRight: BufferGeometry;
 };
 
-/** Fuller torso outline — straighter side walls, blouson hem. */
-const HOODIE_TORSO_PROFILE: readonly [number, number][] = [
-  [0.6, 0.0],
-  [0.615, 0.2],
-  [0.61, 0.45],
-  [0.63, 0.75],
-  [0.68, 1.0],
-  [0.7, 1.18],
-  [0.68, 1.32],
-  [0.62, 1.45],
-  [0.5, 1.54],
-  [0.34, 1.6],
-];
-
 function buildHoodieTorsoGeometry(): BufferGeometry {
-  const points = HOODIE_TORSO_PROFILE.map(([r, y]) => new Vector2(r, y));
-  const geo = new LatheGeometry(points, 48);
-  geo.applyMatrix4(new Matrix4().makeScale(1, 1, JERSEY_DIMENSIONS.flattenZ * 1.05));
+  const geo = buildTorsoGeometry();
+  geo.applyMatrix4(new Matrix4().makeScale(HOODIE_DIMENSIONS.torsoScale, 1.01, 1.08));
   return geo;
 }
 

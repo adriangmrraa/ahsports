@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { FileImage, Plus, UploadCloud, X } from "lucide-react";
+import { ChevronDown, FileImage, Plus, UploadCloud, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { HexColor } from "../model";
 
@@ -11,15 +11,35 @@ import type { HexColor } from "../model";
  * viewer stays the protagonist, controls read as quiet secondary panels.
  */
 
-export function ControlSection({ title, children, hint }: { title: string; children: ReactNode; hint?: string }) {
+export function ControlSection({
+  title,
+  children,
+  hint,
+  summary,
+  defaultOpen = false,
+}: {
+  title: string;
+  children: ReactNode;
+  hint?: string;
+  summary?: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="flex flex-col gap-2.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="label-caps text-[11px] font-semibold tracking-wider text-on-navy-variant">{title}</h3>
-        {hint ? <span className="text-[10px] text-on-navy-variant/70">{hint}</span> : null}
-      </div>
-      {children}
-    </section>
+    <details
+      className="group overflow-hidden rounded-md border border-navy-line bg-navy-950/35"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+        <h3 className="label-caps shrink-0 text-[11px] font-semibold tracking-wider text-on-navy-variant">{title}</h3>
+        <span className="min-w-0 flex-1 truncate text-right text-[11px] text-on-navy-variant/80">
+          {summary ?? hint}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-on-navy-variant transition-transform group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="flex flex-col gap-2.5 border-t border-navy-line px-3 pb-3 pt-3">{children}</div>
+    </details>
   );
 }
 
@@ -116,6 +136,93 @@ export function SelectField<T extends string>({
 }
 
 export type UploadedAsset = { id: string; url: string; name: string; kind: string };
+
+export function SublimationPanel({
+  asset,
+  repeat,
+  onRepeatChange,
+  onUpload,
+  onRemove,
+  busy,
+  error,
+}: {
+  asset: UploadedAsset | null;
+  repeat: number;
+  onRepeatChange: (repeat: number) => void;
+  onUpload: (file: File) => void;
+  onRemove: () => void;
+  busy: boolean;
+  error: string | null;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs leading-5 text-on-navy-variant">
+        Subí una imagen cuadrada o rectangular. Se repite como diseño base sobre el frente y la espalda; los logos y sponsors se agregan aparte.
+      </p>
+      {asset ? (
+        <div className="flex items-center gap-3 rounded-md border border-navy-line bg-navy-900/60 p-2.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={asset.url} alt={`Patrón ${asset.name}`} className="h-14 w-14 shrink-0 rounded-md border border-navy-line bg-white object-cover" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-on-navy">{asset.name}</p>
+            <p className="text-[10px] text-on-navy-variant">Sublimación base</p>
+          </div>
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`Quitar patrón ${asset.name}`}
+            className="inline-flex min-h-9 items-center justify-center rounded-sm px-2 text-xs text-error transition-colors hover:bg-error/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+      ) : null}
+
+      <label className="flex flex-col gap-1.5">
+        <span className="flex items-center justify-between text-xs font-medium text-on-navy">
+          Tamaño del patrón
+          <span className="font-mono text-[10px] text-on-navy-variant">{repeat.toFixed(2)}×</span>
+        </span>
+        <input
+          type="range"
+          min="1"
+          max="12"
+          step="0.25"
+          value={repeat}
+          disabled={!asset}
+          onChange={(event) => onRepeatChange(Number(event.target.value))}
+          aria-label="Repetición del patrón de sublimación"
+          className="accent-accent disabled:opacity-40"
+        />
+        <span className="flex justify-between text-[10px] text-on-navy-variant"><span>Grande</span><span>Pequeño</span></span>
+      </label>
+
+      <label
+        className={cn(
+          "inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-accent/50 bg-accent/5 px-4 text-xs font-semibold text-on-navy transition-colors",
+          busy ? "pointer-events-none opacity-60" : "hover:border-accent hover:bg-accent/10",
+        )}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          className="sr-only"
+          accept="image/png,image/jpeg,image/webp"
+          disabled={busy}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) onUpload(file);
+            event.target.value = "";
+          }}
+        />
+        {busy ? <UploadCloud className="h-4 w-4 animate-pulse" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
+        {busy ? "Subiendo…" : asset ? "Cambiar patrón" : "Subir patrón"}
+      </label>
+      {error ? <p className="rounded-md border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">{error}</p> : null}
+    </div>
+  );
+}
 
 export function AttachmentPanel({
   assets,
