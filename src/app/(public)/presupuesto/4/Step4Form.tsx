@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { ArrowLeft, FileImage, Plus, UploadCloud, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { beginPublicUploadSession, uploadAttachmentFromPublic } from "@/app/actions/public-orders";
 
@@ -80,62 +81,89 @@ export function Step4Form({ initialParams }: { initialParams: Record<string, str
     router.push(`/presupuesto/5?${params.toString()}`);
   }
 
+  const fileInput = (
+    <input
+      type="file"
+      className="sr-only"
+      accept="image/png,image/jpeg,image/svg+xml,image/webp,application/pdf"
+      onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+      disabled={busy}
+    />
+  );
+
   return (
-    <form onSubmit={goNext} className="mx-auto flex w-full max-w-2xl flex-col gap-5">
+    <form onSubmit={goNext} className="flex w-full flex-col gap-6">
       {uploads.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container p-4 text-center sm:p-8">
-          <label className="flex min-h-11 cursor-pointer items-center justify-center rounded-md px-3 focus-within:outline focus-within:outline-2 focus-within:outline-focus focus-within:outline-offset-2">
-            <input
-              type="file"
-              className="sr-only"
-              accept="image/png,image/jpeg,image/svg+xml,image/webp,application/pdf"
-              onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
-              disabled={busy}
-            />
-            <span className="text-sm font-medium text-primary">
-              {busy ? "Subiendo…" : "＋ Agregar archivo (escudo, logo, sponsor, planilla)"}
-            </span>
-          </label>
-        </div>
+        <label className="animate-rise group flex cursor-pointer flex-col items-center gap-3 rounded-3xl border-2 border-dashed border-outline-variant bg-surface-container px-6 py-12 text-center transition-colors hover:border-primary/50 hover:bg-surface-container-high focus-within:outline focus-within:outline-2 focus-within:outline-focus focus-within:outline-offset-2">
+          {fileInput}
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-navy-100 text-navy-700 transition-colors group-hover:bg-primary group-hover:text-accent">
+            <UploadCloud className="h-7 w-7" strokeWidth={1.6} aria-hidden />
+          </span>
+          <span className="text-sm font-semibold text-primary">
+            {busy ? "Subiendo…" : "Agregar archivo"}
+          </span>
+          <span className="max-w-xs text-xs leading-5 text-on-surface-variant">
+            Escudo, logo, sponsor o planilla. PNG, JPG, SVG, WebP o PDF.
+          </span>
+        </label>
       ) : (
         <div className="flex flex-col gap-3">
-          {uploads.map((u) => (
-            <div key={u.id} className="flex flex-col items-stretch gap-3 rounded-xl border border-outline-variant bg-surface-container p-3 sm:flex-row sm:items-center sm:justify-between">
+          {uploads.map((u, i) => (
+            <div
+              key={u.id}
+              className="animate-rise flex flex-col items-stretch gap-3 rounded-2xl border border-outline-variant bg-surface-container p-3.5 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+              style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+            >
               <div className="flex min-w-0 items-center gap-3">
-                <img src={u.url} alt={u.name} className="h-10 w-10 rounded object-contain bg-white" />
+                {u.kind === "identidad_organizacion" || u.url.match(/\.(png|jpe?g|svg|webp)(\?|$)/i) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={u.url} alt={u.name} className="h-12 w-12 shrink-0 rounded-lg border border-outline-variant bg-white object-contain" />
+                ) : (
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-navy-100 text-navy-700">
+                    <FileImage className="h-5 w-5" aria-hidden />
+                  </span>
+                )}
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{u.name}</p>
-                  <p className="text-xs text-on-surface-variant">{KINDS.find((k) => k.value === u.kind)?.label ?? u.kind}</p>
+                  <p className="truncate text-sm font-semibold">{u.name}</p>
+                  <p className="mt-0.5">
+                    <span className="inline-flex items-center rounded-full bg-navy-100 px-2.5 py-0.5 text-[11px] font-semibold text-navy-700">
+                      {KINDS.find((k) => k.value === u.kind)?.label ?? u.kind}
+                    </span>
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setUploads((all) => all.filter((x) => x.id !== u.id))}
-                className="min-h-11 rounded-md px-3 text-left text-sm text-error hover:text-error/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:text-center"
+                aria-label={`Quitar ${u.name}`}
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md px-3 text-sm text-error transition-colors hover:bg-error/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
               >
-                Quitar
+                <X className="h-4 w-4" aria-hidden /> Quitar
               </button>
             </div>
           ))}
-          <label className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-1 rounded-xl border border-outline-variant px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container focus-within:outline focus-within:outline-2 focus-within:outline-focus sm:w-auto">
-            <input
-              type="file"
-              className="sr-only"
-              accept="image/png,image/jpeg,image/svg+xml,image/webp,application/pdf"
-              onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
-              disabled={busy}
-            />
-            ＋ Agregar más
+          <label className="label-caps inline-flex min-h-11 w-fit cursor-pointer items-center justify-center gap-1.5 rounded-full border border-outline-variant bg-surface-container px-5 text-on-surface-variant transition-colors hover:border-primary/50 hover:text-primary focus-within:outline focus-within:outline-2 focus-within:outline-focus">
+            {fileInput}
+            <Plus className="h-4 w-4" aria-hidden />
+            {busy ? "Subiendo…" : "Agregar más"}
           </label>
         </div>
       )}
 
-      {error && <p className="text-sm text-error">{error}</p>}
+      {error && (
+        <p className="rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">{error}</p>
+      )}
       <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <button type="button" onClick={() => router.back()} className="text-sm text-on-surface-variant hover:text-on-surface">
-          ← Volver
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium text-on-surface-variant transition-colors hover:text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:justify-start"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden /> Volver
         </button>
-        <Button type="submit" disabled={!session || busy}>Revisar y confirmar →</Button>
+        <Button type="submit" size="lg" disabled={!session || busy} className="border-accent bg-accent text-on-accent hover:border-accent-strong hover:bg-accent-strong hover:text-on-accent">
+          Revisar y confirmar →
+        </Button>
       </div>
     </form>
   );

@@ -1,5 +1,6 @@
 import { Step4Form } from "./Step4Form";
 import { StepIndicator } from "../_components/StepIndicator";
+import { PageHero } from "@/components/public/PageHero";
 import { WizardEstimateChip } from "../_components/wizard-estimate";
 import { getPublicEstimate, resolveWizardSizeQuantities } from "@/lib/public/estimate";
 import {
@@ -35,14 +36,23 @@ export default async function PresupuestoStep4({
     : null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      <StepIndicator current={4} />
-      <h1 className="mb-2 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Cargá tus archivos</h1>
-      <p className="mb-4 text-center text-sm text-on-surface-variant">
-        Escudos, sponsors, logos o planillas (opcional). Mínimo 0, podés seguir sin archivos.
-      </p>
-      {sp.productId && <WizardEstimateChip estimate={estimate} />}
-      <Step4Form initialParams={sp} />
-    </div>
+    <>
+      <PageHero
+        crumb="Presupuesto"
+        eyebrow="Paso 4 de 5 · Archivos"
+        title={
+          <>
+            Cargá tus <span className="text-accent">archivos.</span>
+          </>
+        }
+        lead="Escudos, sponsors, logos o planillas (opcional). Podés seguir sin archivos — el diseño lo trabajamos juntos."
+      >
+        <StepIndicator current={4} />
+        {sp.productId && <WizardEstimateChip estimate={estimate} />}
+      </PageHero>
+      <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
+        <Step4Form initialParams={sp} />
+      </div>
+    </>
   );
 }

@@ -4706,5 +4706,10 @@
   "src_lib_public_site": "src/lib/public/site.ts — Constantes y helpers compartidos del sitio público (header, footer, sitemap, SEO).",
   "src_lib_public_site_site_name": "SITE_NAME — constant exported from src/lib/public/site.ts: Constantes y helpers compartidos del sitio público (header, footer, sitemap, SEO).",
   "src_lib_public_site_site_tagline": "SITE_TAGLINE — constant exported from src/lib/public/site.ts (line 12).",
-  "src_lib_public_site_site_url": "SITE_URL — constant exported from src/lib/public/site.ts: Base absoluta para canonical/OG/sitemap."
+  "src_lib_public_site_site_url": "SITE_URL — constant exported from src/lib/public/site.ts: Base absoluta para canonical/OG/sitemap.",
+  "src_app_public_catalogo_page_productplaceholder": "ProductPlaceholder() — constant declared in src/app/(public)/catalogo/page.tsx: Arte de placeholder para productos sin imagen: panel navy con stripes y la inicial calada del producto (mismo tratamiento que el \"10\" del Hero).",
+  "src_app_public_presupuesto_2_step2form_step2form_pickproduct": "pickProduct() — symbol declared in src/app/(public)/presupuesto/2/Step2Form.tsx (line 95).",
+  "src_components_public_pagehero_pagehero": "PageHero() — symbol exported from src/components/public/PageHero.tsx: Banda hero navy compartida por las páginas públicas interiores (/catalogo, /presupuesto, /seguimiento).",
+  "src_components_public_pagehero": "src/components/public/PageHero.tsx — Banda hero navy compartida por las páginas públicas interiores (/catalogo, /presupuesto, /seguimiento).",
+  "src_app_public_presupuesto_1_step1form_type_options": "TYPE_OPTIONS — constant declared in src/app/(public)/presupuesto/1/Step1Form.tsx (line 10)."
 }
