@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLoader, useThree } from "@react-three/fiber";
-import type { Group } from "three";
+import { Mesh, type Group } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
@@ -56,6 +56,13 @@ function LoadedGlb({ url, rendererKey, config, assetUrls }: GarmentModelProps & 
     // SkeletonUtils.clone handles both static and skinned scenes; the cached
     // gltf.scene is shared across mounts so it must never be mutated.
     const cloned = cloneSkinned(gltf.scene);
+    cloned.traverse((node) => {
+      // Some source garments ship without vertex normals (MakeHuman OBJ
+      // conversions) — light/shadow response needs them.
+      if (node instanceof Mesh && !node.geometry.attributes.normal) {
+        node.geometry.computeVertexNormals();
+      }
+    });
     return normalizeGarmentScene(cloned, rendererKey);
   }, [gltf, rendererKey]);
 
