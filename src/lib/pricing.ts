@@ -20,7 +20,7 @@ import {
 } from "@/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
 import { calculateBomConsumption, consumptionUnit } from "@/lib/consumption";
-import { computeOptionUnitPrice, selectVolumeTier, techniqueAllowedForFabric } from "@/lib/product-options";
+import { computeOptionUnitPrice, normalizeTechniqueIds, selectVolumeTier, techniqueAllowedForFabric } from "@/lib/product-options";
 
 export type SizeQuantity = { sizeId: string | null; quantity: number };
 
@@ -32,6 +32,13 @@ export type QuoteLineInput = {
   sizeQuantities?: SizeQuantity[];
   /** Kept for one-size/internal callers. */
   sizeId?: string | null;
+  /**
+   * Decoration methods are STACKABLE: a line can be 100% sublimado AND also
+   * carry DTF/bordado for logos & sponsors, so this is a set. Every selected
+   * delta and per-unit cost sums. The first element is the primary method.
+   */
+  techniqueIds?: string[] | null;
+  /** Legacy single-method form — folded into techniqueIds[0]. */
   techniqueId?: string | null;
   /** When set the line prices via the options model: basePrice + deltas - tier. */
   fabricId?: string | null;
@@ -128,26 +135,40 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
     const [product] = await db.select().from(products).where(eq(products.id, line.productId)).limit(1);
     if (!product) throw new Error(`Producto ${line.productId} no encontrado.`);
 
+    // Stackable selection — deduped, ordered; techniqueIds[0] is primary.
+    const lineTechniqueIds = normalizeTechniqueIds(line.techniqueIds, line.techniqueId);
+
     if (product.productKind === "bundle") {
-      if (line.techniqueId) throw new Error(`El conjunto "${product.name}" deriva sus costos de las prendas componentes y no acepta una técnica propia.`);
+      if (lineTechniqueIds.length > 0) throw new Error(`El conjunto "${product.name}" deriva sus costos de las prendas componentes y no acepta técnicas propias.`);
       lines.push(await quoteBundleLine({ line, product, rule, urgent: input.urgent, pricingRuleId: input.pricingRuleId }));
       continue;
     }
 
-    const lineTechnique = line.techniqueId
-      ? (await db.select().from(techniques).where(eq(techniques.id, line.techniqueId)).limit(1))[0]
-      : null;
-    if (line.techniqueId && !lineTechnique) throw new Error("La técnica seleccionada no existe.");
+    // Resolve the whole method selection (stackable). Input order is kept —
+    // the first id is the primary method used for recipe matching.
+    const lineTechniquesById = new Map(
+      lineTechniqueIds.length > 0
+        ? (await db.select().from(techniques).where(inArray(techniques.id, lineTechniqueIds))).map((row) => [row.id, row] as const)
+        : [],
+    );
+    const lineTechniques = lineTechniqueIds.flatMap((id) => {
+      const technique = lineTechniquesById.get(id);
+      return technique ? [technique] : [];
+    });
+    if (lineTechniqueIds.length > 0 && lineTechniques.length !== lineTechniqueIds.length) {
+      throw new Error("La técnica seleccionada no existe.");
+    }
+    const lineTechnique = lineTechniques[0] ?? null;
 
     // Options model (fabricId present): the line prices as
-    // basePrice + fabricDelta + methodDelta + technique cost − volume tier,
+    // basePrice + fabricDelta + Σ methodDeltas + methods cost − volume tier,
     // instead of cost × margin. Membership in product_fabrics /
     // product_techniques is strict — quoting an option the product does not
     // allow is a hard error, never a silent fallback.
     let optionsContext: {
       fabric: typeof fabrics.$inferSelect;
       fabricDelta: number;
-      methodDelta: number;
+      methods: Array<{ technique: typeof techniques.$inferSelect; delta: number }>;
       volumeTier: { minQty: number; discountPercent: number } | null;
     } | null = null;
     if (line.fabricId) {
@@ -157,24 +178,25 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
       const fabricRow = fabricRows.find((row) => row.fabricId === fabric.id);
       if (!fabricRow) throw new Error(`La tela "${fabric.name}" no está habilitada para "${product.name}".`);
       const techniqueRows = await db.select().from(productTechniques).where(eq(productTechniques.productId, line.productId));
-      let methodDelta = 0;
-      if (lineTechnique && !lineTechnique.active) throw new Error(`El método "${lineTechnique.name}" está inactivo.`);
-      if (techniqueRows.length > 0) {
-        if (!lineTechnique) throw new Error(`El producto "${product.name}" requiere elegir un método de aplicación.`);
-        const techniqueRow = techniqueRows.find((row) => row.techniqueId === lineTechnique.id);
-        if (!techniqueRow) throw new Error(`El método "${lineTechnique.name}" no está habilitado para "${product.name}".`);
-        methodDelta = Number(techniqueRow.priceModifier);
-      } else if (line.techniqueId) {
-        throw new Error(`El producto "${product.name}" no tiene métodos configurables.`);
+      const methods: Array<{ technique: typeof techniques.$inferSelect; delta: number }> = [];
+      for (const technique of lineTechniques) {
+        if (!technique.active) throw new Error(`El método "${technique.name}" está inactivo.`);
+        if (techniqueRows.length === 0) throw new Error(`El producto "${product.name}" no tiene métodos configurables.`);
+        const techniqueRow = techniqueRows.find((row) => row.techniqueId === technique.id);
+        if (!techniqueRow) throw new Error(`El método "${technique.name}" no está habilitado para "${product.name}".`);
+        if (!techniqueAllowedForFabric(fabric, technique)) {
+          throw new Error(`La tela "${fabric.name}" no admite "${technique.name}".`);
+        }
+        methods.push({ technique, delta: Number(techniqueRow.priceModifier) });
       }
-      if (lineTechnique && !techniqueAllowedForFabric(fabric, lineTechnique)) {
-        throw new Error(`La tela "${fabric.name}" no admite "${lineTechnique.name}".`);
+      if (techniqueRows.length > 0 && methods.length === 0) {
+        throw new Error(`El producto "${product.name}" requiere elegir al menos un método de aplicación.`);
       }
       const tierRows = await db.select().from(productVolumeTiers).where(eq(productVolumeTiers.productId, line.productId));
       optionsContext = {
         fabric,
         fabricDelta: Number(fabric.priceModifier) + Number(fabricRow.priceModifier),
-        methodDelta,
+        methods,
         volumeTier: selectVolumeTier(
           tierRows.map((row) => ({ minQty: row.minQty, discountPercent: Number(row.discountPercent) })),
           line.quantity,
@@ -205,7 +227,7 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
     }
 
     const techniqueCache = new Map<string, typeof techniques.$inferSelect>();
-    if (lineTechnique) techniqueCache.set(lineTechnique.id, lineTechnique);
+    for (const technique of lineTechniques) techniqueCache.set(technique.id, technique);
     const getTechnique = async (techniqueId: string | null) => {
       if (!techniqueId) return null;
       const cached = techniqueCache.get(techniqueId);
@@ -216,13 +238,16 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
       return technique;
     };
 
+    // Recipe matching stays on the primary method — a recipe row is bound to
+    // a single technique, while the sell/cost side stacks every selected one.
+    const primaryTechniqueId = lineTechnique?.id ?? null;
     const chooseRecipe = (sizeId: string | null) =>
-      recipes.find((recipe) => recipe.sizeId === sizeId && recipe.techniqueId === (line.techniqueId ?? null))
+      recipes.find((recipe) => recipe.sizeId === sizeId && recipe.techniqueId === primaryTechniqueId)
       ?? recipes.find((recipe) => recipe.sizeId === sizeId)
-      ?? recipes.find((recipe) => recipe.sizeId === null && recipe.techniqueId === (line.techniqueId ?? null))
+      ?? recipes.find((recipe) => recipe.sizeId === null && recipe.techniqueId === primaryTechniqueId)
       ?? recipes.find((recipe) => recipe.sizeId === null && recipe.techniqueId === null);
 
-    const groups: Array<SizeQuote & { technique: typeof techniques.$inferSelect | null }> = [];
+    const groups: Array<SizeQuote & { techniques: Array<typeof techniques.$inferSelect> }> = [];
     const sharedTechniqueIds = new Set<string>();
     const techniqueSnapshots = new Map<string, TechniqueSummary>();
     let sharedTechniqueCost = 0;
@@ -273,8 +298,12 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
         });
       }
 
-      const technique = await getTechnique(line.techniqueId ?? recipe?.techniqueId ?? null);
-      if (technique) {
+      // Every selected method adds its own per-garment cost and its setup
+      // fee once per line — methods are stackable on the cost side too.
+      const groupTechniques = lineTechniques.length > 0
+        ? lineTechniques
+        : [await getTechnique(recipe?.techniqueId ?? null)].filter((t): t is NonNullable<typeof t> => t !== null);
+      for (const technique of groupTechniques) {
         if (technique.costPerUnit) materialCost += Number(technique.costPerUnit);
         if (!sharedTechniqueIds.has(technique.id)) {
           sharedTechniqueIds.add(technique.id);
@@ -309,18 +338,18 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
         subtotal: 0,
         materials: [...aggregated.values()].map((material) => ({ ...material, totalQuantity: round3(material.totalQuantity) })),
         consumption,
-        technique,
+        techniques: groupTechniques,
       });
     }
 
-    const sqmTechniqueIds = new Set(groups.filter((group) => group.technique && Number(group.technique.costPerSquareMeter) > 0).map((group) => group.technique!.id));
+    const sqmTechniqueIds = new Set(groups.flatMap((group) => group.techniques).filter((technique) => Number(technique.costPerSquareMeter) > 0).map((technique) => technique.id));
     if (sqmTechniqueIds.size > 0) {
       if (!line.orderLineId) throw new Error("La técnica cobra por m² pero esta cotización no tiene una línea de pedido con medidas de aplicación.");
       const appRows = await db.select().from(applications).where(eq(applications.orderLineId, line.orderLineId));
       for (const techniqueId of sqmTechniqueIds) {
         const matching = appRows.filter((application) => application.techniqueId === techniqueId);
         const area = matching.reduce((total, application) => total + ((Number(application.widthCm) || 0) * (Number(application.heightCm) || 0) / 10000) * application.quantity, 0);
-        const technique = groups.find((group) => group.technique?.id === techniqueId)?.technique;
+        const technique = groups.flatMap((group) => group.techniques).find((t) => t.id === techniqueId);
         if (!technique || area <= 0) throw new Error(`La técnica "${technique?.name ?? "seleccionada"}" cobra por m² y necesita ancho/alto cargados en las aplicaciones del pedido.`);
         sharedTechniqueCost += area * Number(technique.costPerSquareMeter);
         const summary = techniqueSnapshots.get(techniqueId);
@@ -336,8 +365,8 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
       ? computeOptionUnitPrice({
           basePrice: Number(product.basePrice),
           fabricDelta: optionsContext.fabricDelta,
-          methodDelta: optionsContext.methodDelta,
-          techniqueCostPerUnit: lineTechnique ? Number(lineTechnique.costPerUnit) : 0,
+          methodDeltas: optionsContext.methods.map((method) => method.delta),
+          techniqueCostPerUnit: optionsContext.methods.reduce((total, method) => total + Number(method.technique.costPerUnit), 0),
           sharedCostPerUnit: sharedPerUnit,
           discountPercent: optionsContext.volumeTier?.discountPercent ?? 0,
           urgentSurchargePercent: input.urgent ? rule.urgentSurcharge : 0,
@@ -387,10 +416,13 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
             fabricId: optionsContext.fabric.id,
             fabricName: optionsContext.fabric.name,
             fabricDelta: round2(optionsContext.fabricDelta),
-            techniqueId: lineTechnique?.id ?? null,
-            techniqueName: lineTechnique?.name ?? null,
-            methodDelta: round2(optionsContext.methodDelta),
-            techniqueCostPerUnit: lineTechnique ? Number(lineTechnique.costPerUnit) : 0,
+            methods: optionsContext.methods.map((method) => ({
+              techniqueId: method.technique.id,
+              techniqueName: method.technique.name,
+              delta: round2(method.delta),
+            })),
+            methodsDelta: round2(optionsContext.methods.reduce((total, method) => total + method.delta, 0)),
+            methodsCostPerUnit: round2(optionsContext.methods.reduce((total, method) => total + Number(method.technique.costPerUnit), 0)),
             basePrice: Number(product.basePrice),
             listUnitPrice: optionPrice.listUnitPrice,
             volumeTier: optionsContext.volumeTier,

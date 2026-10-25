@@ -1,35 +1,42 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { fabrics, productFabrics, productTechniques, productVolumeTiers, techniques } from "@/db/schema";
-import { techniqueAllowedForFabric } from "@/lib/product-options";
+import { normalizeTechniqueIds, techniqueAllowedForFabric } from "@/lib/product-options";
+
+export { normalizeTechniqueIds };
 
 /**
- * Validates the option pair an order line wants to capture, mirroring the
- * rules quoteOrder() enforces so an invalid combo fails at write time instead
- * of at quote time.
+ * Validates the option selection an order line wants to capture, mirroring
+ * the rules quoteOrder() enforces so an invalid combo fails at write time
+ * instead of at quote time.
  *
  * - fabricId set → the fabric must exist, be active and be one of the
  *   product's configured product_fabrics (strict membership).
- * - product has configured methods (product_techniques) → techniqueId is
- *   required and must be a member; without configured methods a techniqueId
- *   is rejected only in options mode — a legacy BOM line without fabricId
- *   keeps the old "technique exists and is active" check.
- * - A sublimation technique on a non-sublimable fabric is always rejected.
+ * - product has configured methods (product_techniques) → at least one
+ *   techniqueId is required and EVERY selected method must be a member;
+ *   without configured methods any techniqueId is rejected only in options
+ *   mode — a legacy BOM line without fabricId keeps the old "technique
+ *   exists and is active" check.
+ * - Methods are STACKABLE: every selected method is checked against the
+ *   fabric — a sublimation method on a non-sublimable fabric is rejected.
  */
 export async function assertLineOptionsAllowed(input: {
   productId: string;
   productName?: string;
   fabricId?: string | null;
-  techniqueId?: string | null;
+  techniqueIds?: string[];
 }): Promise<string | null> {
-  const { productId, fabricId, techniqueId } = input;
-  if (!fabricId && !techniqueId) return null;
+  const { productId, fabricId } = input;
+  const techniqueIds = normalizeTechniqueIds(input.techniqueIds);
+  if (!fabricId && techniqueIds.length === 0) return null;
   const productLabel = input.productName ? `"${input.productName}"` : "este producto";
 
-  if (techniqueId) {
-    const [technique] = await db.select().from(techniques).where(eq(techniques.id, techniqueId)).limit(1);
-    if (!technique) return "El método seleccionado no existe";
-    if (!technique.active) return `El método "${technique.name}" está inactivo`;
+  let selectedTechniques: Array<typeof techniques.$inferSelect> = [];
+  if (techniqueIds.length > 0) {
+    selectedTechniques = await db.select().from(techniques).where(inArray(techniques.id, techniqueIds));
+    if (selectedTechniques.length !== techniqueIds.length) return "Un método seleccionado no existe";
+    const inactive = selectedTechniques.find((technique) => !technique.active);
+    if (inactive) return `El método "${inactive.name}" está inactivo`;
   }
 
   if (!fabricId) return null;
@@ -50,17 +57,16 @@ export async function assertLineOptionsAllowed(input: {
     .from(productTechniques)
     .where(eq(productTechniques.productId, productId));
   if (techniqueRows.length > 0) {
-    if (!techniqueId) return `El producto ${productLabel} requiere elegir un método de aplicación`;
-    if (!techniqueRows.some((row) => row.techniqueId === techniqueId)) {
-      return "El método seleccionado no está habilitado para este producto";
-    }
-  } else if (techniqueId) {
+    if (techniqueIds.length === 0) return `El producto ${productLabel} requiere elegir al menos un método de aplicación`;
+    const allowed = new Set(techniqueRows.map((row) => row.techniqueId));
+    const disallowed = selectedTechniques.find((technique) => !allowed.has(technique.id));
+    if (disallowed) return `El método "${disallowed.name}" no está habilitado para este producto`;
+  } else if (techniqueIds.length > 0) {
     return `El producto ${productLabel} no tiene métodos configurables`;
   }
 
-  if (techniqueId) {
-    const [technique] = await db.select().from(techniques).where(eq(techniques.id, techniqueId)).limit(1);
-    if (technique && !techniqueAllowedForFabric(fabric, technique)) {
+  for (const technique of selectedTechniques) {
+    if (!techniqueAllowedForFabric(fabric, technique)) {
       return `La tela "${fabric.name}" no admite "${technique.name}"`;
     }
   }
@@ -78,6 +84,22 @@ export async function getProductFabricDelta(productId: string, fabricId: string)
     .limit(1);
   if (!row) return null;
   return Number(fabric.priceModifier) + Number(row.priceModifier);
+}
+
+/**
+ * Per-product sell deltas for a set of methods, keyed by techniqueId.
+ * Used to snapshot order_line_techniques.price_modifier at line creation —
+ * a technique not configured for the product simply yields no entry (the
+ * caller already validated membership when productTechniques exist).
+ */
+export async function getProductMethodDeltas(productId: string, techniqueIds: string[]) {
+  const ids = normalizeTechniqueIds(techniqueIds);
+  if (ids.length === 0) return new Map<string, number>();
+  const rows = await db
+    .select({ techniqueId: productTechniques.techniqueId, priceModifier: productTechniques.priceModifier })
+    .from(productTechniques)
+    .where(and(eq(productTechniques.productId, productId), inArray(productTechniques.techniqueId, ids)));
+  return new Map(rows.map((row) => [row.techniqueId, Number(row.priceModifier)]));
 }
 
 /** Public-safe option catalog for a product: allowed fabrics, methods and tiers. */

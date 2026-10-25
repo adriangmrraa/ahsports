@@ -277,6 +277,8 @@ export const orderLineSchema = z.object({
   orderId: z.string().min(1).max(36),
   productId: z.string().min(1).max(36),
   techniqueId: z.string().max(36).optional().nullable(),
+  /** Stackable methods — the full selection; techniqueId stays as primary. */
+  techniqueIds: z.array(z.string().max(36)).max(20).optional(),
   fabricId: z.string().max(36).optional().nullable(),
   recipeId: z.string().max(36).optional().nullable(),
   quantity: z.number().int().min(1),
@@ -289,6 +291,8 @@ export const createOrderLineSchema = z.object({
   orderId: z.string().min(1).max(36),
   productId: z.string().min(1).max(36),
   techniqueId: z.string().max(36).optional().nullable(),
+  /** Stackable methods — the full selection; techniqueId stays as primary. */
+  techniqueIds: z.array(z.string().max(36)).max(20).optional(),
   fabricId: z.string().max(36).optional().nullable(),
   notes: z.string().optional().nullable(),
   sizeQuantities: z.record(z.string(), z.number().int().min(0).max(1000)).default({}),
@@ -417,6 +421,8 @@ export const createPublicOrderSchema = z.object({
   productId: z.string().uuid(),
   fabricId: z.string().uuid().optional().nullable(),
   techniqueId: z.string().uuid().optional().nullable(),
+  /** Stackable methods picked in the wizard (sublimado + DTF/bordado can mix). */
+  techniqueIds: z.array(z.string().uuid()).max(20).optional(),
   sizeQuantities: z.array(z.object({
     sizeId: z.string().uuid().nullable(),
     quantity: z.number().int().min(1).max(1000),

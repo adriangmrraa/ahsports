@@ -19,6 +19,19 @@ export function filterTechniquesForFabric<T extends TechniqueLike>(techniques: T
 }
 
 /**
+ * Normalizes a method selection: dedupes preserving pick order (the first
+ * element is the "primary" method written to order_lines.technique_id) and
+ * folds the legacy single techniqueId into the array form.
+ */
+export function normalizeTechniqueIds(
+  techniqueIds?: (string | null | undefined)[] | null,
+  legacyTechniqueId?: string | null,
+): string[] {
+  const raw = techniqueIds?.length ? techniqueIds : legacyTechniqueId ? [legacyTechniqueId] : [];
+  return [...new Set(raw.filter((id): id is string => Boolean(id)))];
+}
+
+/**
  * Picks the applicable tier for a quantity: the row with the highest minQty
  * that is still <= quantity. Returns null when quantity is below every tier
  * or the ladder is empty. Tolerates unsorted input.
@@ -42,8 +55,10 @@ function roundToStep(value: number, step: number) {
 export type OptionUnitPriceInput = {
   basePrice: number;
   fabricDelta: number;
-  methodDelta: number;
-  /** technique.costPerUnit — charged per garment on top of the sell deltas. */
+  /** Sell deltas of EVERY selected method — methods are stackable (sublimado
+   *  + DTF/bordado can coexist on the same garment), so they all sum. */
+  methodDeltas: number[];
+  /** Sum of the selected methods' costPerUnit — per-garment internal cost. */
   techniqueCostPerUnit?: number;
   /** Fixed costs spread over the line quantity (setup + m²), per garment. */
   sharedCostPerUnit?: number;
@@ -63,8 +78,8 @@ export type OptionUnitPrice = {
 };
 
 /**
- * Options pricing formula:
- *   list   = basePrice + fabricDelta + methodDelta + techniqueCostPerUnit + shared/qty
+ * Options pricing formula (methods are STACKABLE — every selected delta sums):
+ *   list   = basePrice + fabricDelta + Σ methodDeltas + techniqueCostPerUnit + shared/qty
  *   urgent = list * (1 + surcharge%)
  *   unit   = roundToStep(urgent * (1 - discount%), rounding)
  * A product with basePrice 0 still quotes at 0 + deltas — deltas are never
@@ -74,7 +89,7 @@ export function computeOptionUnitPrice(input: OptionUnitPriceInput): OptionUnitP
   const list =
     input.basePrice +
     input.fabricDelta +
-    input.methodDelta +
+    input.methodDeltas.reduce((total, delta) => total + delta, 0) +
     (input.techniqueCostPerUnit ?? 0) +
     (input.sharedCostPerUnit ?? 0);
   const surcharged = list * (1 + (input.urgentSurchargePercent ?? 0) / 100);

@@ -32,9 +32,10 @@ export type PublicEstimate = {
     fabricId: string;
     fabricName: string;
     fabricDelta: number;
-    techniqueId: string | null;
-    techniqueName: string | null;
-    methodDelta: number;
+    /** Stackable methods the customer picked, each with its sell delta. */
+    methods: Array<{ techniqueId: string; techniqueName: string; delta: number }>;
+    /** Sum of every method delta. */
+    methodsDelta: number;
     listUnitPrice: number;
     volumeTier: { minQty: number; discountPercent: number } | null;
     discountPercent: number;
@@ -51,6 +52,9 @@ export async function getPublicEstimate(input: {
   productId: string;
   sizeQuantities: SizeQuantity[];
   fabricId?: string | null;
+  /** Stackable methods — every selected delta sums into the unit price. */
+  techniqueIds?: string[] | null;
+  /** Legacy single-method form; techniqueIds wins when both are sent. */
   techniqueId?: string | null;
 }): Promise<PublicEstimate | null> {
   const sizeQuantities = input.sizeQuantities
@@ -73,6 +77,7 @@ export async function getPublicEstimate(input: {
         quantity,
         sizeQuantities,
         fabricId: input.fabricId ?? null,
+        techniqueIds: input.techniqueIds ?? null,
         techniqueId: input.techniqueId ?? null,
       }],
     });
@@ -99,9 +104,8 @@ export async function getPublicEstimate(input: {
             fabricId: line.options.fabricId,
             fabricName: line.options.fabricName,
             fabricDelta: line.options.fabricDelta,
-            techniqueId: line.options.techniqueId,
-            techniqueName: line.options.techniqueName,
-            methodDelta: line.options.methodDelta,
+            methods: line.options.methods,
+            methodsDelta: line.options.methodsDelta,
             listUnitPrice: line.options.listUnitPrice,
             volumeTier: line.options.volumeTier,
             discountPercent: line.options.discountPercent,

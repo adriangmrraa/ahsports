@@ -89,15 +89,22 @@ export function TelasManager({ initial }: { initial: Row[] }) {
             <Field label="Modificador de precio" hint="$ +/- sobre el precio base"><Input type="number" step="0.01" value={form.priceModifier} onChange={(e) => setForm({ ...form, priceModifier: e.target.value })} required /></Field>
             <Field label="Orden" hint="Menor aparece primero"><Input type="number" step="1" min="0" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })} required /></Field>
           </div>
-          <label className="flex items-center gap-2 text-sm text-on-surface cursor-pointer w-fit">
-            <input
-              type="checkbox"
-              checked={form.sublimable}
-              onChange={(e) => setForm({ ...form, sublimable: e.target.checked })}
-              className="w-4 h-4 accent-primary"
-            />
-            Apta para sublimación
-          </label>
+          <div>
+            <label className="flex items-center gap-2 text-sm text-on-surface cursor-pointer w-fit">
+              <input
+                type="checkbox"
+                checked={form.sublimable}
+                onChange={(e) => setForm({ ...form, sublimable: e.target.checked })}
+                className="w-4 h-4 accent-primary"
+              />
+              Apta para sublimación
+            </label>
+            <p className="text-xs text-on-surface-variant mt-1">
+              {form.sublimable
+                ? "Esta tela permite sublimado 100% — el wizard también ofrece DTF/bordado encima."
+                : "No permite sublimado — el wizard solo ofrecerá DTF/bordado."}
+            </p>
+          </div>
           {error && <p className="text-sm text-error">{error}</p>}
           <div className="flex justify-end gap-2">
             {editing && <Button type="button" variant="ghost" disabled={pending} onClick={cancelEdit}>Cancelar</Button>}
@@ -126,6 +133,9 @@ export function TelasManager({ initial }: { initial: Row[] }) {
               <TD label="Sublimable">
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${t.sublimable ? "bg-primary/10 border-primary/40 text-primary" : "border-outline-variant text-on-surface-variant"}`}>
                   {t.sublimable ? "SÍ" : "NO"}
+                </span>
+                <span className="block text-[11px] text-on-surface-variant mt-1">
+                  {t.sublimable ? "Permite sublimado 100%" : "Solo DTF/bordado"}
                 </span>
               </TD>
               <TD label="Estado">

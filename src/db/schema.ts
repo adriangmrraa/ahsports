@@ -411,10 +411,12 @@ export type LineOptionsSnapshot = {
   fabricId: string;
   fabricName: string;
   fabricDelta: number;
-  techniqueId: string | null;
-  techniqueName: string | null;
-  methodDelta: number;
-  techniqueCostPerUnit: number;
+  /** Stackable methods applied to the line, each with the sell delta it added. */
+  methods: Array<{ techniqueId: string; techniqueName: string; delta: number }>;
+  /** Sum of every method delta — what the customer pays on top of the fabric. */
+  methodsDelta: number;
+  /** Sum of the selected methods' costPerUnit (internal cost, not a sell delta). */
+  methodsCostPerUnit: number;
   basePrice: number;
   listUnitPrice: number;
   volumeTier: { minQty: number; discountPercent: number } | null;
@@ -480,6 +482,29 @@ export const orderLines = pgTable(
   },
   (t) => ({
     orderIdx: index("order_lines_order_idx").on(t.orderId),
+  }),
+);
+
+/**
+ * Stackable decoration methods picked per order line — a garment can be
+ * 100% sublimado AND also carry DTF/bordado for logos & sponsors, so the
+ * selection is a set, not a single FK. order_lines.technique_id keeps the
+ * first selected method for legacy readers (recipe matching, ficha técnica,
+ * agent tools); this table is the authoritative full selection.
+ */
+export const orderLineTechniques = pgTable(
+  "order_line_techniques",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    orderLineId: varchar("order_line_id", { length: 36 }).notNull().references(() => orderLines.id, { onDelete: "cascade" }),
+    techniqueId: varchar("technique_id", { length: 36 }).notNull().references(() => techniques.id),
+    /** Sell-price delta applied at line creation (product_techniques snapshot). */
+    priceModifier: numeric("price_modifier", { precision: 12, scale: 2 }).notNull().default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    lineTechniqueUnique: uniqueIndex("order_line_techniques_unique_idx").on(t.orderLineId, t.techniqueId),
+    techniqueIdx: index("order_line_techniques_technique_idx").on(t.techniqueId),
   }),
 );
 
@@ -671,6 +696,12 @@ export const orderLinesRelations = relations(orderLines, ({ one, many }) => ({
   technique: one(techniques, { fields: [orderLines.techniqueId], references: [techniques.id] }),
   fabric: one(fabrics, { fields: [orderLines.fabricId], references: [fabrics.id] }),
   items: many(orderItems),
+  lineTechniques: many(orderLineTechniques),
+}));
+
+export const orderLineTechniquesRelations = relations(orderLineTechniques, ({ one }) => ({
+  orderLine: one(orderLines, { fields: [orderLineTechniques.orderLineId], references: [orderLines.id] }),
+  technique: one(techniques, { fields: [orderLineTechniques.techniqueId], references: [techniques.id] }),
 }));
 
 export const productsRelations = relations(products, ({ one, many }) => ({
