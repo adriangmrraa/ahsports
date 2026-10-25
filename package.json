@@ -15,10 +15,11 @@
     "db:seed": "tsx src/db/seed.ts",
     "check:agent-tools": "tsx scripts/check-agent-tools.mts",
     "test": "npm run test:agents",
-    "test:agents": "node --import tsx --import ./test/register-server-only-stub.mjs --test --test-force-exit src/lib/attribution/ref-code-sign.test.ts src/lib/channels/signature.test.ts src/lib/channels/intake.test.ts src/lib/ai/config.test.ts src/lib/ai/providers-catalog.test.ts src/lib/messaging/auto-reply.test.ts src/lib/messaging/ingress.test.ts src/lib/messaging/inbound-pipeline.test.ts src/lib/whatsapp/session-policy.test.ts src/lib/whatsapp/anti-loop.test.ts src/lib/whatsapp/sales-tools.test.ts src/lib/telegram/confirmations.test.ts src/lib/storage.test.ts src/lib/product-options.test.ts"
+    "test:agents": "node --import tsx --import ./test/register-server-only-stub.mjs --test --test-force-exit src/lib/attribution/ref-code-sign.test.ts src/lib/channels/signature.test.ts src/lib/channels/intake.test.ts src/lib/ai/config.test.ts src/lib/ai/providers-catalog.test.ts src/lib/messaging/auto-reply.test.ts src/lib/messaging/ingress.test.ts src/lib/messaging/inbound-pipeline.test.ts src/lib/whatsapp/session-policy.test.ts src/lib/whatsapp/anti-loop.test.ts src/lib/whatsapp/sales-tools.test.ts src/lib/telegram/confirmations.test.ts src/lib/storage.test.ts src/lib/product-options.test.ts src/configurator/model.test.ts src/configurator/registry.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
+    "@react-three/fiber": "~9.8.2",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
@@ -28,6 +29,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.5.5",
+    "three": "^0.186.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -35,6 +37,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.186.0",
     "drizzle-kit": "^0.30.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.1.0",
