@@ -14,17 +14,32 @@ import { BottomsGarment } from "./garments/BottomsGarment";
 import { BundleGarment } from "./garments/BundleGarment";
 import { FallbackGarment } from "./garments/FallbackGarment";
 import { AccessoryGarment } from "./garments/AccessoryGarment";
+import { GlbGarment } from "./garments/GlbGarment";
+
+/** GLB-first wrappers: real garment model when the file exists, procedural otherwise. */
+function JerseyRenderer(props: GarmentModelProps) {
+  return <GlbGarment rendererKey="sports-jersey" fallback={SportsJersey} {...props} />;
+}
+function HoodieRenderer(props: GarmentModelProps) {
+  return <GlbGarment rendererKey="hoodie" fallback={HoodieGarment} {...props} />;
+}
+function BottomsRenderer(props: GarmentModelProps) {
+  return <GlbGarment rendererKey="bottoms" fallback={BottomsGarment} {...props} />;
+}
+function AccessoryRenderer(props: GarmentModelProps) {
+  return <GlbGarment rendererKey="accessory" fallback={AccessoryGarment} {...props} />;
+}
 
 /**
  * Renderer key → model component. Keys come from the pure registry so the
  * mapping stays declarative and testable; every key must be covered.
  */
 export const GARMENT_RENDERERS: Record<GarmentRendererKey, ComponentType<GarmentModelProps>> = {
-  "sports-jersey": SportsJersey,
-  hoodie: HoodieGarment,
-  bottoms: BottomsGarment,
+  "sports-jersey": JerseyRenderer,
+  hoodie: HoodieRenderer,
+  bottoms: BottomsRenderer,
   bundle: BundleGarment,
-  accessory: AccessoryGarment,
+  accessory: AccessoryRenderer,
   "generic-garment": FallbackGarment,
 };
 

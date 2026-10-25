@@ -4,6 +4,17 @@ import { FallbackGarment } from "./FallbackGarment";
 import { SportsJersey, type GarmentModelProps } from "./SportsJersey";
 import { HoodieGarment } from "./HoodieGarment";
 import { BottomsGarment } from "./BottomsGarment";
+import { GlbGarment } from "./GlbGarment";
+
+function JerseyComponent(props: GarmentModelProps) {
+  return <GlbGarment rendererKey="sports-jersey" fallback={SportsJersey} {...props} />;
+}
+function HoodieComponent(props: GarmentModelProps) {
+  return <GlbGarment rendererKey="hoodie" fallback={HoodieGarment} {...props} />;
+}
+function BottomsComponent(props: GarmentModelProps) {
+  return <GlbGarment rendererKey="bottoms" fallback={BottomsGarment} {...props} />;
+}
 
 /**
  * Local renderer map for bundle components — deliberately not imported from
@@ -12,9 +23,9 @@ import { BottomsGarment } from "./BottomsGarment";
  * validation; if a descriptor ever nests one, it resolves to the fallback.
  */
 const COMPONENT_RENDERERS: Record<string, ComponentType<GarmentModelProps>> = {
-  "sports-jersey": SportsJersey,
-  hoodie: HoodieGarment,
-  bottoms: BottomsGarment,
+  "sports-jersey": JerseyComponent,
+  hoodie: HoodieComponent,
+  bottoms: BottomsComponent,
   "generic-garment": FallbackGarment,
 };
 

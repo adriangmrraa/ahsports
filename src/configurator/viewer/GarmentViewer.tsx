@@ -129,6 +129,17 @@ export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>
             frameloop="demand"
             dpr={[1, 1.5]}
             shadows="basic"
+            fallback={
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+                <Shirt className="h-10 w-10 text-on-navy-variant" aria-hidden />
+                <p className="text-sm font-medium text-on-navy">
+                  La vista 3D no está disponible en este dispositivo.
+                </p>
+                <p className="text-xs text-on-navy-variant">
+                  Tu navegador no soporta WebGL. La configuración elegida se mantiene.
+                </p>
+              </div>
+            }
             gl={{
               antialias: true,
               preserveDrawingBuffer: false,
