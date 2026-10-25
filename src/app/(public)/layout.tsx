@@ -1,6 +1,7 @@
-import { PublicShell } from "@/components/layout/PublicShell";
 import { MetaPixel } from "@/components/meta/MetaPixel";
 import { UtmCaptureScript } from "@/components/attribution/UtmCaptureScript";
+import { SiteHeader } from "@/components/public/SiteHeader";
+import { SiteFooter } from "@/components/public/SiteFooter";
 import { resolvePixelId } from "@/lib/meta/pixel-id";
 
 /**
@@ -13,10 +14,12 @@ export default async function PublicLayout({ children }: { children: React.React
   const pixelId = await resolvePixelId();
 
   return (
-    <PublicShell>
+    <div className="flex min-h-screen min-w-0 flex-col bg-surface text-on-surface">
+      <SiteHeader />
       <UtmCaptureScript />
       {pixelId ? <MetaPixel pixelId={pixelId} /> : null}
-      {children}
-    </PublicShell>
+      <main className="min-w-0 flex-1 animate-fade">{children}</main>
+      <SiteFooter />
+    </div>
   );
 }

@@ -1,50 +1,81 @@
 @import "tailwindcss";
 
 @theme {
-  /* Paleta sobria: papel cálido + tinta. Casi monocroma. */
-  --color-background: #f6f5f2;
-  --color-surface: #f6f5f2;
-  --color-surface-dim: #edebe6;
+  /*
+   * Identidad AH Sports: azul marino deportivo + acento ámbar para CTAs.
+   * Los nombres semánticos se mantienen estables (los consumen admin y las
+   * páginas públicas hermanas); solo cambian los valores.
+   */
+
+  /* Escala navy — base de marca. */
+  --color-navy-50: #eef2f9;
+  --color-navy-100: #d9e2f1;
+  --color-navy-200: #b3c5e3;
+  --color-navy-300: #84a1cf;
+  --color-navy-400: #537cb7;
+  --color-navy-500: #315d9b;
+  --color-navy-600: #24477d;
+  --color-navy-700: #1b3763;
+  --color-navy-800: #152a4d;
+  --color-navy-900: #0f1f3a;
+  --color-navy-950: #081226;
+
+  /* Acento ámbar — energía de cancha, reservado para CTAs y marcas activas. */
+  --color-accent: #f5a524;
+  --color-accent-strong: #dd8f0e;
+  --color-accent-soft: #fde9c4;
+  --color-on-accent: #1d1400;
+
+  /* Superficies claras neutro-frías (texto navy, papel frío). */
+  --color-background: #f4f6f9;
+  --color-surface: #f4f6f9;
+  --color-surface-dim: #e9edf3;
   --color-surface-bright: #ffffff;
-  --color-surface-container-lowest: #e7e4de;
-  --color-surface-container-low: #efede8;
-  --color-surface-container: #fbfaf8;
-  --color-surface-container-high: #f1efe9;
-  --color-surface-container-highest: #e5e2da;
-  --color-on-surface: #242220;
-  --color-on-surface-variant: #6f6a62;
-  --color-outline: #a8a298;
-  --color-outline-variant: #e1ddd5;
-  --color-surface-tint: #24211d;
-  --color-primary: #24211d;
-  --color-on-primary: #f7f5f1;
-  --color-primary-container: #35322d;
-  --color-on-primary-container: #f6f4f0;
-  --color-primary-fixed: #35322d;
-  --color-on-primary-fixed: #f6f4f0;
-  --color-secondary: #8a6b52;
-  --color-on-secondary: #faf7f3;
-  --color-tertiary: #5e6f60;
-  --color-on-tertiary: #f4f6f4;
-  --color-error: #a63d32;
+  --color-surface-container-lowest: #e5e9f0;
+  --color-surface-container-low: #ecf0f5;
+  --color-surface-container: #fafbfd;
+  --color-surface-container-high: #f0f3f8;
+  --color-surface-container-highest: #e2e7ef;
+  --color-on-surface: #161d2d;
+  --color-on-surface-variant: #57627a;
+  --color-outline: #9aa6bb;
+  --color-outline-variant: #dde3ec;
+  --color-surface-tint: #152a4d;
+
+  /* Tinta y bordes pensados para secciones navy (hero, footer, bandas). */
+  --color-on-navy: #e8eefb;
+  --color-on-navy-variant: #9db0d2;
+  --color-navy-line: #2a3f66;
+
+  --color-primary: #152a4d;
+  --color-on-primary: #f2f6fc;
+  --color-primary-container: #0f1f3a;
+  --color-on-primary-container: #e6edf9;
+  --color-primary-fixed: #1b3763;
+  --color-on-primary-fixed: #eaf0fa;
+  --color-secondary: #45577a;
+  --color-on-secondary: #f2f5fa;
+  --color-tertiary: #b3761e;
+  --color-on-tertiary: #fdf6ea;
+  --color-error: #b04438;
   --color-on-error: #faf2f1;
-  --color-success: #4b7a5d;
-  --color-warning: #a07935;
+  --color-success: #3f7a5c;
+  --color-warning: #9a6f14;
 
-  --color-content-primary: #242220;
-  --color-content-secondary: #6f6a62;
-  --color-content-inverse: #f7f5f1;
-  --color-border-default: #e1ddd5;
-  --color-border-strong: #b5afa4;
-  --color-focus: #24211d;
-  --color-status-info: #24211d;
-  --color-status-success: #4b7a5d;
-  --color-status-warning: #a07935;
-  --color-status-danger: #a63d32;
+  --color-content-primary: #161d2d;
+  --color-content-secondary: #57627a;
+  --color-content-inverse: #f2f6fc;
+  --color-border-default: #dde3ec;
+  --color-border-strong: #aab4c8;
+  --color-focus: #315d9b;
+  --color-status-info: #1b3763;
+  --color-status-success: #3f7a5c;
+  --color-status-warning: #9a6f14;
+  --color-status-danger: #b04438;
 
-  --font-display: "Inter", system-ui, sans-serif;
-  --font-headline: "Inter", system-ui, sans-serif;
-  --font-body: "Inter", system-ui, sans-serif;
+  --font-display: var(--font-archivo), "Archivo", "Inter", system-ui, sans-serif;
+  --font-headline: var(--font-archivo), "Archivo", "Inter", system-ui, sans-serif;
+  --font-body: var(--font-inter), "Inter", system-ui, sans-serif;
 
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
@@ -77,11 +108,11 @@
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-headline);
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-weight: 700;
+    letter-spacing: -0.015em;
   }
   ::selection {
-    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    background: color-mix(in srgb, var(--color-accent) 35%, transparent);
   }
 }
 
@@ -93,7 +124,7 @@
     border: 1px solid var(--color-border-default);
   }
   .gradient-text {
-    background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-container) 100%);
+    background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-navy-500) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -136,20 +167,104 @@
     background: var(--color-outline);
   }
 
+  /*
+   * Texturas CSS-only para secciones navy (sin imágenes pesadas).
+   * Aplican background-image; combinar con bg-navy-* y texto on-navy.
+   */
+  .texture-grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  }
+  .texture-mesh {
+    background-image:
+      radial-gradient(ellipse 60% 50% at 15% 0%, color-mix(in srgb, var(--color-navy-600) 55%, transparent) 0%, transparent 70%),
+      radial-gradient(ellipse 45% 40% at 85% 15%, color-mix(in srgb, var(--color-navy-500) 35%, transparent) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 45% at 70% 100%, color-mix(in srgb, var(--color-accent) 12%, transparent) 0%, transparent 75%);
+  }
+  .texture-grid {
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--color-on-navy) 6%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--color-on-navy) 6%, transparent) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+  .texture-stripes {
+    background-image: repeating-linear-gradient(
+      -55deg,
+      transparent 0px,
+      transparent 10px,
+      color-mix(in srgb, var(--color-on-navy) 4%, transparent) 10px,
+      color-mix(in srgb, var(--color-on-navy) 4%, transparent) 11px
+    );
+  }
+  .texture-fade-x {
+    -webkit-mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+    mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+  }
+
   /* Motion: entradas suaves y respeto por reduced-motion. */
-  @keyframes rise {
-    from { opacity: 0; transform: translateY(12px); }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(14px); }
     to { opacity: 1; transform: none; }
   }
   @keyframes fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
   }
-  .animate-rise {
-    animation: rise 0.55s cubic-bezier(0.21, 0.86, 0.36, 1) both;
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes pulse-cta {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 45%, transparent); }
+    55% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--color-accent) 0%, transparent); }
+  }
+
+  .animate-rise,
+  .animate-fade-up {
+    animation: fade-up 0.55s cubic-bezier(0.21, 0.86, 0.36, 1) both;
   }
   .animate-fade {
     animation: fade-in 0.45s ease both;
+  }
+  .animate-float {
+    animation: float 5s ease-in-out infinite;
+  }
+  .animate-pulse-cta {
+    animation: pulse-cta 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Marquee infinito: el contenedor duplica el contenido y desliza -50%.
+     Pausa en hover para legibilidad. Velocidad ajustable con --marquee-duration. */
+  .animate-marquee {
+    animation: marquee var(--marquee-duration, 38s) linear infinite;
+  }
+  .marquee-hover-pause:hover .animate-marquee {
+    animation-play-state: paused;
+  }
+
+  /* Entrada escalonada: cada hijo entra con fade-up y delay incremental. */
+  .stagger-in > * {
+    animation: fade-up 0.6s cubic-bezier(0.21, 0.86, 0.36, 1) both;
+  }
+  .stagger-in > :nth-child(1) { animation-delay: 40ms; }
+  .stagger-in > :nth-child(2) { animation-delay: 110ms; }
+  .stagger-in > :nth-child(3) { animation-delay: 180ms; }
+  .stagger-in > :nth-child(4) { animation-delay: 250ms; }
+  .stagger-in > :nth-child(5) { animation-delay: 320ms; }
+  .stagger-in > :nth-child(6) { animation-delay: 390ms; }
+  .stagger-in > :nth-child(7) { animation-delay: 460ms; }
+  .stagger-in > :nth-child(n+8) { animation-delay: 530ms; }
+
+  /* Elevación en hover para cards y CTAs secundarios. */
+  .hover-lift {
+    transition: transform 0.3s cubic-bezier(0.21, 0.86, 0.36, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 18px 44px -14px color-mix(in srgb, var(--color-navy-950) 32%, transparent);
   }
 
   /* Tablas → tarjetas en mobile (< md). El markup no cambia:
@@ -164,7 +279,7 @@
       border-radius: 0.75rem;
       padding: 0.625rem 0.875rem;
       background: var(--color-surface-container);
-      animation: rise 0.4s cubic-bezier(0.21, 0.86, 0.36, 1) both;
+      animation: fade-up 0.4s cubic-bezier(0.21, 0.86, 0.36, 1) both;
     }
     .table-cards tbody tr:nth-child(2) { animation-delay: 30ms; }
     .table-cards tbody tr:nth-child(3) { animation-delay: 60ms; }
@@ -202,10 +317,15 @@
     .table-cards td:not([data-label]):last-child { text-align: right; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .animate-rise, .animate-fade { animation: none; }
+    .animate-rise, .animate-fade, .animate-fade-up, .animate-float,
+    .animate-marquee, .animate-pulse-cta, .stagger-in > * {
+      animation: none;
+    }
+    .hover-lift:hover { transform: none; }
     *, *::before, *::after {
       transition-duration: 0.01ms !important;
       animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
     }
   }
 }
