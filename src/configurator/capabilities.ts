@@ -41,8 +41,8 @@ const COLOR_ROLES_ALL: readonly ColorRole[] = ["primary", "secondary", "accent"]
 
 /**
  * Catalog zone labels (Spanish, as stored in products.zones) → model zones.
- * Pure string mapping, no product-name branching. Unmapped labels (e.g.
- * "Pierna derecha" on bottoms) stay as reference-only decorations.
+ * Pure string mapping, no product-name branching. Labels without a model
+ * surface stay listed as reference-only information.
  */
 const ZONE_LABEL_TO_GARMENT_ZONE: Readonly<Record<string, GarmentZone>> = {
   "pecho izquierdo": "chest-left",
@@ -54,6 +54,8 @@ const ZONE_LABEL_TO_GARMENT_ZONE: Readonly<Record<string, GarmentZone>> = {
   "espalda baja": "back-lower",
   "manga izquierda": "sleeve-left",
   "manga derecha": "sleeve-right",
+  "pierna izquierda": "leg-left",
+  "pierna derecha": "leg-right",
 };
 
 export function mapProductZoneLabel(label: string): GarmentZone | null {
@@ -70,10 +72,16 @@ export const GARMENT_ZONE_LABELS: Readonly<Record<GarmentZone, string>> = {
   "back-lower": "Espalda baja",
   "sleeve-left": "Manga izquierda",
   "sleeve-right": "Manga derecha",
+  "leg-left": "Pierna izquierda",
+  "leg-right": "Pierna derecha",
 };
 
-/** All model zones when the catalog row carries no zone list at all. */
-const DEFAULT_ZONES: readonly GarmentZone[] = GARMENT_ZONES;
+/** Zones on the upper body (torso, sleeves, back). */
+const UPPER_ZONES: readonly GarmentZone[] = GARMENT_ZONES.filter(
+  (z) => z !== "leg-left" && z !== "leg-right",
+);
+/** Zones on legs — only bottoms render them. */
+const LOWER_ZONES: readonly GarmentZone[] = ["leg-left", "leg-right"];
 
 /**
  * Full-capability profile for the jersey family (camiseta/remera/chomba):
@@ -119,11 +127,42 @@ export function productCapabilities(
       unmapped.push(label);
     }
   }
-  const zones = productZoneLabels && productZoneLabels.length > 0 ? mapped : DEFAULT_ZONES;
+  /** Catalog-declared zones when present; each family else gets its own defaults. */
+  const explicitZones = productZoneLabels && productZoneLabels.length > 0 ? mapped : null;
 
-  // Accessories and bundles without a garment body get colors only — the
-  // fallback renderer shows them honestly without fake garment controls.
-  if (kind === "bundle" || type === "conjunto" || type === "accesorio" || family === "accesorio") {
+  // Bundles (conjuntos): capabilities are the union of what the real
+  // component garments can host — a camiseta+short set exposes torso and leg
+  // zones, a campera+pantalón set keeps the hoodie fixed sleeve, etc.
+  if (kind === "bundle" || type === "conjunto" || (descriptor?.components?.length ?? 0) > 0) {
+    const componentKeys = (descriptor?.components ?? []).map(
+      (component) => resolveGarmentRenderer(component).key,
+    );
+    const hasJersey = componentKeys.includes("sports-jersey");
+    const hasUpper = hasJersey || componentKeys.includes("hoodie");
+    const hasLower = componentKeys.includes("bottoms");
+    const defaultZones: GarmentZone[] = [
+      ...(hasUpper ? UPPER_ZONES : []),
+      ...(hasLower ? LOWER_ZONES : []),
+    ];
+    return {
+      rendererKey: resolution.key,
+      rendererReason: resolution.reason,
+      // Collar/sleeve controls only make sense when a component can take them.
+      collarVariants: hasJersey ? COLLAR_VARIANTS : [],
+      sleeveVariants: hasJersey ? SLEEVE_VARIANTS : componentKeys.includes("hoodie") ? ["long"] : [],
+      defaultCollar: "crew",
+      defaultSleeves: hasJersey ? "short" : "long",
+      colorRoles: COLOR_ROLES_ALL,
+      zones: explicitZones ?? defaultZones,
+      unmappedZoneLabels: unmapped,
+      supportsPlacements: hasUpper || hasLower,
+      supportsFabrics: true,
+    };
+  }
+
+  // Accessories get colors only — the fallback renderer shows them honestly
+  // without fake garment controls or pretend decal zones.
+  if (type === "accesorio" || family === "accesorio") {
     return {
       rendererKey: resolution.key,
       rendererReason: resolution.reason,
@@ -132,16 +171,16 @@ export function productCapabilities(
       defaultCollar: "crew",
       defaultSleeves: "short",
       colorRoles: COLOR_ROLES_ALL,
-      zones,
+      zones: explicitZones ?? [],
       unmappedZoneLabels: unmapped,
-      supportsPlacements: resolution.key !== FALLBACK_RENDERER_KEY,
+      supportsPlacements: false,
       supportsFabrics: true,
     };
   }
 
-  // Bottoms (pantalon/short/bermuda): no collar, no sleeves — honest profile
-  // for the fallback renderer until a dedicated family renderer exists.
-  if (type === "pantalon" || type === "short" || type === "bermuda" || family === "pantalon" || family === "short_futbol" || family === "bermuda") {
+  // Bottoms (pantalon/short/bermuda/calza): no collar, no sleeves — the legs
+  // are the decal surface, so leg zones are real placement targets.
+  if (resolution.key === "bottoms") {
     return {
       rendererKey: resolution.key,
       rendererReason: resolution.reason,
@@ -150,16 +189,16 @@ export function productCapabilities(
       defaultCollar: "crew",
       defaultSleeves: "short",
       colorRoles: ["primary", "accent"],
-      zones,
+      zones: explicitZones ?? LOWER_ZONES,
       unmappedZoneLabels: unmapped,
-      supportsPlacements: false,
+      supportsPlacements: true,
       supportsFabrics: true,
     };
   }
 
-  // Jackets/hoodies (campera family): no collar control — those garments use
-  // hood/zip structures; sleeves are fixed long.
-  if (type === "campera" || family === "campera") {
+  // Jackets/hoodies (campera family): no collar control — the hood is
+  // structural; sleeves are fixed long.
+  if (resolution.key === "hoodie") {
     return {
       rendererKey: resolution.key,
       rendererReason: resolution.reason,
@@ -168,12 +207,12 @@ export function productCapabilities(
       defaultCollar: "crew",
       defaultSleeves: "long",
       colorRoles: COLOR_ROLES_ALL,
-      zones,
+      zones: explicitZones ?? UPPER_ZONES,
       unmappedZoneLabels: unmapped,
-      supportsPlacements: resolution.key !== FALLBACK_RENDERER_KEY,
+      supportsPlacements: true,
       supportsFabrics: true,
     };
   }
 
-  return jerseyCapabilities(resolution, zones, unmapped);
+  return jerseyCapabilities(resolution, explicitZones ?? UPPER_ZONES, unmapped);
 }

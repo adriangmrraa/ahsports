@@ -9,6 +9,7 @@ import { WizardEstimateChip } from "../_components/wizard-estimate";
 import { resolveWizardDraft } from "../_components/wizard-draft";
 import { getPublicEstimate } from "@/lib/public/estimate";
 import { listFabricVisualProfiles } from "@/lib/configurator/drafts";
+import { loadBundleComponentDescriptors } from "@/lib/configurator/descriptors";
 import {
   WizardRateLimitNotice,
   wizardRateLimitReached,
@@ -51,7 +52,14 @@ export default async function PresupuestoStep4({
     listFabricVisualProfiles(),
   ]);
 
-  const product = productRows.find((p) => p.id === payload.productId);
+  // Bundle composition: conjuntos render their real component garments.
+  const componentMap = await loadBundleComponentDescriptors(productRows.map((p) => p.id));
+  const productsWithComponents = productRows.map((p) => ({
+    ...p,
+    components: componentMap.get(p.id) ?? [],
+  }));
+
+  const product = productsWithComponents.find((p) => p.id === payload.productId);
   if (!product) redirect(`/presupuesto/2?d=${encodeURIComponent(token)}`);
 
   // Attachments already staged under this draft's upload session survive a
@@ -95,7 +103,7 @@ export default async function PresupuestoStep4({
       <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-12">
         <Step4Designer
           draftToken={token}
-          products={productRows}
+          products={productsWithComponents}
           fabrics={fabricProfiles}
           lockProductId={product.id}
           productName={product.name}

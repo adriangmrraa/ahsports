@@ -20,7 +20,7 @@ export type GarmentColors = {
 export const COLLAR_VARIANTS = ["crew", "v-neck", "polo"] as const;
 export type CollarVariant = (typeof COLLAR_VARIANTS)[number];
 
-export const SLEEVE_VARIANTS = ["short", "long"] as const;
+export const SLEEVE_VARIANTS = ["sleeveless", "short", "long"] as const;
 export type SleeveVariant = (typeof SLEEVE_VARIANTS)[number];
 
 export const FABRIC_PRESET_IDS = ["performance", "satin", "pique", "mesh"] as const;
@@ -42,6 +42,8 @@ export const GARMENT_ZONES = [
   "back-lower",
   "sleeve-left",
   "sleeve-right",
+  "leg-left",
+  "leg-right",
 ] as const;
 export type GarmentZone = (typeof GARMENT_ZONES)[number];
 
@@ -84,6 +86,12 @@ export type ProductGarmentDescriptor = {
   garmentType?: string | null;
   productType?: string | null;
   productKind?: string | null;
+  /**
+   * Bundle composition (conjuntos): descriptors of the real component
+   * products resolved from product_bundle_items. The bundle renderer draws
+   * each component's own garment instead of duplicating geometry.
+   */
+  components?: readonly ProductGarmentDescriptor[];
 };
 
 /**

@@ -2,6 +2,7 @@ import { db } from "@/db/client";
 import { attachments, products } from "@/db/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { getConfiguratorDraftByToken, listFabricVisualProfiles } from "@/lib/configurator/drafts";
+import { loadBundleComponentDescriptors } from "@/lib/configurator/descriptors";
 import { HomeConfigurator } from "./HomeConfigurator";
 
 /**
@@ -28,6 +29,13 @@ export async function ConfiguratorSection({ draftToken }: { draftToken?: string 
     listFabricVisualProfiles(),
     draftToken ? getConfiguratorDraftByToken(draftToken) : Promise.resolve(null),
   ]);
+
+  // Bundle composition: conjuntos render their real component garments.
+  const componentMap = await loadBundleComponentDescriptors(productRows.map((p) => p.id));
+  const productsWithComponents = productRows.map((p) => ({
+    ...p,
+    components: componentMap.get(p.id) ?? [],
+  }));
 
   let initialProductId: string | null = null;
   let initialConfig = null;
@@ -64,7 +72,7 @@ export async function ConfiguratorSection({ draftToken }: { draftToken?: string 
           </p>
         </div>
         <HomeConfigurator
-          products={productRows}
+          products={productsWithComponents}
           fabrics={fabricProfiles}
           draftToken={resumed ? draftToken! : null}
           initialProductId={initialProductId}

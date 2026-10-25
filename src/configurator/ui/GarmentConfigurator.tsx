@@ -100,6 +100,7 @@ const COLLAR_LABELS: Record<CollarVariant, string> = {
 };
 
 const SLEEVE_LABELS: Record<SleeveVariant, string> = {
+  sleeveless: "Sin mangas",
   short: "Corta",
   long: "Larga",
 };
@@ -118,6 +119,8 @@ const ZONE_LABELS: Record<GarmentZone, string> = {
   "back-lower": "Espalda baja",
   "sleeve-left": "Manga izq.",
   "sleeve-right": "Manga der.",
+  "leg-left": "Pierna izq.",
+  "leg-right": "Pierna der.",
 };
 
 const ATTACHMENT_KINDS = [

@@ -13,11 +13,13 @@ describe("mapProductZoneLabel", () => {
     assert.equal(mapProductZoneLabel("Espalda baja"), "back-lower");
     assert.equal(mapProductZoneLabel("Manga izquierda"), "sleeve-left");
     assert.equal(mapProductZoneLabel("Manga derecha"), "sleeve-right");
+    assert.equal(mapProductZoneLabel("Pierna izquierda"), "leg-left");
+    assert.equal(mapProductZoneLabel("Pierna derecha"), "leg-right");
   });
 
   it("is case/space tolerant and returns null for unknown labels", () => {
     assert.equal(mapProductZoneLabel("  PECHO IZQUIERDO "), "chest-left");
-    assert.equal(mapProductZoneLabel("Pierna derecha"), null);
+    assert.equal(mapProductZoneLabel("Cintura"), null);
     assert.equal(mapProductZoneLabel(""), null);
   });
 });
@@ -39,7 +41,7 @@ describe("productCapabilities", () => {
     const caps = productCapabilities({ garmentType: "camiseta", garmentFamily: "parte_superior" }, jerseyZones);
     assert.equal(caps.rendererKey, "sports-jersey");
     assert.deepEqual(caps.collarVariants, ["crew", "v-neck", "polo"]);
-    assert.deepEqual(caps.sleeveVariants, ["short", "long"]);
+    assert.deepEqual(caps.sleeveVariants, ["sleeveless", "short", "long"]);
     assert.equal(caps.supportsPlacements, true);
     assert.equal(caps.supportsFabrics, true);
     assert.ok(caps.zones.includes("chest-left"));
@@ -57,24 +59,65 @@ describe("productCapabilities", () => {
     const caps = productCapabilities({ garmentType: "campera", garmentFamily: "campera" }, jerseyZones);
     assert.equal(caps.collarVariants.length, 0);
     assert.deepEqual(caps.sleeveVariants, ["long"]);
-    assert.equal(caps.rendererKey, FALLBACK_RENDERER_KEY);
-    // Fallback renderer → placements/fabric controls off until a real renderer lands.
-    assert.equal(caps.supportsPlacements, false);
+    assert.equal(caps.rendererKey, "hoodie");
+    // Dedicated renderer → real placement surfaces on torso and sleeves.
+    assert.equal(caps.supportsPlacements, true);
   });
 
-  it("gives bottoms no collar/sleeve controls", () => {
+  it("gives bottoms no collar/sleeve controls and real leg placement zones", () => {
     const caps = productCapabilities({ garmentType: "pantalon", garmentFamily: "pantalon" }, ["Pierna derecha", "Pierna izquierda"]);
+    assert.equal(caps.rendererKey, "bottoms");
     assert.equal(caps.collarVariants.length, 0);
     assert.equal(caps.sleeveVariants.length, 0);
     assert.deepEqual(caps.colorRoles, ["primary", "accent"]);
-    assert.deepEqual(caps.unmappedZoneLabels, ["Pierna derecha", "Pierna izquierda"]);
+    assert.equal(caps.supportsPlacements, true);
+    assert.deepEqual(caps.zones, ["leg-right", "leg-left"]);
+    assert.deepEqual(caps.unmappedZoneLabels, []);
   });
 
-  it("keeps conjuntos on color-only profile", () => {
+  it("bottoms default to leg zones when the catalog row has none", () => {
+    const caps = productCapabilities({ garmentType: "bermuda" }, null);
+    assert.deepEqual(caps.zones, ["leg-left", "leg-right"]);
+  });
+
+  it("a conjunto merges the capabilities of its real components", () => {
+    const caps = productCapabilities(
+      {
+        garmentType: "conjunto",
+        productKind: "bundle",
+        components: [{ garmentType: "camiseta" }, { garmentType: "short" }],
+      },
+      null,
+    );
+    assert.equal(caps.rendererKey, "bundle");
+    assert.equal(caps.supportsPlacements, true);
+    // Upper zones come from the jersey, leg zones from the short.
+    assert.ok(caps.zones.includes("chest-left"));
+    assert.ok(caps.zones.includes("leg-left"));
+    // Jersey component unlocks collar/sleeve controls for the whole set.
+    assert.deepEqual(caps.collarVariants, ["crew", "v-neck", "polo"]);
+    assert.deepEqual(caps.sleeveVariants, ["sleeveless", "short", "long"]);
+  });
+
+  it("a hoodie+pantalón conjunto exposes leg zones but no collar", () => {
+    const caps = productCapabilities(
+      {
+        productKind: "bundle",
+        components: [{ garmentType: "campera" }, { garmentType: "pantalon" }],
+      },
+      null,
+    );
+    assert.equal(caps.supportsPlacements, true);
+    assert.ok(caps.zones.includes("leg-right"));
+    assert.deepEqual(caps.collarVariants, []);
+    assert.deepEqual(caps.sleeveVariants, ["long"]);
+  });
+
+  it("conjuntos without components stay honest — nothing to host placements", () => {
     const caps = productCapabilities({ garmentType: "conjunto", productKind: "bundle" }, jerseyZones);
-    assert.equal(caps.collarVariants.length, 0);
-    assert.equal(caps.sleeveVariants.length, 0);
+    assert.equal(caps.rendererKey, "bundle");
     assert.equal(caps.supportsPlacements, false);
+    assert.equal(caps.collarVariants.length, 0);
   });
 
   it("treats accesorios as color-only fallback", () => {

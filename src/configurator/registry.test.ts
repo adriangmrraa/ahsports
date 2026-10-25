@@ -17,7 +17,7 @@ import {
 
 describe("resolveGarmentRenderer — sports-jersey matches", () => {
   it("maps every shirt-like garmentType to sports-jersey", () => {
-    for (const garmentType of ["camiseta", "remera", "chomba"]) {
+    for (const garmentType of ["camiseta", "remera", "chomba", "musculosa"]) {
       const res = resolveGarmentRenderer({ garmentType });
       assert.equal(res.key, "sports-jersey", garmentType);
       assert.equal(res.matched, true, garmentType);
@@ -44,6 +44,43 @@ describe("resolveGarmentRenderer — sports-jersey matches", () => {
   });
 });
 
+describe("resolveGarmentRenderer — dedicated family renderers", () => {
+  it("campera/canguro map to the hoodie renderer", () => {
+    for (const garmentType of ["campera", "canguro"]) {
+      const res = resolveGarmentRenderer({ garmentType });
+      assert.equal(res.key, "hoodie", garmentType);
+      assert.equal(res.matched, true, garmentType);
+    }
+  });
+
+  it("pantalon/short/bermuda/calza map to the bottoms renderer", () => {
+    for (const garmentType of ["pantalon", "short", "bermuda", "calza"]) {
+      const res = resolveGarmentRenderer({ garmentType });
+      assert.equal(res.key, "bottoms", garmentType);
+      assert.equal(res.matched, true, garmentType);
+    }
+  });
+
+  it("conjuntos and bundle kinds map to the bundle renderer", () => {
+    for (const descriptor of [
+      { garmentType: "conjunto" },
+      { productKind: "bundle", garmentType: "camiseta" },
+      { components: [{ garmentType: "camiseta" }] },
+    ]) {
+      const res = resolveGarmentRenderer(descriptor);
+      assert.equal(res.key, "bundle", JSON.stringify(descriptor));
+      assert.equal(res.matched, true);
+    }
+  });
+
+  it("a dedicated family beats a contradictory jersey family", () => {
+    // A "short" labelled parte_superior must NOT render as a jersey.
+    const res = resolveGarmentRenderer({ garmentType: "short", garmentFamily: "parte_superior" });
+    assert.equal(res.key, "bottoms");
+    assert.equal(res.matched, true);
+  });
+});
+
 describe("resolveGarmentRenderer — explicit fallback", () => {
   it("null/empty descriptors fall back without matching", () => {
     for (const descriptor of [null, undefined, {}]) {
@@ -54,17 +91,8 @@ describe("resolveGarmentRenderer — explicit fallback", () => {
     }
   });
 
-  it("known non-jersey garmentTypes fall back explicitly", () => {
-    for (const garmentType of ["campera", "pantalon", "short", "bermuda", "conjunto", "accesorio"]) {
-      const res = resolveGarmentRenderer({ garmentType, garmentFamily: "parte_superior" });
-      assert.equal(res.key, FALLBACK_RENDERER_KEY, garmentType);
-      assert.equal(res.matched, false, garmentType);
-    }
-  });
-
-  it("non-jersey garmentType wins over a jersey family", () => {
-    // A "short" labelled parte_superior must NOT render as a jersey.
-    const res = resolveGarmentRenderer({ garmentType: "short", garmentFamily: "parte_superior" });
+  it("non-garment types (accesorios) fall back honestly", () => {
+    const res = resolveGarmentRenderer({ garmentType: "accesorio", garmentFamily: "parte_superior" });
     assert.equal(res.key, FALLBACK_RENDERER_KEY);
     assert.equal(res.matched, false);
   });

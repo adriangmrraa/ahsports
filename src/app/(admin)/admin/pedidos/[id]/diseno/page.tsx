@@ -14,6 +14,7 @@ import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { ArrowLeft } from "lucide-react";
 import { listFabricVisualProfiles } from "@/lib/configurator/drafts";
+import { loadBundleComponentDescriptors } from "@/lib/configurator/descriptors";
 import { normalizeGarmentConfig } from "@/configurator/model";
 import { OrderDesignEditor } from "./OrderDesignEditor";
 
@@ -132,6 +133,8 @@ export default async function PedidoDisenoPage({
     : [];
   const placedAssets = assetRows.filter((a) => assetRefs.includes(a.id));
   const fabricProfiles = await listFabricVisualProfiles();
+  // Bundle composition: conjuntos render their real component garments.
+  const componentMap = await loadBundleComponentDescriptors(lines.map((l) => l.productId));
 
   return (
     <>
@@ -177,6 +180,7 @@ export default async function PedidoDisenoPage({
           productType: line.productType,
           productKind: line.productKind,
           zones: line.zones,
+          components: componentMap.get(line.productId) ?? [],
         }}
         fabrics={fabricProfiles}
         initialConfig={currentConfig}

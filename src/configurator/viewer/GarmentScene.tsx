@@ -209,6 +209,30 @@ export type GarmentSceneProps = {
   assetUrls?: Record<string, string>;
 };
 
+/**
+ * Geometry identity for decal re-projection: every input that changes the
+ * mesh surface — product classification, collar/sleeves, and each bundle
+ * component's own family — so baked decals never outlive the shape they
+ * were projected onto.
+ */
+function shapeKeyFor(
+  descriptor: ProductGarmentDescriptor | null | undefined,
+  config: GarmentConfig,
+): string {
+  const head = [
+    descriptor?.garmentFamily ?? "x",
+    descriptor?.garmentType ?? "x",
+    descriptor?.productType ?? "x",
+    descriptor?.productKind ?? "x",
+    config.collar,
+    config.sleeves,
+  ].join(":");
+  const parts = (descriptor?.components ?? [])
+    .map((c) => `${c.garmentFamily ?? "x"}.${c.garmentType ?? "x"}.${c.productType ?? "x"}`)
+    .join("+");
+  return parts ? `${head}|${parts}` : head;
+}
+
 export function GarmentScene({ config, descriptor, view, onCaptureBridge, assetUrls }: GarmentSceneProps) {
   const garmentRef = useRef<Group>(null);
   return (
@@ -228,7 +252,7 @@ export function GarmentScene({ config, descriptor, view, onCaptureBridge, assetU
           target={garmentRef}
           placements={config.placements}
           assetUrls={assetUrls ?? {}}
-          shapeKey={`${descriptor?.garmentFamily ?? "x"}:${descriptor?.garmentType ?? "x"}:${descriptor?.productType ?? "x"}:${descriptor?.productKind ?? "x"}:${config.collar}:${config.sleeves}`}
+          shapeKey={shapeKeyFor(descriptor, config)}
         />
       </Suspense>
     </>

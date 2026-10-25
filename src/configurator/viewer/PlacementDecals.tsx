@@ -14,6 +14,7 @@ import {
   TextureLoader,
   Vector3,
   type Group,
+  type Intersection,
 } from "three";
 import type { GarmentZone, VisualAssetPlacement } from "../model";
 
@@ -52,7 +53,47 @@ const ZONE_SURFACES: Record<GarmentZone, { aim: [number, number, number]; out: [
   "back-lower": { aim: [0, 0.8, -0.3], out: [0, -0.03, -1] },
   "sleeve-left": { aim: [0.7, 1.16, 0.08], out: [0.96, -0.06, 0.12] },
   "sleeve-right": { aim: [-0.7, 1.16, 0.08], out: [-0.96, -0.06, 0.12] },
+  // Leg tubes live at x≈±0.27 (bottoms geometry). y=1.08 sits mid-thigh —
+  // below the crotch on every variant yet above even the shortest hem, so
+  // shorts/bermudas still have surface where the ray lands.
+  "leg-left": { aim: [0.27, 1.08, 0.17], out: [0.18, 0, 0.98] },
+  "leg-right": { aim: [-0.27, 1.08, 0.17], out: [-0.18, 0, 0.98] },
 };
+
+/**
+ * Which surface class each zone lives on. Legs only exist on lower garments;
+ * everything else is upper-body. In bundles the raycast only targets the
+ * scope groups that can host the zone — a chest logo can never land on the
+ * pants, a leg logo never on the jersey.
+ */
+const ZONE_SCOPE: Record<GarmentZone, "upper" | "lower"> = {
+  "front-center": "upper",
+  "chest-left": "upper",
+  "chest-right": "upper",
+  "back-upper": "upper",
+  "back-lower": "upper",
+  "sleeve-left": "upper",
+  "sleeve-right": "upper",
+  "leg-left": "lower",
+  "leg-right": "lower",
+};
+
+/**
+ * Raycast scopes inside the garment tree. ProductGarment/BundleGarment tag
+ * each garment's root group with `userData.scope`; when the tree carries no
+ * tags at all (tests, legacy callers) the root itself serves every scope.
+ */
+function resolveScopes(root: Object3D, scope: "upper" | "lower"): Object3D[] {
+  const tagged: Object3D[] = [];
+  let anyTagged = false;
+  root.traverse((node) => {
+    if (typeof node.userData?.scope === "string") {
+      anyTagged = true;
+      if (node.userData.scope === scope) tagged.push(node);
+    }
+  });
+  return anyTagged ? tagged : [root];
+}
 
 const RAY_DISTANCE = 2.6;
 
@@ -100,18 +141,32 @@ export function projectDecalGeometry(
   if (!ZONE_SURFACES[placement.zone]) return null;
 
   target.updateWorldMatrix(true, true);
-  const local = zoneRay(placement.zone, placement);
-  const origin = local.origin.clone().applyMatrix4(target.matrixWorld);
-  const direction = local.direction.clone().transformDirection(target.matrixWorld).normalize();
 
-  const raycaster = new Raycaster(origin, direction);
-  const hits = raycaster
-    .intersectObject(target, true)
-    .filter((h) => h.object instanceof Mesh && h.face);
-  const hit = hits[0];
-  if (!hit || !hit.face || !(hit.object instanceof Mesh)) return null;
+  // Cast against every subtree that can host this zone's surface class and
+  // keep the closest hit — in bundles a zone may be hostable by more than one
+  // component (e.g. two upper garments) and the front-most surface wins.
+  let hit: Intersection | null = null;
+  let bestDistance = Infinity;
+  for (const scope of resolveScopes(target, ZONE_SCOPE[placement.zone])) {
+    scope.updateWorldMatrix(true, true);
+    const local = zoneRay(placement.zone, placement);
+    const origin = local.origin.clone().applyMatrix4(scope.matrixWorld);
+    const direction = local.direction.clone().transformDirection(scope.matrixWorld).normalize();
 
-  const normal = hit.face.normal
+    const raycaster = new Raycaster(origin, direction);
+    const hits = raycaster
+      .intersectObject(scope, true)
+      .filter((h) => h.object instanceof Mesh && h.face);
+    const candidate = hits[0];
+    if (candidate && candidate.distance < bestDistance) {
+      hit = candidate;
+      bestDistance = candidate.distance;
+    }
+  }
+  const face = hit?.face;
+  if (!hit || !face || !(hit.object instanceof Mesh)) return null;
+
+  const normal = face.normal
     .clone()
     .transformDirection(hit.object.matrixWorld)
     .normalize();

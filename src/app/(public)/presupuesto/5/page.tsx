@@ -4,6 +4,7 @@ import { attachments, products, sizes, fabrics, techniques } from "@/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getBusinessInfo } from "@/lib/business";
 import { getPublicEstimate } from "@/lib/public/estimate";
+import { loadBundleComponentDescriptors } from "@/lib/configurator/descriptors";
 import { Step5Form } from "./Step5Form";
 import { StepIndicator } from "../_components/StepIndicator";
 import { PageHero } from "@/components/public/PageHero";
@@ -174,6 +175,7 @@ export default async function PresupuestoStep5({
               garmentType: product.garmentType,
               productType: product.productType,
               productKind: product.productKind,
+              components: (await loadBundleComponentDescriptors([product.id])).get(product.id) ?? [],
             },
             fabricName: designFabricName,
             revisionNo: item.currentRevisionNo,

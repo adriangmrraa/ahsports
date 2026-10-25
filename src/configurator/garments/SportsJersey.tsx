@@ -1,10 +1,12 @@
 import { useEffect, useMemo } from "react";
-import type { GarmentConfig, HexColor } from "../model";
+import type { GarmentConfig, HexColor, ProductGarmentDescriptor } from "../model";
 import { fabricVisualPreset, type FabricVisualPreset } from "../render-tokens";
 import { buildJerseyGeometries, disposeJerseyGeometries } from "../geometry/jersey-geometry";
 
 export type GarmentModelProps = {
   config: GarmentConfig;
+  /** Structural product info — renderers that need variants (bottoms length, bundle components) read it. */
+  descriptor?: ProductGarmentDescriptor | null;
 };
 
 function FabricMaterial({ color, preset }: { color: HexColor; preset: FabricVisualPreset }) {
@@ -49,18 +51,36 @@ export function SportsJersey({ config }: GarmentModelProps) {
       <mesh castShadow geometry={geometries.collar}>
         <FabricMaterial color={accent} preset={fabric} />
       </mesh>
-      <mesh castShadow geometry={geometries.sleeveLeft}>
-        <FabricMaterial color={primary} preset={fabric} />
-      </mesh>
-      <mesh castShadow geometry={geometries.sleeveRight}>
-        <FabricMaterial color={primary} preset={fabric} />
-      </mesh>
-      <mesh geometry={geometries.cuffLeft}>
-        <FabricMaterial color={accent} preset={fabric} />
-      </mesh>
-      <mesh geometry={geometries.cuffRight}>
-        <FabricMaterial color={accent} preset={fabric} />
-      </mesh>
+      {geometries.sleeveLeft && (
+        <mesh castShadow geometry={geometries.sleeveLeft}>
+          <FabricMaterial color={primary} preset={fabric} />
+        </mesh>
+      )}
+      {geometries.sleeveRight && (
+        <mesh castShadow geometry={geometries.sleeveRight}>
+          <FabricMaterial color={primary} preset={fabric} />
+        </mesh>
+      )}
+      {geometries.cuffLeft && (
+        <mesh geometry={geometries.cuffLeft}>
+          <FabricMaterial color={accent} preset={fabric} />
+        </mesh>
+      )}
+      {geometries.cuffRight && (
+        <mesh geometry={geometries.cuffRight}>
+          <FabricMaterial color={accent} preset={fabric} />
+        </mesh>
+      )}
+      {geometries.armholeLeft && (
+        <mesh geometry={geometries.armholeLeft}>
+          <FabricMaterial color={accent} preset={fabric} />
+        </mesh>
+      )}
+      {geometries.armholeRight && (
+        <mesh geometry={geometries.armholeRight}>
+          <FabricMaterial color={accent} preset={fabric} />
+        </mesh>
+      )}
     </group>
   );
 }
