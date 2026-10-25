@@ -1,13 +1,15 @@
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { products, sizes, fabrics, techniques } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { attachments, products, sizes, fabrics, techniques } from "@/db/schema";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getBusinessInfo } from "@/lib/business";
 import { getPublicEstimate } from "@/lib/public/estimate";
+import { loadBundleComponentDescriptors } from "@/lib/configurator/descriptors";
 import { Step5Form } from "./Step5Form";
 import { StepIndicator } from "../_components/StepIndicator";
 import { PageHero } from "@/components/public/PageHero";
 import { WizardEstimateCard } from "../_components/wizard-estimate";
+import { resolveWizardDraft } from "../_components/wizard-draft";
 import {
   WizardRateLimitNotice,
   wizardRateLimitReached,
@@ -15,21 +17,10 @@ import {
 
 export const metadata = { title: "Presupuesto · Paso 5 · AH Sports" };
 
-function parseLineItems(raw: string | undefined): { talle: string; name: string; number: string }[] {
-  if (!raw) return [];
-  return raw
-    .split(",")
-    .filter(Boolean)
-    .map((r) => {
-      const [talle, name, number] = r.split("|");
-      return { talle, name: name ?? "", number: number ?? "" };
-    });
-}
-
 /**
  * F4-12 — Paso 5: confirmación + resumen + costo estimado.
- * Muestra el resumen del flujo y el desglose de precios del motor real;
- * el form confirma → createPublicOrder.
+ * Todo el estado se lee del draft (`?d=`): PII, talles, personalización y el
+ * diseño 3D quedan server-side; el submit solo manda el bearer token.
  */
 export default async function PresupuestoStep5({
   searchParams,
@@ -39,36 +30,60 @@ export default async function PresupuestoStep5({
   if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
 
   const sp = await searchParams;
-  if (!sp.productId || !sp.lineItems) redirect("/presupuesto/2");
-  if (!sp.uploadSessionId || !sp.uploadSessionSecret) redirect("/presupuesto/4");
+  const { token, payload, items } = await resolveWizardDraft(5, sp);
+  const backTo = (step: number) => `/presupuesto/${step}?d=${encodeURIComponent(token)}`;
 
-  const [product] = await db.select({ id: products.id, name: products.name, active: products.active, basePrice: products.basePrice }).from(products).where(eq(products.id, sp.productId)).limit(1);
-  if (!product || !product.active) redirect("/presupuesto/2");
-  const items = parseLineItems(sp.lineItems);
-  const productSizes = await db.select({ id: sizes.id, label: sizes.label }).from(sizes).where(eq(sizes.productId, product.id));
-  const sizeByLabel = new Map(productSizes.map((size) => [size.label, size.id]));
-  const serializedItems = items.map((item) => ({ ...item, sizeId: sizeByLabel.get(item.talle) ?? null }));
-  const quantities = new Map<string | null, number>();
-  for (const item of serializedItems) {
-    // Null-keyed entries ("Sin talle" on size-less products) must also count:
-    // the schema requires ≥1 sizeQuantity and the draft validates totals.
-    quantities.set(item.sizeId, (quantities.get(item.sizeId) ?? 0) + 1);
+  if (!payload.name || !payload.email || !payload.phone) redirect(backTo(1));
+  if (!payload.productId) redirect(backTo(2));
+  if (!payload.lineItems || payload.lineItems.length === 0) redirect(backTo(3));
+
+  const [product] = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      active: products.active,
+      basePrice: products.basePrice,
+      garmentFamily: products.garmentFamily,
+      garmentType: products.garmentType,
+      productType: products.productType,
+      productKind: products.productKind,
+    })
+    .from(products)
+    .where(eq(products.id, payload.productId))
+    .limit(1);
+  if (!product || !product.active) redirect(backTo(2));
+
+  // Labels for the summary list — draft lineItems carry sizeLabel already but
+  // we re-resolve so a label rename mid-flow still shows the live catalog.
+  const lineItems = payload.lineItems;
+  const sizeIds = lineItems.map((i) => i.sizeId).filter((x): x is string => Boolean(x));
+  const sizeRows = sizeIds.length > 0
+    ? await db.select({ id: sizes.id, label: sizes.label }).from(sizes).where(inArray(sizes.id, sizeIds))
+    : [];
+  const labelById = new Map(sizeRows.map((s) => [s.id, s.label]));
+  const displayItems = lineItems.map((item) => ({
+    talle: (item.sizeId ? labelById.get(item.sizeId) : undefined) ?? item.sizeLabel ?? "Sin talle",
+    name: item.individualName ?? "",
+    number: item.individualNumber ?? "",
+  }));
+
+  const quantities = (payload.sizeQuantities ?? []).filter((s) => s.quantity > 0);
+  if (quantities.length === 0) {
+    // Legacy drafts may carry quantities only inside lineItems.
+    const bySize = new Map<string | null, number>();
+    for (const item of lineItems) bySize.set(item.sizeId, (bySize.get(item.sizeId) ?? 0) + 1);
+    quantities.push(...Array.from(bySize, ([sizeId, quantity]) => ({ sizeId, quantity })));
   }
-  const sizeQuantities = Array.from(quantities, ([sizeId, quantity]) => ({ sizeId, quantity }));
 
-  // Option picks flow as URL state; the engine re-validates them anyway.
-  const fabricId = sp.fabricId ?? null;
-  const methodIds = sp.methodIds?.split(",").filter(Boolean) ?? [];
+  const fabricId = payload.fabricId ?? null;
+  const methodIds = payload.techniqueIds ?? [];
+  const estimate = await getPublicEstimate({
+    productId: product.id,
+    sizeQuantities: quantities,
+    fabricId,
+    techniqueIds: methodIds,
+  });
 
-  // Only quote when every line resolved to a real size (or the product has
-  // none): a stray label would otherwise hit the generic recipe and lie.
-  const estimable = productSizes.length === 0 || serializedItems.every((i) => i.sizeId !== null);
-  const estimate = estimable
-    ? await getPublicEstimate({ productId: product.id, sizeQuantities, fabricId, techniqueIds: methodIds })
-    : null;
-
-  // Names for the summary — resolved server-side so the summary stays right
-  // even when the engine cannot produce an estimate.
   const optionNames: string[] = [];
   if (fabricId) {
     const [fabric] = await db.select({ name: fabrics.name }).from(fabrics).where(eq(fabrics.id, fabricId)).limit(1);
@@ -83,11 +98,46 @@ export default async function PresupuestoStep5({
     }
   }
 
+  // Design summary: the current revision config of the priced product.
+  const item = items.find((i) => i.productId === product.id) ?? items[0] ?? null;
+  const designFabricId = item?.config.fabricId ?? fabricId;
+  let designFabricName: string | null = null;
+  if (designFabricId) {
+    const [fabric] = await db.select({ name: fabrics.name }).from(fabrics).where(eq(fabrics.id, designFabricId)).limit(1);
+    designFabricName = fabric?.name ?? null;
+  }
+
+  // Placements reference attachments by id — resolve their public URLs so the
+  // summary viewer draws the same decals the user designed in step 4.
+  const assetRefs = (item?.config.placements ?? [])
+    .map((p) => p.assetRef)
+    .filter((x): x is string => Boolean(x));
+  const assetRows = assetRefs.length > 0
+    ? await db
+        .select({ id: attachments.id, url: attachments.url })
+        .from(attachments)
+        .where(and(inArray(attachments.id, assetRefs), isNull(attachments.deletedAt)))
+    : [];
+  const assetUrls = Object.fromEntries(assetRows.map((a) => [a.id, a.url]));
+
+  const stagedFiles = payload.uploadSessionId
+    ? await db
+        .select({ id: attachments.id })
+        .from(attachments)
+        .where(
+          and(
+            eq(attachments.uploadSessionId, payload.uploadSessionId),
+            isNull(attachments.orderId),
+            isNull(attachments.deletedAt),
+          ),
+        )
+    : [];
+
   const contactInfo = {
-    name: sp.name ?? "",
-    email: sp.email ?? "",
-    phone: sp.phone ?? "",
-    org: sp.org ?? "",
+    name: payload.name,
+    email: payload.email,
+    phone: payload.phone,
+    org: payload.organizationName ?? "",
   };
   const business = await getBusinessInfo();
 
@@ -108,21 +158,29 @@ export default async function PresupuestoStep5({
       <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
         <WizardEstimateCard estimate={estimate} referencePrice={product.basePrice} />
         <Step5Form
-        productName={product.name}
-        fabricId={fabricId}
-        methodIds={methodIds}
-        optionNames={optionNames}
-        items={serializedItems}
-        total={items.length}
-        sizeQuantities={sizeQuantities}
-        contactInfo={contactInfo}
-        type={(sp.type as "new" | "returning") ?? "new"}
-        notes={sp.notes}
-        fileIds={sp.files ? sp.files.split(",").filter(Boolean) : undefined}
-        uploadSessionId={sp.uploadSessionId}
-        uploadSessionSecret={sp.uploadSessionSecret}
-        whatsappPhone={business.whatsappPhone}
-        backHref={`/presupuesto/4?${new URLSearchParams(sp as Record<string, string>).toString()}`}
+          draftToken={token}
+          productName={product.name}
+          optionNames={optionNames}
+          items={displayItems}
+          total={displayItems.length}
+          contactInfo={contactInfo}
+          notes={payload.notes}
+          fileCount={stagedFiles.length}
+          whatsappPhone={business.whatsappPhone}
+          backHref={backTo(4)}
+          design={item ? {
+            config: item.config,
+            descriptor: {
+              garmentFamily: product.garmentFamily,
+              garmentType: product.garmentType,
+              productType: product.productType,
+              productKind: product.productKind,
+              components: (await loadBundleComponentDescriptors([product.id])).get(product.id) ?? [],
+            },
+            fabricName: designFabricName,
+            revisionNo: item.currentRevisionNo,
+            assetUrls,
+          } : null}
         />
       </div>
     </>

@@ -68,6 +68,8 @@ export const garmentType = pgEnum("garment_type", ["remera", "chomba", "camiseta
 export const productKind = pgEnum("product_kind", ["garment", "bundle"]);
 export const bundleSizeMode = pgEnum("bundle_size_mode", ["same_label", "fixed"]);
 export const productTaxonomyNodeKind = pgEnum("product_taxonomy_node_kind", ["category", "subcategory", "type"]);
+export const configuratorDraftStatus = pgEnum("configurator_draft_status", ["active", "converted", "expired", "archived"]);
+export const designRevisionSource = pgEnum("design_revision_source", ["home", "wizard", "admin", "system"]);
 
 // Agent platform enums (P0 — see migration 0010_agent_platform.sql).
 // Multichannel port (migration 0011): the enum gains instagram/facebook/sms/
@@ -193,6 +195,8 @@ export const fabrics = pgTable("fabrics", {
   sublimable: boolean("sublimable").notNull().default(true),
   /** Catalog-level sell-price delta; product_fabrics adds a per-product one. */
   priceModifier: numeric("price_modifier", { precision: 12, scale: 2 }).notNull().default("0"),
+  /** Configurator fabric visual preset id (performance|satin|pique|mesh); NULL → name heuristic. */
+  visualPreset: varchar("visual_preset", { length: 32 }),
   sortOrder: integer("sort_order").notNull().default(0),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -436,6 +440,8 @@ export type PricingSnapshot = {
     materials: Array<{ materialId?: string; name: string; totalQuantity: number; unit: string }>;
     bundleComponents?: Array<{ productId: string; productName: string; quantity: number }>;
     options?: LineOptionsSnapshot;
+    /** 3D configurator design bound to this line — revision id + number for provenance. */
+    design?: { revisionId: string; revisionNo: number; itemId: string };
     techniques?: Array<{
       id: string;
       name: string;
@@ -475,6 +481,8 @@ export const orderLines = pgTable(
     techniqueId: varchar("technique_id", { length: 36 }).references(() => techniques.id),
     fabricId: varchar("fabric_id", { length: 36 }).references(() => fabrics.id),
     recipeId: varchar("recipe_id", { length: 36 }).references(() => bomRecipes.id),
+    /** Active 3D-design revision chosen for this line — full history stays on design_revisions. */
+    designRevisionId: varchar("design_revision_id", { length: 36 }).references((): AnyPgColumn => designRevisions.id, { onDelete: "set null" }),
     quantity: integer("quantity").notNull().default(1),
     unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull().default("0"),
     unitCost: numeric("unit_cost", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -590,6 +598,96 @@ export const applications = pgTable(
   },
   (t) => ({
     attachIdx: index("applications_attach_idx").on(t.attachmentId),
+  }),
+);
+
+/**
+ * 3D configurator draft — opaque server-side holder for the wizard/home flow
+ * state that used to ride in query params. Only the SHA-256 of the public
+ * bearer token is stored (same threat model as upload_sessions); the token
+ * itself lives only in the browser URL/local state.
+ */
+export const configuratorDrafts = pgTable(
+  "configurator_drafts",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    status: configuratorDraftStatus("status").notNull().default("active"),
+    /** Wizard flow state: contact refs, product picks, size quantities, notes. */
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    orderId: varchar("order_id", { length: 36 }).references(() => orders.id, { onDelete: "set null" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tokenHashIdx: uniqueIndex("configurator_drafts_token_hash_idx").on(t.tokenHash),
+    expiryIdx: index("configurator_drafts_expiry_idx").on(t.status, t.expiresAt),
+    orderIdx: index("configurator_drafts_order_idx").on(t.orderId),
+  }),
+);
+
+/** One configured product inside a draft — config is a normalized GarmentConfig. */
+export const configuratorItems = pgTable(
+  "configurator_items",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    draftId: varchar("draft_id", { length: 36 }).notNull().references(() => configuratorDrafts.id, { onDelete: "cascade" }),
+    productId: varchar("product_id", { length: 36 }).notNull().references(() => products.id),
+    config: jsonb("config").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    currentRevisionNo: integer("current_revision_no").notNull().default(0),
+    orderLineId: varchar("order_line_id", { length: 36 }).references(() => orderLines.id, { onDelete: "set null" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    draftIdx: index("configurator_items_draft_idx").on(t.draftId, t.sortOrder),
+    orderLineIdx: index("configurator_items_order_line_idx").on(t.orderLineId),
+    productIdx: index("configurator_items_product_idx").on(t.productId),
+  }),
+);
+
+/**
+ * Immutable design snapshot. Every meaningful config change APPENDS a revision;
+ * rows are never updated in place so home/wizard/admin edits keep full history.
+ */
+export const designRevisions = pgTable(
+  "design_revisions",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    itemId: varchar("item_id", { length: 36 }).notNull().references(() => configuratorItems.id, { onDelete: "cascade" }),
+    revisionNo: integer("revision_no").notNull(),
+    config: jsonb("config").$type<Record<string, unknown>>().notNull(),
+    source: designRevisionSource("source").notNull().default("wizard"),
+    note: text("note"),
+    createdById: varchar("created_by_id", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    itemRevUnique: uniqueIndex("design_revisions_item_rev_idx").on(t.itemId, t.revisionNo),
+  }),
+);
+
+/** Deterministic render artifact bound to a revision + camera view. */
+export const designRenders = pgTable(
+  "design_renders",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+    revisionId: varchar("revision_id", { length: 36 }).notNull().references(() => designRevisions.id, { onDelete: "cascade" }),
+    view: varchar("view", { length: 16 }).notNull(),
+    /** Rendered frame stored through the existing attachment/storage pipeline. */
+    attachmentId: varchar("attachment_id", { length: 36 }).references(() => attachments.id, { onDelete: "set null" }),
+    storageKey: varchar("storage_key", { length: 512 }),
+    /** SHA-256 of the rendered bytes — proves render↔revision provenance. */
+    contentHash: varchar("content_hash", { length: 64 }),
+    width: integer("width"),
+    height: integer("height"),
+    mime: varchar("mime", { length: 64 }).notNull().default("image/png"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    revisionIdx: index("design_renders_revision_idx").on(t.revisionId, t.createdAt),
   }),
 );
 
@@ -766,6 +864,29 @@ export const attachmentsRelations = relations(attachments, ({ one, many }) => ({
 
 export const uploadSessionsRelations = relations(uploadSessions, ({ many }) => ({
   attachments: many(attachments),
+}));
+
+export const configuratorDraftsRelations = relations(configuratorDrafts, ({ one, many }) => ({
+  order: one(orders, { fields: [configuratorDrafts.orderId], references: [orders.id] }),
+  items: many(configuratorItems),
+}));
+
+export const configuratorItemsRelations = relations(configuratorItems, ({ one, many }) => ({
+  draft: one(configuratorDrafts, { fields: [configuratorItems.draftId], references: [configuratorDrafts.id] }),
+  product: one(products, { fields: [configuratorItems.productId], references: [products.id] }),
+  orderLine: one(orderLines, { fields: [configuratorItems.orderLineId], references: [orderLines.id] }),
+  revisions: many(designRevisions),
+}));
+
+export const designRevisionsRelations = relations(designRevisions, ({ one, many }) => ({
+  item: one(configuratorItems, { fields: [designRevisions.itemId], references: [configuratorItems.id] }),
+  createdBy: one(users, { fields: [designRevisions.createdById], references: [users.id] }),
+  renders: many(designRenders),
+}));
+
+export const designRendersRelations = relations(designRenders, ({ one }) => ({
+  revision: one(designRevisions, { fields: [designRenders.revisionId], references: [designRevisions.id] }),
+  attachment: one(attachments, { fields: [designRenders.attachmentId], references: [attachments.id] }),
 }));
 
 export const paymentsRelations = relations(payments, ({ one, many }) => ({

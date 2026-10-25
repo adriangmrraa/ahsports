@@ -150,7 +150,12 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
             <LinkButton href={`/admin/pedidos/${order.id}/planilla`} variant="secondary" size="sm">
               Planilla
             </LinkButton>
-            <Soon>Arte</Soon>
+            <LinkButton href={`/admin/pedidos/${order.id}/arte`} variant="secondary" size="sm">
+              Arte
+            </LinkButton>
+            <LinkButton href={`/admin/pedidos/${order.id}/diseno`} variant="secondary" size="sm">
+              Diseño 3D
+            </LinkButton>
             <LinkButton href={`/admin/pedidos/${order.id}/ficha-tecnica`} variant="secondary" size="sm">
               Ficha técnica
             </LinkButton>

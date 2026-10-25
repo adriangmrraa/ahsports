@@ -1,8 +1,15 @@
-import { Step4Form } from "./Step4Form";
+import { redirect } from "next/navigation";
+import { db } from "@/db/client";
+import { attachments, products } from "@/db/schema";
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { Step4Designer } from "./Step4Designer";
 import { StepIndicator } from "../_components/StepIndicator";
 import { PageHero } from "@/components/public/PageHero";
 import { WizardEstimateChip } from "../_components/wizard-estimate";
-import { getPublicEstimate, resolveWizardSizeQuantities } from "@/lib/public/estimate";
+import { resolveWizardDraft } from "../_components/wizard-draft";
+import { getPublicEstimate } from "@/lib/public/estimate";
+import { listFabricVisualProfiles } from "@/lib/configurator/drafts";
+import { loadBundleComponentDescriptors } from "@/lib/configurator/descriptors";
 import {
   WizardRateLimitNotice,
   wizardRateLimitReached,
@@ -11,9 +18,10 @@ import {
 export const metadata = { title: "Presupuesto · Paso 4 · AH Sports" };
 
 /**
- * F4-11 — Paso 4: carga de archivos (escudos/logos/sponsors/planillas).
- * Server wrapper que pasa los params del flujo al form client y mantiene
- * visible el estimado del motor de pricing.
+ * F4-11 — Paso 4: diseño 3D + archivos. Mismo GarmentConfigurator que la home,
+ * bloqueado al producto cotizado en el paso 2; el estado vive en el draft y
+ * los adjuntos quedan reclamados al confirmar — el secreto de upload jamás
+ * sale del sessionStorage del navegador.
  */
 export default async function PresupuestoStep4({
   searchParams,
@@ -23,37 +31,85 @@ export default async function PresupuestoStep4({
   if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
 
   const sp = await searchParams;
-  const estimate = sp.productId
-    ? await getPublicEstimate({
-        productId: sp.productId,
-        sizeQuantities: await resolveWizardSizeQuantities({
-          productId: sp.productId,
-          sq: sp.sq,
-          sizeQuantities: sp.sizeQuantities,
-          total: Number(sp.total || 0),
-        }),
-        fabricId: sp.fabricId ?? null,
-        techniqueIds: sp.methodIds?.split(",").filter(Boolean) ?? null,
+  const { token, payload, items } = await resolveWizardDraft(4, sp);
+  if (!payload.productId) redirect(`/presupuesto/2?d=${encodeURIComponent(token)}`);
+
+  const [productRows, fabricProfiles] = await Promise.all([
+    db
+      .select({
+        id: products.id,
+        name: products.name,
+        sku: products.sku,
+        garmentFamily: products.garmentFamily,
+        garmentType: products.garmentType,
+        productType: products.productType,
+        productKind: products.productKind,
+        zones: products.zones,
       })
-    : null;
+      .from(products)
+      .where(eq(products.active, true))
+      .orderBy(asc(products.name)),
+    listFabricVisualProfiles(),
+  ]);
+
+  // Bundle composition: conjuntos render their real component garments.
+  const componentMap = await loadBundleComponentDescriptors(productRows.map((p) => p.id));
+  const productsWithComponents = productRows.map((p) => ({
+    ...p,
+    components: componentMap.get(p.id) ?? [],
+  }));
+
+  const product = productsWithComponents.find((p) => p.id === payload.productId);
+  if (!product) redirect(`/presupuesto/2?d=${encodeURIComponent(token)}`);
+
+  // Attachments already staged under this draft's upload session survive a
+  // reload: they are listed server-side from the bound session id.
+  const staged = payload.uploadSessionId
+    ? await db
+        .select({ id: attachments.id, url: attachments.url, name: attachments.name, kind: attachments.kind })
+        .from(attachments)
+        .where(
+          and(
+            eq(attachments.uploadSessionId, payload.uploadSessionId),
+            isNull(attachments.orderId),
+            isNull(attachments.deletedAt),
+          ),
+        )
+    : [];
+
+  const item = items.find((i) => i.productId === product.id);
+  const estimate = await getPublicEstimate({
+    productId: product.id,
+    sizeQuantities: (payload.sizeQuantities ?? []).filter((s) => s.quantity > 0),
+    fabricId: payload.fabricId ?? null,
+    techniqueIds: payload.techniqueIds ?? null,
+  });
 
   return (
     <>
       <PageHero
         crumb="Presupuesto"
-        eyebrow="Paso 4 de 5 · Archivos"
+        eyebrow="Paso 4 de 5 · Diseño"
         title={
           <>
-            Cargá tus <span className="text-accent">archivos.</span>
+            Diseñá tu <span className="text-accent">prenda.</span>
           </>
         }
-        lead="Escudos, sponsors, logos o planillas (opcional). Podés seguir sin archivos — el diseño lo trabajamos juntos."
+        lead="Colores, tela, cuello, mangas y archivos. Todo lo que elijas queda guardado en tu diseño."
       >
         <StepIndicator current={4} />
-        {sp.productId && <WizardEstimateChip estimate={estimate} />}
+        <WizardEstimateChip estimate={estimate} />
       </PageHero>
-      <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
-        <Step4Form initialParams={sp} />
+      <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-12">
+        <Step4Designer
+          draftToken={token}
+          products={productsWithComponents}
+          fabrics={fabricProfiles}
+          lockProductId={product.id}
+          productName={product.name}
+          initialConfig={item?.config ?? { fabricId: payload.fabricId ?? undefined }}
+          initialAssets={staged}
+        />
       </div>
     </>
   );

@@ -5,8 +5,10 @@ import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { updateConfiguratorDraftPayload } from "@/app/actions/configurator";
 
 interface Row {
+  sizeId: string | null;
   talle: string;
   name: string;
   number: string;
@@ -14,26 +16,43 @@ interface Row {
 
 /**
  * F4-10 — Paso 3 form: una fila por prenda con nombre/número.
- * Estado serializado a /presupuesto/4 (lineItems) via search params.
+ * Estado persistido en el draft del configurador (`?d=`) — la URL ya no
+ * transporta PII de jugadores ni cantidades.
  */
 export function Step3Form({
+  draftToken,
   productName,
   sizes,
   total,
   noSize,
+  initialRows,
 }: {
+  draftToken: string;
   productName: string;
-  sizes: { label: string; qty: number }[];
+  sizes: { id: string | null; label: string; qty: number }[];
   total: number;
   noSize?: boolean;
+  initialRows?: { sizeId: string | null; sizeLabel?: string; individualName?: string | null; individualNumber?: string | null }[];
 }) {
   const router = useRouter();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>(() => {
+    // Back-navigation restores what the draft already holds when the garment
+    // count still matches; otherwise rows are rebuilt from current quantities.
+    if (initialRows && initialRows.length === total) {
+      return initialRows.map((r) => ({
+        sizeId: r.sizeId,
+        talle: r.sizeLabel || "Sin talle",
+        name: r.individualName ?? "",
+        number: r.individualNumber ?? "",
+      }));
+    }
     const r: Row[] = [];
     if (noSize) {
-      for (let i = 0; i < total; i++) r.push({ talle: "Sin talle", name: "", number: "" });
+      for (let i = 0; i < total; i++) r.push({ sizeId: null, talle: "Sin talle", name: "", number: "" });
     } else {
-      for (const s of sizes) for (let i = 0; i < s.qty; i++) r.push({ talle: s.label, name: "", number: "" });
+      for (const s of sizes) for (let i = 0; i < s.qty; i++) r.push({ sizeId: s.id, talle: s.label, name: "", number: "" });
     }
     return r;
   });
@@ -42,13 +61,26 @@ export function Step3Form({
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
   }
 
-  function goNext(e: React.FormEvent) {
+  async function goNext(e: React.FormEvent) {
     e.preventDefault();
-    const lineItems = rows.map((r) => `${r.talle}|${r.name.replace(/[|]/g, "").trim()}|${r.number.replace(/[|]/g, "").trim()}`).join(",");
-    const params = new URLSearchParams(window.location.search);
-    params.set("productName", productName);
-    params.set("lineItems", lineItems);
-    router.push(`/presupuesto/4?${params.toString()}`);
+    if (saving) return;
+    setSaving(true);
+    setError(null);
+    const res = await updateConfiguratorDraftPayload(draftToken, {
+      lineItems: rows.map((r) => ({
+        sizeId: r.sizeId,
+        sizeLabel: r.talle,
+        individualName: r.name.trim() || null,
+        individualNumber: r.number.trim() || null,
+      })),
+      step: 3,
+    });
+    setSaving(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    router.push(`/presupuesto/4?d=${encodeURIComponent(draftToken)}`);
   }
 
   if (total === 0) {
@@ -61,6 +93,7 @@ export function Step3Form({
 
   return (
     <form onSubmit={goNext} className="flex w-full flex-col gap-5">
+      <p className="sr-only">{productName}</p>
       {/* Mobile: una card por prenda */}
       <div className="flex flex-col gap-3 sm:hidden">
         {rows.map((r, i) => (
@@ -114,6 +147,9 @@ export function Step3Form({
         </table>
       </div>
 
+      {error && (
+        <p className="rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">{error}</p>
+      )}
       <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button
           type="button"
@@ -122,8 +158,8 @@ export function Step3Form({
         >
           <ArrowLeft className="h-4 w-4" aria-hidden /> Volver
         </button>
-        <Button type="submit" size="lg" className="border-accent bg-accent text-on-accent hover:border-accent-strong hover:bg-accent-strong hover:text-on-accent">
-          Siguiente →
+        <Button type="submit" size="lg" disabled={saving} className="border-accent bg-accent text-on-accent hover:border-accent-strong hover:bg-accent-strong hover:text-on-accent">
+          {saving ? "Guardando…" : "Siguiente →"}
         </Button>
       </div>
     </form>

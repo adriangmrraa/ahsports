@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { Hero } from "@/components/public/home/Hero";
+import { ConfiguratorSection } from "@/components/public/home/ConfiguratorSection";
 import { ProofStrip } from "@/components/public/home/ProofStrip";
 import { HowItWorks } from "@/components/public/home/HowItWorks";
 import { Categories } from "@/components/public/home/Categories";
@@ -18,8 +19,13 @@ export const metadata: Metadata = {
  * Server component — toda la animación es CSS; los datos de negocio vienen
  * de settings vía getPublicBusinessInfo (deduplicada por request).
  */
-export default async function PublicLanding() {
+export default async function PublicLanding({
+  searchParams,
+}: {
+  searchParams: Promise<{ d?: string }>;
+}) {
   const business = await getPublicBusinessInfo();
+  const { d } = await searchParams;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -66,6 +72,7 @@ export default async function PublicLanding() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <Hero />
+      <ConfiguratorSection draftToken={d} />
       <ProofStrip />
       <HowItWorks />
       <Categories />

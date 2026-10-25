@@ -3,6 +3,7 @@ import type { LineOptionsSnapshot, MaterialConsumptionSnapshot, PricingSnapshot 
 import {
   applications,
   bomItems,
+  designRevisions,
   fabrics,
   productBundleItems,
   productBundles,
@@ -81,6 +82,8 @@ export type QuoteResult = {
     bundleComponents?: Array<{ productId: string; productName: string; quantity: number }>;
     /** Present only when the line priced through the options model (fabricId set). */
     options?: LineOptionsSnapshot;
+    /** Immutable design revision this line was quoted from (3D configurator). */
+    design?: { revisionId: string; revisionNo: number; itemId: string };
   }>;
   totals: { cost: number; price: number; margin: number; marginPercent: number };
   rule: { id: string; name: string; marginPercent: number; urgentSurcharge: number; minAdvancePercent: number; rounding: number };
@@ -131,6 +134,27 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
   };
   const lines: QuoteResult["lines"] = [];
 
+  // 3D-configurator provenance: order_lines.design_revision_id → the design
+  // ref stamped on the quote snapshot so a priced line always carries the
+  // immutable revision it was quoted from.
+  const orderLineIds = input.lines.flatMap((l) => (l.orderLineId ? [l.orderLineId] : []));
+  const designByLineId = new Map<string, { revisionId: string; revisionNo: number; itemId: string }>();
+  if (orderLineIds.length > 0) {
+    const designRows = await db
+      .select({
+        orderLineId: orderLines.id,
+        revisionId: designRevisions.id,
+        revisionNo: designRevisions.revisionNo,
+        itemId: designRevisions.itemId,
+      })
+      .from(orderLines)
+      .innerJoin(designRevisions, eq(designRevisions.id, orderLines.designRevisionId))
+      .where(inArray(orderLines.id, orderLineIds));
+    for (const row of designRows) {
+      designByLineId.set(row.orderLineId, { revisionId: row.revisionId, revisionNo: row.revisionNo, itemId: row.itemId });
+    }
+  }
+
   for (const line of input.lines) {
     const [product] = await db.select().from(products).where(eq(products.id, line.productId)).limit(1);
     if (!product) throw new Error(`Producto ${line.productId} no encontrado.`);
@@ -140,7 +164,10 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
 
     if (product.productKind === "bundle") {
       if (lineTechniqueIds.length > 0) throw new Error(`El conjunto "${product.name}" deriva sus costos de las prendas componentes y no acepta técnicas propias.`);
-      lines.push(await quoteBundleLine({ line, product, rule, urgent: input.urgent, pricingRuleId: input.pricingRuleId }));
+      const bundleLine = await quoteBundleLine({ line, product, rule, urgent: input.urgent, pricingRuleId: input.pricingRuleId });
+      const bundleDesign = line.orderLineId ? designByLineId.get(line.orderLineId) : undefined;
+      if (bundleDesign) bundleLine.design = bundleDesign;
+      lines.push(bundleLine);
       continue;
     }
 
@@ -399,6 +426,7 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
       orderLineId: line.orderLineId,
       productId: line.productId,
       productName: product.name,
+      design: line.orderLineId ? designByLineId.get(line.orderLineId) : undefined,
       quantity: line.quantity,
       unitCost: round2(lineCost / line.quantity),
       unitPrice: round2(linePrice / line.quantity),

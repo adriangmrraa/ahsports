@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { formatARS } from "@/lib/public/format";
 import { labelProductTaxonomy } from "@/lib/product-taxonomy";
 import { estimateWizardQuote } from "../_components/estimate-action";
+import { updateConfiguratorDraftPayload } from "@/app/actions/configurator";
 import type { PublicEstimate } from "@/lib/public/estimate";
 import { cn } from "@/lib/utils";
 
@@ -45,18 +46,36 @@ const SUBCATEGORY_ORDER = ["prendas", "conjuntos", "mochilas_infantiles", "bolso
  * El estimado sale del motor de pricing real (estimateWizardQuote) — nunca
  * de una cuenta hecha en el cliente.
  */
-export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProduct[]; initialProductId?: string }) {
+export function Step2Form({
+  catalog,
+  draftToken,
+  initialProductId,
+  initialQuantities,
+  initialDirectQuantity,
+  initialFabricId,
+  initialMethodIds,
+}: {
+  catalog: CatalogProduct[];
+  draftToken: string;
+  initialProductId?: string;
+  initialQuantities?: Record<string, number>;
+  initialDirectQuantity?: number;
+  initialFabricId?: string;
+  initialMethodIds?: string[];
+}) {
   const router = useRouter();
   const [productId, setProductId] = useState(initialProductId ?? catalog[0]?.id ?? "");
   const product = catalog.find((p) => p.id === productId);
 
-  const [qty, setQty] = useState<Record<string, number>>({});
-  const [directQuantity, setDirectQuantity] = useState(0);
+  const [qty, setQty] = useState<Record<string, number>>(initialQuantities ?? {});
+  const [directQuantity, setDirectQuantity] = useState(initialDirectQuantity ?? 0);
 
   // Stackable option selection: one fabric + any mix of the methods the
   // product offers (sublimado can stack with DTF/bordado on top of it).
-  const [fabricId, setFabricId] = useState("");
-  const [methodIds, setMethodIds] = useState<string[]>([]);
+  const [fabricId, setFabricId] = useState(initialFabricId ?? "");
+  const [methodIds, setMethodIds] = useState<string[]>(initialMethodIds ?? []);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const sizeQuantities = useMemo(() => {
     if (!product) return [];
@@ -166,24 +185,27 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
     setMethodIds((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
   }
 
-  function goNext(e: React.FormEvent) {
+  async function goNext(e: React.FormEvent) {
     e.preventDefault();
-    if (!product || total < minOrder || !optionsReady) return;
-    const sizesParam = product.sizes
-      .map((s) => `${s.label}:${qty[s.id] || 0}`)
-      .filter((x) => !x.endsWith(":0"))
-      .join(",");
-    const params = new URLSearchParams(window.location.search);
-    params.set("productId", product.id);
-    params.set("productName", product.name);
-    params.set("sizeQuantities", sizesParam);
-    params.set("sq", sizeQuantities.map((x) => `${x.sizeId ?? ""}:${x.quantity}`).join(","));
-    params.set("total", String(total));
-    if (fabricId) params.set("fabricId", fabricId);
-    else params.delete("fabricId");
-    if (methodIds.length > 0) params.set("methodIds", methodIds.join(","));
-    else params.delete("methodIds");
-    router.push(`/presupuesto/3?${params.toString()}`);
+    if (!product || total < minOrder || !optionsReady || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    // Everything goes server-side on the draft; the URL only carries `d`.
+    const res = await updateConfiguratorDraftPayload(draftToken, {
+      productId: product.id,
+      fabricId: fabricId || null,
+      techniqueIds: methodIds,
+      sizeQuantities,
+      // Sizes are stale for other steps until step 3 fills the items.
+      lineItems: undefined,
+      step: 2,
+    });
+    setSaving(false);
+    if (!res.ok) {
+      setSaveError(res.error);
+      return;
+    }
+    router.push(`/presupuesto/3?d=${encodeURIComponent(draftToken)}`);
   }
 
   return (
@@ -488,8 +510,11 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
             </div>
           )}
 
-          <Button type="submit" size="lg" disabled={total < minOrder || !optionsReady} className="border-accent bg-accent text-on-accent hover:border-accent-strong hover:bg-accent-strong hover:text-on-accent">
-            Siguiente →
+          {saveError && (
+            <p className="rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">{saveError}</p>
+          )}
+          <Button type="submit" size="lg" disabled={total < minOrder || !optionsReady || saving} className="border-accent bg-accent text-on-accent hover:border-accent-strong hover:bg-accent-strong hover:text-on-accent">
+            {saving ? "Guardando…" : "Siguiente →"}
           </Button>
         </>
       )}

@@ -446,6 +446,45 @@ export const createPublicOrderSchema = z.object({
   }
 });
 
+/**
+ * Draft-token order creation: the client only proves possession of the
+ * configurator draft; every flow field (contact, product, sizes, PII items,
+ * upload session) is read server-side from the draft payload.
+ */
+export const createPublicOrderDraftSchema = z.object({
+  draftToken: z.string().min(10).max(80),
+}).strict();
+
+/**
+ * Authoritative shape a configurator draft payload must satisfy to become an
+ * order. Mirrors createPublicOrderSchema's flow fields minus browser-held
+ * secrets — the upload session is bound to the draft at upload time, so the
+ * bearer token is the ownership proof. Non-strict on purpose: the draft
+ * payload is forward-compatible and may carry UI fields (step, labels…).
+ */
+export const draftOrderDataSchema = z.object({
+  type: z.enum(["new", "returning"]).default("new"),
+  name: z.string().trim().min(1).max(255),
+  email: z.string().trim().email("Email inválido").max(255),
+  phone: z.string().trim().min(3).max(64),
+  organizationName: z.string().trim().min(1).max(255).optional(),
+  notes: z.string().trim().max(4000).optional(),
+  productId: z.string().uuid(),
+  fabricId: z.string().uuid().optional().nullable(),
+  techniqueId: z.string().uuid().optional().nullable(),
+  techniqueIds: z.array(z.string().uuid()).max(20).optional(),
+  sizeQuantities: z.array(z.object({
+    sizeId: z.string().uuid().nullable(),
+    quantity: z.number().int().min(1).max(1000),
+  })).min(1).max(32),
+  lineItems: z.array(z.object({
+    sizeId: z.string().uuid().nullable(),
+    individualName: z.string().trim().max(128).optional().nullable(),
+    individualNumber: z.string().trim().max(32).optional().nullable(),
+  })).min(1).max(1000),
+  uploadSessionId: z.string().uuid().optional(),
+});
+
 /** Public pre-order upload metadata. The file itself is validated separately. */
 export const publicAttachmentUploadSchema = z.object({
   kind: attachmentKindSchema,
