@@ -27,6 +27,7 @@ import {
 } from "../model";
 import { productCapabilities, type ProductCapabilities } from "../capabilities";
 import { GarmentViewer, type GarmentViewerHandle } from "../viewer/GarmentViewer";
+import { ViewerErrorBoundary } from "../viewer/ViewerErrorBoundary";
 import { AttachmentPanel, ControlSection, SegmentedControl, SelectField, SwatchField, type UploadedAsset } from "./controls";
 
 /**
@@ -368,14 +369,16 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
       <div className={cn("grid w-full gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,1fr)]", className)} data-mode={mode}>
         {/* Viewer — the protagonist */}
         <div className="relative">
-          <GarmentViewer
-            ref={viewerRef}
-            config={config}
-            descriptor={product}
-            view={config.view}
-            onViewChange={(view: ViewPreset) => update({ view })}
-            assetUrls={assetUrls}
-          />
+          <ViewerErrorBoundary>
+            <GarmentViewer
+              ref={viewerRef}
+              config={config}
+              descriptor={product}
+              view={config.view}
+              onViewChange={(view: ViewPreset) => update({ view })}
+              assetUrls={assetUrls}
+            />
+          </ViewerErrorBoundary>
           {fallbackNotice && (
             <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-4 text-on-navy-variant">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />

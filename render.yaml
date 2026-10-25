@@ -3,7 +3,7 @@ services:
     name: ah-sports-os
     runtime: node
     plan: starter
-    buildCommand: npm install && npm run db:migrate && npm run build
+    buildCommand: NODE_ENV=development npm install && npm run db:migrate && NODE_ENV=production npm run build && npm prune --omit=dev
     startCommand: npm start
     healthCheckPath: /
     envVars:
