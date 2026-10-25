@@ -40,6 +40,8 @@ export const visualAssetPlacementSchema = z.object({
 export const garmentConfigSchema = z.object({
   colors: garmentColorsSchema,
   fabric: z.enum(FABRIC_PRESET_IDS),
+  /** Real catalog fabrics.id — separate from the renderer preset so order lines keep the priced fabric. */
+  fabricId: z.string().min(1).max(64).nullable().default(null),
   collar: z.enum(COLLAR_VARIANTS),
   sleeves: z.enum(SLEEVE_VARIANTS),
   view: z.enum(VIEW_PRESETS),

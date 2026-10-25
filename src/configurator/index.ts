@@ -52,4 +52,17 @@ export { GARMENT_RENDERERS, ProductGarment, type ProductGarmentProps } from "./r
 
 export { GarmentViewer, type GarmentViewerHandle, type GarmentViewerProps } from "./viewer/GarmentViewer";
 
+export {
+  GarmentConfigurator,
+  type ConfiguratorFabric,
+  type ConfiguratorMode,
+  type ConfiguratorProduct,
+  type ConfiguratorState,
+  type ConfiguratorUploader,
+  type GarmentConfiguratorHandle,
+  type GarmentConfiguratorProps,
+} from "./ui/GarmentConfigurator";
+
+export { mapProductZoneLabel, productCapabilities, type ProductCapabilities } from "./capabilities";
+
 export { JERSEY_DIMENSIONS } from "./geometry/jersey-geometry";

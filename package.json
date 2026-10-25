@@ -15,7 +15,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "check:agent-tools": "tsx scripts/check-agent-tools.mts",
     "test": "npm run test:agents",
-    "test:agents": "node --import tsx --import ./test/register-server-only-stub.mjs --test --test-force-exit src/lib/attribution/ref-code-sign.test.ts src/lib/channels/signature.test.ts src/lib/channels/intake.test.ts src/lib/ai/config.test.ts src/lib/ai/providers-catalog.test.ts src/lib/messaging/auto-reply.test.ts src/lib/messaging/ingress.test.ts src/lib/messaging/inbound-pipeline.test.ts src/lib/whatsapp/session-policy.test.ts src/lib/whatsapp/anti-loop.test.ts src/lib/whatsapp/sales-tools.test.ts src/lib/telegram/confirmations.test.ts src/lib/storage.test.ts src/lib/product-options.test.ts src/configurator/model.test.ts src/configurator/registry.test.ts src/configurator/schemas.test.ts"
+    "test:agents": "node --import tsx --import ./test/register-server-only-stub.mjs --test --test-force-exit src/lib/attribution/ref-code-sign.test.ts src/lib/channels/signature.test.ts src/lib/channels/intake.test.ts src/lib/ai/config.test.ts src/lib/ai/providers-catalog.test.ts src/lib/messaging/auto-reply.test.ts src/lib/messaging/ingress.test.ts src/lib/messaging/inbound-pipeline.test.ts src/lib/whatsapp/session-policy.test.ts src/lib/whatsapp/anti-loop.test.ts src/lib/whatsapp/sales-tools.test.ts src/lib/telegram/confirmations.test.ts src/lib/storage.test.ts src/lib/product-options.test.ts src/configurator/model.test.ts src/configurator/registry.test.ts src/configurator/schemas.test.ts src/configurator/capabilities.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

@@ -63,7 +63,10 @@ export type VisualAssetPlacement = {
 
 export type GarmentConfig = {
   colors: GarmentColors;
+  /** Renderer fabric preset — drives PBR response. */
   fabric: FabricPresetId;
+  /** Real catalog fabrics.id chosen by the user (null → renderer default). */
+  fabricId: string | null;
   collar: CollarVariant;
   sleeves: SleeveVariant;
   view: ViewPreset;
@@ -93,6 +96,7 @@ export type ProductGarmentDescriptor = {
 export type GarmentConfigInput = {
   colors?: Partial<Record<keyof GarmentColors, unknown>> | null;
   fabric?: unknown;
+  fabricId?: unknown;
   collar?: unknown;
   sleeves?: unknown;
   view?: unknown;
@@ -106,6 +110,7 @@ export const DEFAULT_GARMENT_CONFIG: GarmentConfig = {
     accent: SCENE_TOKENS.garmentAccent,
   },
   fabric: "performance",
+  fabricId: null,
   collar: "crew",
   sleeves: "short",
   view: "front",
@@ -171,6 +176,7 @@ export function normalizeGarmentConfig(input?: GarmentConfigInput | null): Garme
       accent: pickColor(colors.accent, base.colors.accent),
     },
     fabric: pickVariant(FABRIC_PRESET_IDS, input.fabric, base.fabric),
+    fabricId: typeof input.fabricId === "string" && input.fabricId.length > 0 ? input.fabricId : null,
     collar: pickVariant(COLLAR_VARIANTS, input.collar, base.collar),
     sleeves: pickVariant(SLEEVE_VARIANTS, input.sleeves, base.sleeves),
     view: pickVariant(VIEW_PRESETS, input.view, base.view),
