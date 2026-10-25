@@ -4,7 +4,7 @@ import { Component, type ReactNode } from "react";
 import { Shirt } from "lucide-react";
 
 type Props = { children: ReactNode; className?: string };
-type State = { crashed: boolean; retryNonce: number };
+type State = { crashed: boolean; retryNonce: number; detail: string | null };
 
 /**
  * Island guard for the 3D viewer: if the scene throws (WebGL, chunk load,
@@ -12,10 +12,14 @@ type State = { crashed: boolean; retryNonce: number };
  * degrades to this static fallback instead of white-paging the whole route.
  */
 export class ViewerErrorBoundary extends Component<Props, State> {
-  state: State = { crashed: false, retryNonce: 0 };
+  state: State = { crashed: false, retryNonce: 0, detail: null };
 
-  static getDerivedStateFromError(): State {
-    return { crashed: true, retryNonce: 0 };
+  static getDerivedStateFromError(error: unknown): State {
+    const detail =
+      error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : String(error ?? "unknown");
+    return { crashed: true, retryNonce: 0, detail };
   }
 
   componentDidCatch(error: unknown) {
@@ -40,6 +44,16 @@ export class ViewerErrorBoundary extends Component<Props, State> {
           >
             Reintentar vista 3D
           </button>
+          {this.state.detail && (
+            <details className="mt-2 max-w-full text-left">
+              <summary className="cursor-pointer text-[10px] uppercase tracking-wide text-on-navy-variant">
+                Detalle técnico
+              </summary>
+              <p className="mt-1 max-h-24 overflow-auto break-all rounded bg-navy-900/60 p-2 font-mono text-[10px] leading-relaxed text-on-navy-variant">
+                {this.state.detail}
+              </p>
+            </details>
+          )}
         </div>
       );
     }

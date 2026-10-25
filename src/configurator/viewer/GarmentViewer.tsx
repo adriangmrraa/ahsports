@@ -48,10 +48,11 @@ type WebGLSupport = "unknown" | "supported" | "unsupported" | "lost";
 function detectWebGLSupport(): boolean {
   try {
     const canvas = document.createElement("canvas");
-    const context = (
-      window.WebGLRenderingContext &&
-      (canvas.getContext("webgl2") ?? canvas.getContext("webgl"))
-    );
+    // WebGL2 strictly: three r163+ dropped WebGL1, so a device that only
+    // hands out a "webgl" context would mount and then throw inside the
+    // renderer init. Probing exactly what the renderer needs keeps those
+    // devices on the honest fallback panel instead of a crash.
+    const context = window.WebGLRenderingContext && canvas.getContext("webgl2");
     if (!context) return false;
     // Safari/iOS enforces a much tighter WebGL-context budget than desktop
     // browsers. The capability probe must release its throw-away context or
