@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { updateSetting } from "@/app/actions/settings";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { FieldHint } from "@/components/admin/FieldHint";
 
 const FIELDS = [
   { key: "taller_nombre", label: "Nombre del taller" },
-  { key: "taller_cbu", label: "CBU" },
+  { key: "taller_cbu", label: "CBU", hint: "Clave bancaria donde el cliente te transfiere la seña." },
   { key: "taller_contacto_email", label: "Email de contacto" },
   { key: "taller_contacto_phone", label: "Teléfono de contacto" },
   { key: "taller_direccion", label: "Dirección" },
@@ -56,6 +57,7 @@ export function WorkshopSettingsForm({ initial }: { initial: Record<string, unkn
               onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
               placeholder={f.label}
             />
+            {"hint" in f && f.hint && <FieldHint>{f.hint}</FieldHint>}
           </label>
         ))}
       </div>

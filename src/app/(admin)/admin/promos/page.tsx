@@ -6,6 +6,8 @@ import { formatMoneyAr } from "@/lib/telegram/format";
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
+import { PageGuide } from "@/components/admin/PageGuide";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { Plus } from "lucide-react";
 import { PromoRowActions } from "./PromoRowActions";
 
@@ -22,16 +24,19 @@ export default async function PromosPage() {
         subtitle={`${rows.length} promociones cargadas · las activas se exponen en /api/promotions y al agente de WhatsApp`}
         action={<LinkButton href="/admin/promos/nuevo"><Plus className="w-4 h-4" /> Nueva promo</LinkButton>}
       />
+      <PageGuide
+        what="Una promo es un combo con nombre: varios productos y cantidades que se ofrecen juntos."
+        whatFor="Las activas se publican en la API y las usa el agente de WhatsApp. Sin precio propio, se cobra la suma real."
+        nextStep={{ href: "/admin/promos/nuevo", label: "Nueva promo" }}
+      />
+
       {rows.length === 0 ? (
-        <Card>
-          <div className="text-center py-10">
-            <p className="label-caps text-primary mb-2">Sin promociones</p>
-            <p className="text-sm text-on-surface-variant mb-4">
-              Las promos nombran un combo de productos del catálogo con precio promocional opcional.
-            </p>
-            <LinkButton href="/admin/promos/nuevo">Cargar primera promo</LinkButton>
-          </div>
-        </Card>
+        <AdminEmptyState
+          title="Sin promociones"
+          what="Las promos empaquetan productos del catálogo en una oferta con nombre y precio opcional."
+          whatFor="Creá la primera con los productos y cantidades que querés ofrecer juntos."
+          action={<LinkButton href="/admin/promos/nuevo">Cargar primera promo</LinkButton>}
+        />
       ) : (
         <Card>
           <Table responsive>

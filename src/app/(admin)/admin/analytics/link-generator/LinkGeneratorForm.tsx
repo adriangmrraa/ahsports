@@ -6,6 +6,7 @@ import { buildWhatsAppLink } from "@/lib/attribution/ref-code";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { FieldHint } from "@/components/admin/FieldHint";
 import { Check, ClipboardCopy, Link2 } from "lucide-react";
 
 const PHONE_REGEX = /^[0-9]{10,15}$/;
@@ -99,6 +100,7 @@ export function LinkGeneratorForm({ defaultPhone }: { defaultPhone: string }) {
               onChange={(e) => setCampaign(e.target.value)}
               required
             />
+            <FieldHint>Nombre de la campaña de ads: así sabés de dónde vino cada lead.</FieldHint>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -109,6 +111,7 @@ export function LinkGeneratorForm({ defaultPhone }: { defaultPhone: string }) {
               value={adset}
               onChange={(e) => setAdset(e.target.value)}
             />
+            <FieldHint>Conjunto de anuncios dentro de la campaña (segmentación de Meta Ads).</FieldHint>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -119,6 +122,7 @@ export function LinkGeneratorForm({ defaultPhone }: { defaultPhone: string }) {
               value={ad}
               onChange={(e) => setAd(e.target.value)}
             />
+            <FieldHint>El anuncio puntual. Dejalo vacío si no hace falta ese nivel de detalle.</FieldHint>
           </div>
 
           <div className="flex flex-col gap-1.5">

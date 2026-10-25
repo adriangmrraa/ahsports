@@ -1,9 +1,11 @@
 import { db } from "@/db/client";
 import { products } from "@/db/schema";
 import { desc } from "drizzle-orm";
-import { PageHeader, Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
+import { PageGuide } from "@/components/admin/PageGuide";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { Plus } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { labelGarmentFamily, labelGarmentType } from "@/lib/garments";
@@ -20,14 +22,19 @@ export default async function ProductosPage() {
         action={<LinkButton href="/admin/productos/nuevo"><Plus className="w-4 h-4" /> Nuevo producto</LinkButton>}
       />
 
+      <PageGuide
+        what="Acá vive todo lo que vendés: prendas, conjuntos y servicios."
+        whatFor="Cada producto define precio base, telas, métodos y la receta que calcula su costo real. Abrí uno para configurarlo."
+        nextStep={{ href: "/admin/productos/nuevo", label: "Nuevo producto" }}
+      />
+
       {rows.length === 0 ? (
-        <Card>
-          <div className="text-center py-10">
-            <p className="label-caps text-primary mb-2">Sin productos</p>
-            <p className="text-sm text-on-surface-variant mb-4">Creá el primer producto para empezar a cotizar.</p>
-            <LinkButton href="/admin/productos/nuevo">Crear producto</LinkButton>
-          </div>
-        </Card>
+        <AdminEmptyState
+          title="Sin productos"
+          what="El catálogo es la base de todo: sin productos no hay líneas, recetas ni cotizaciones."
+          whatFor="Creá el primero con su precio base y después sumale telas, métodos y receta."
+          action={<LinkButton href="/admin/productos/nuevo">Crear producto</LinkButton>}
+        />
       ) : (
         <Table responsive>
           <THead>

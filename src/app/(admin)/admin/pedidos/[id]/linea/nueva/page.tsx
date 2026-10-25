@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { fabrics, orders, productFabrics, productTechniques, products, sizes, techniques } from "@/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { AddLineForm } from "./AddLineForm";
 
 export default async function NuevaLineaPage({ params }: { params: Promise<{ id: string }> }) {
@@ -50,6 +51,10 @@ export default async function NuevaLineaPage({ params }: { params: Promise<{ id:
   return (
     <>
       <PageHeader title={`Pedido #${order.number} — Nueva línea`} subtitle="Agregá un producto con cantidades por talle" />
+      <PageGuide
+        what="Una línea es un producto dentro del pedido, con cantidad total repartida por talle."
+        whatFor="Elegí producto y tela, marcá los métodos de estampado y cargá cuántas unidades van de cada talle."
+      />
       <Card>
         {editable ? (
           <AddLineForm

@@ -41,7 +41,7 @@ export function OrgForm() {
           <Input id="orgName" name="orgName" required maxLength={255} placeholder="Ej: Club Renacer" />
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Tipo">
+          <Field label="Tipo" hint="Sirve para filtrar y segmentar. «Particular» es para ventas sin institución.">
             <Select name="kind" defaultValue="club">
               <option value="club">Club</option>
               <option value="empresa">Empresa</option>
@@ -61,6 +61,7 @@ export function OrgForm() {
 
       <div className="space-y-4 pt-4 border-t border-outline-variant">
         <p className="label-caps text-primary">Contacto inicial</p>
+        <p className="text-xs text-on-surface-variant">La persona con la que hablás. Después podés sumar más contactos desde el perfil.</p>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Nombre del contacto" htmlFor="contactName">
             <Input id="contactName" name="contactName" required maxLength={255} placeholder="Ej: Juan Pérez" />

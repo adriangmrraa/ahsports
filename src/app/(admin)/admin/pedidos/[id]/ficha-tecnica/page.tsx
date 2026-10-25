@@ -17,6 +17,7 @@ import {
 } from "@/db/schema";
 import { desc, eq, inArray } from "drizzle-orm";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import type { PricingSnapshot } from "@/db/schema";
 import { calculateBomConsumption, consumptionUnit } from "@/lib/consumption";
 
@@ -144,6 +145,11 @@ export default async function FichaTecnicaPage({ params }: { params: Promise<{ i
             ← Ficha
           </Link>
         }
+      />
+
+      <PageGuide
+        what="La ficha técnica es la orden de producción: qué llevar, cuánto de cada material y qué aplicaciones van."
+        whatFor="Usa el snapshot de la cotización si existe; si no, recalcula desde las recetas. Es solo lectura."
       />
 
       {/* Resumen */}

@@ -68,7 +68,7 @@ export function ProveedorForm({ initial }: { initial?: SupplierInitial }) {
         <Field label="Dirección"><Input name="address" defaultValue={initial?.address ?? ""} /></Field>
         <Field label="CUIT"><Input name="taxId" defaultValue={initial?.taxId ?? ""} placeholder="30-..." /></Field>
       </div>
-      <Field label="Notas"><Textarea name="notes" rows={2} defaultValue={initial?.notes ?? ""} placeholder="Condiciones, plazos de entrega, etc." /></Field>
+      <Field label="Notas" hint="Condiciones de pago, plazos de entrega, mínimos de compra."><Textarea name="notes" rows={2} defaultValue={initial?.notes ?? ""} placeholder="Condiciones, plazos de entrega, etc." /></Field>
       {error && <p className="text-sm text-error">{error}</p>}
       <div className="flex justify-end gap-2 pt-4 border-t border-outline-variant">
         <Button type="submit" disabled={pending}>{pending ? "Guardando..." : initial ? "Guardar" : "Crear"}</Button>

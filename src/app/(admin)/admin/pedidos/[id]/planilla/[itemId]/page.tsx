@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { applications, attachments, orderItems, orderLines, orders, products, productionEvents, sizes, techniques } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { ItemEditor } from "./ItemEditor";
 import { ItemStageAdvance } from "./ItemStageAdvance";
 
@@ -73,6 +74,11 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
             ← Planilla
           </Link>
         }
+      />
+
+      <PageGuide
+        what="La ficha de una prenda individual: nombre, número, aplicaciones y etapa de producción."
+        whatFor="Avanzá la etapa cuando la prenda pase por corte, confección, estampado o control. El historial guarda cada paso."
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -1,5 +1,6 @@
 import { listChannelAccounts } from "@/app/actions/channel-accounts";
 import { PageHeader } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { requireAgentAdmin } from "@/lib/agent/rbac";
 import { publicBaseUrl, webhookEndpoints } from "./webhook-endpoints";
 import { ChannelsView } from "./ChannelsView";
@@ -36,6 +37,10 @@ export default async function CanalesPage({
       <PageHeader
         title="Canales"
         subtitle="Cuentas físicas por proveedor: cómo se envía y por dónde entran los webhooks."
+      />
+      <PageGuide
+        what="Un canal es una cuenta física por proveedor: WhatsApp, Instagram, Telegram o un número propio."
+        whatFor="Conectá la cuenta para enviar y recibir. Los webhooks son las URLs que cada proveedor usa para avisarte de mensajes nuevos."
       />
       <ChannelsView
         initialAccounts={accountsResult.ok ? accountsResult.rows : []}

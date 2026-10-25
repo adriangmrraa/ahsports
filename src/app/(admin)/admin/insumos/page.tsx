@@ -2,8 +2,10 @@ import { db } from "@/db/client";
 import { materials, suppliers } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { eq } from "drizzle-orm";
-import { PageHeader, Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
+import { PageGuide } from "@/components/admin/PageGuide";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { Plus } from "lucide-react";
 import { InsumosTable } from "./InsumosTable";
 
@@ -22,14 +24,19 @@ export default async function InsumosPage() {
         subtitle={`${rows.length} materiales en el catálogo`}
         action={<LinkButton href="/admin/insumos/nuevo"><Plus className="w-4 h-4" /> Nuevo insumo</LinkButton>}
       />
+      <PageGuide
+        what="Los insumos son lo que la prenda consume en producción: telas, hilos, films, avíos y packaging."
+        whatFor="Cada insumo tiene su precio y unidad de compra. Las recetas los usan para calcular el costo real."
+        nextStep={{ href: "/admin/insumos/nuevo", label: "Nuevo insumo" }}
+      />
+
       {rows.length === 0 ? (
-        <Card>
-          <div className="text-center py-10">
-            <p className="label-caps text-primary mb-2">Sin materiales</p>
-            <p className="text-sm text-on-surface-variant mb-4">Cargá telas, hilos, films DTF, papel sublimación, etc.</p>
-            <LinkButton href="/admin/insumos/nuevo">Cargar primer material</LinkButton>
-          </div>
-        </Card>
+        <AdminEmptyState
+          title="Sin materiales"
+          what="Sin insumos cargados no hay forma de saber cuánto cuesta producir una prenda."
+          whatFor="Cargá primero las telas y los consumibles que más uses; después armá las recetas."
+          action={<LinkButton href="/admin/insumos/nuevo">Cargar primer material</LinkButton>}
+        />
       ) : (
         <InsumosTable rows={rows.map(({ material, supplierName }) => ({ ...material, supplierName }))} />
       )}

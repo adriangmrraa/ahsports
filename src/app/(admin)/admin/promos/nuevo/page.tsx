@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { products } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Card } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { PromoForm } from "../PromoForm";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,10 @@ export default async function NuevaPromoPage() {
   return (
     <>
       <PageHeader title="Nueva promo" subtitle="Combo nombrado de productos del catálogo con precio promocional opcional" />
+      <PageGuide
+        what="Una promo es un combo con nombre: varios productos y cantidades que se ofrecen juntos."
+        whatFor="Si dejás el precio vacío se cobra la suma de los precios reales. Las promos activas las ven el agente y la API pública."
+      />
       <Card>
         <PromoForm products={rows} />
       </Card>

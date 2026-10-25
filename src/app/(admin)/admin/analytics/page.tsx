@@ -1,6 +1,7 @@
 import { PageHeader, Card, StatCard, Badge } from "@/components/ui/Card";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { LinkButton } from "@/components/ui/Button";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { BarChart3, Filter, Link2, Megaphone, Target, Users } from "lucide-react";
 import {
   getCampaignPerformance,
@@ -45,6 +46,12 @@ export default async function AnalyticsPage() {
             <Link2 className="w-4 h-4" /> Generar link
           </LinkButton>
         }
+      />
+
+      <PageGuide
+        what="Analytics muestra de dónde vienen los leads y cuántos terminan en pedido."
+        whatFor="La atribución sale del canal, la campaña UTM o el link con ref. Usá «Generar link» para crear enlaces medibles."
+        nextStep={{ href: "/admin/analytics/link-generator", label: "Generar link" }}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">

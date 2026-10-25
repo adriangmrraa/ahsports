@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { materials, suppliers } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { InsumoForm } from "../nuevo/InsumoForm";
 import { DesactivarButton } from "./DesactivarButton";
 
@@ -22,6 +23,10 @@ export default async function InsumoDetallePage({ params }: { params: Promise<{ 
         title={m.name}
         subtitle={`${m.category} · ${m.unit} · ${m.active ? "activo" : "inactivo"}`}
         action={<DesactivarButton id={m.id} active={m.active} />}
+      />
+      <PageGuide
+        what="La ficha del insumo: datos de compra, unidad y proveedor."
+        whatFor="Ajustá precio o unidad acá. El cambio impacta en el costo de las recetas que usan este material."
       />
       <Card>
         <InsumoForm initial={m} suppliers={sups} />

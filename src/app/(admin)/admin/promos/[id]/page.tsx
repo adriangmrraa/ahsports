@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { products, promotions } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, Card } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { PromoForm } from "../PromoForm";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,10 @@ export default async function EditarPromoPage({ params }: { params: Promise<{ id
   return (
     <>
       <PageHeader title={`Editar promo`} subtitle={promo.name} />
+      <PageGuide
+        what="Una promo es un combo nombrado de productos con precio promocional opcional."
+        whatFor="Si el precio queda vacío se cobra la suma real. Los cambios aplican a las ventas nuevas."
+      />
       <Card>
         <PromoForm
           products={productRows}

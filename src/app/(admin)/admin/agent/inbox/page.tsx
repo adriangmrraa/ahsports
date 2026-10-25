@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { requireAgentAdmin } from "@/lib/agent/rbac";
 import { channelValues } from "@/lib/channels/types";
-import { Card, PageHeader } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Input";
+import { PageGuide } from "@/components/admin/PageGuide";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { Search } from "lucide-react";
 import { LiveRefresher } from "@/components/live/LiveRefresher";
 import { ConversationTable } from "./ConversationTable";
@@ -64,6 +66,12 @@ export default async function AgentInboxPage({
         subtitle={channelFilter ? `Canal: ${INBOX_CHANNEL_LABEL[channelFilter]}` : "Últimas conversaciones"}
       />
 
+      <PageGuide
+        what="Acá ves todas las conversaciones que entraron por los canales, con su última actividad."
+        whatFor="Filtrá por canal o cuenta para encontrar un hilo. Entrá a una conversación para leer y responder."
+        nextStep={{ href: "/admin/canales", label: "Ver canales" }}
+      />
+
       <form method="get" className="flex flex-wrap gap-2 mb-4">
         <div className="relative flex-1 max-w-md min-w-56">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
@@ -113,14 +121,11 @@ export default async function AgentInboxPage({
           {/* No table mounted → no stream of its own; refresh swaps in the
               table (which then merges live events itself) on first activity. */}
           <LiveRefresher endpoint="/api/events/inbox" />
-          <Card>
-            <div className="text-center py-10">
-              <p className="label-caps text-primary mb-2">Sin conversaciones</p>
-              <p className="text-sm text-on-surface-variant">
-                Cuando el canal reciba mensajes, las conversaciones aparecerán acá.
-              </p>
-            </div>
-          </Card>
+          <AdminEmptyState
+            title="Sin conversaciones"
+            what="Cada conversación agrupa los mensajes de una persona en un canal y cuenta."
+            whatFor="Conectá un canal y escribile: el hilo aparece acá automáticamente."
+          />
         </>
       ) : (
         <ConversationTable

@@ -6,6 +6,7 @@ import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { Search, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +78,12 @@ export default async function ContactosPage({ searchParams }: { searchParams: Pr
       <PageHeader
         title="Contactos"
         subtitle={`${rows.length} contactos${query ? ` · filtro: "${query}"` : ""}`}
+      />
+
+      <PageGuide
+        what="Los contactos son las personas: quién atiende, quién recibe el presupuesto, quién hace el pedido."
+        whatFor="Un contacto puede pertenecer a una organización o ser particular. Los canales muestran por dónde escribió."
+        nextStep={{ href: "/admin/organizaciones", label: "Ver organizaciones" }}
       />
 
       <Card className="mb-4">

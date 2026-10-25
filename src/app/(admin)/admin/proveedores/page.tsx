@@ -4,6 +4,8 @@ import { asc } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
+import { PageGuide } from "@/components/admin/PageGuide";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { Plus } from "lucide-react";
 
 export default async function ProveedoresPage() {
@@ -16,14 +18,19 @@ export default async function ProveedoresPage() {
         subtitle={`${rows.length} proveedores cargados`}
         action={<LinkButton href="/admin/proveedores/nuevo"><Plus className="w-4 h-4" /> Nuevo proveedor</LinkButton>}
       />
+      <PageGuide
+        what="Los proveedores son las textiles y casas de insumos a las que les comprás."
+        whatFor="Asociá cada material con su proveedor para saber a quién pedirle y a qué precio."
+        nextStep={{ href: "/admin/proveedores/nuevo", label: "Nuevo proveedor" }}
+      />
+
       {rows.length === 0 ? (
-        <Card>
-          <div className="text-center py-10">
-            <p className="label-caps text-primary mb-2">Sin proveedores</p>
-            <p className="text-sm text-on-surface-variant mb-4">Cargá las textiles y casas de insumos con sus datos de contacto.</p>
-            <LinkButton href="/admin/proveedores/nuevo">Cargar primer proveedor</LinkButton>
-          </div>
-        </Card>
+        <AdminEmptyState
+          title="Sin proveedores"
+          what="Sin proveedores no podés registrar de dónde viene cada material ni su costo de compra."
+          whatFor="Cargá primero las textiles y casas de insumos que más uses."
+          action={<LinkButton href="/admin/proveedores/nuevo">Cargar primer proveedor</LinkButton>}
+        />
       ) : (
         <Card>
           <Table responsive>

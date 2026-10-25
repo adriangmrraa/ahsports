@@ -4,6 +4,7 @@ import { bomItems, bomRecipes, materials, products, sizes, techniques } from "@/
 import { asc, eq, inArray } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { ArrowLeft } from "lucide-react";
 import { RecetasEditor } from "./RecetasEditor";
 
@@ -33,6 +34,11 @@ export default async function ProductoRecetasPage({ params }: { params: Promise<
             <ArrowLeft className="w-4 h-4" /> Volver al producto
           </LinkButton>
         }
+      />
+      <PageGuide
+        what="Las recetas BOM definen qué materiales consume este producto al producirse."
+        whatFor="Con la receta cargada el sistema calcula el costo real por talle y cotiza con margen."
+        nextStep={{ href: "/admin/recetas", label: "Ver todas las recetas" }}
       />
       <Card>
         <RecetasEditor

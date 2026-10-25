@@ -5,6 +5,7 @@ import { desc, eq } from "drizzle-orm";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { Lock } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -31,6 +32,11 @@ export default async function PedidosBloqueadosPage() {
         title="Pedidos bloqueados"
         subtitle={`${rows.length} pedidos pendientes de seña`}
         action={<LinkButton href="/admin/pedidos">Ver todos</LinkButton>}
+      />
+
+      <PageGuide
+        what="Acá caen los pedidos que no cubren la seña mínima y no pueden entrar a producción."
+        whatFor="Registrá la seña desde la ficha del pedido. Cuando el saldo cubra el mínimo, el pedido se desbloquea solo."
       />
 
       <div className="glass-panel rounded-lg p-4 mb-6 border-l-4 border-l-error flex items-start gap-3">

@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { db } from "@/db/client";
 import { orders, payments } from "@/db/schema";
-import { and, desc, eq, gte, inArray, sql, sum } from "drizzle-orm";
+import { desc, eq, gte, inArray, sql, sum } from "drizzle-orm";
 import { Card, PageHeader, StatCard } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Card";
-import { Button, LinkButton } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/Button";
 import { ShoppingCart, Factory, AlertTriangle, Wallet, Plus, ArrowRight, Banknote, Layers, Image as ImageIcon } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { PageGuide } from "@/components/admin/PageGuide";
+import { formatCurrency } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const [activeOrders] = await db
@@ -75,6 +76,12 @@ export default async function DashboardPage() {
             </LinkButton>
           </>
         }
+      />
+
+      <PageGuide
+        what="El resumen del taller: pedidos activos, bloqueados, presupuestos pendientes y facturación del mes."
+        whatFor="Empezá por las alertas de la derecha: son las que frenan producción. El embudo muestra en qué etapa está cada pedido."
+        nextStep={{ href: "/admin/pedidos/kanban", label: "Ir al kanban" }}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

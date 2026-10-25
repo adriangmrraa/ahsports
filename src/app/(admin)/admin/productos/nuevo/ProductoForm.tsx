@@ -116,7 +116,7 @@ export function ProductoForm({ initial, molds = [], componentProducts = [], taxo
 
   return (
     <form onSubmit={submit} className="space-y-4 max-w-2xl">
-      <Field label="SKU"><Input name="sku" required defaultValue={initial?.sku ?? ""} placeholder="CAM-SUB-001" /></Field>
+      <Field label="SKU" hint="Código único del producto (ej. CAM-SUB-001). Lo usás para buscarlo y aparece en las cotizaciones."><Input name="sku" required defaultValue={initial?.sku ?? ""} placeholder="CAM-SUB-001" /></Field>
       <div className="rounded-md border border-primary/30 bg-primary/5 p-4 space-y-3">
         <p className="text-sm font-semibold text-on-surface">Clasificación general</p>
         <p className="text-xs text-on-surface-variant">Elegí una ruta del catálogo. Podés actualizar las opciones desde Configuración → Catálogo.</p>
@@ -127,7 +127,7 @@ export function ProductoForm({ initial, molds = [], componentProducts = [], taxo
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Field label="Tipo de producto">
+        <Field label="Tipo de producto" hint="Individual = una prenda. Conjunto = varias prendas que se venden juntas y reutilizan sus recetas.">
           <Select value={productKind} onChange={(e) => {
             const next = e.target.value as "garment" | "bundle";
             setProductKind(next);
@@ -149,7 +149,7 @@ export function ProductoForm({ initial, molds = [], componentProducts = [], taxo
             <option value="bundle">Conjunto / kit</option>
           </Select>
         </Field>
-        <Field label="Lógica específica de prenda">
+        <Field label="Lógica específica de prenda" hint="Activá familia y molde si la prenda tiene tabla de medidas reutilizable.">
           <label className="flex items-center gap-2 min-h-[42px] text-sm text-on-surface">
             <input type="checkbox" checked={usesGarmentLogic} disabled={productKind === "bundle"} onChange={(e) => {
               const checked = e.target.checked;
@@ -205,9 +205,9 @@ export function ProductoForm({ initial, molds = [], componentProducts = [], taxo
         <Field label="Precio base (referencia)" hint="NO define el precio de venta: lo calcula la receta + margen al cotizar">
           <Input name="basePrice" type="number" step="0.01" defaultValue={initial?.basePrice ?? "0"} />
         </Field>
-        <Field label="Pedido mínimo"><Input name="minOrder" type="number" min={1} defaultValue={initial?.minOrder ?? 1} /></Field>
+        <Field label="Pedido mínimo" hint="Mínimo de unidades que acepta una línea de pedido de este producto."><Input name="minOrder" type="number" min={1} defaultValue={initial?.minOrder ?? 1} /></Field>
       </div>
-      <Field label="Zonas válidas (clic para toggle)">
+      <Field label="Zonas válidas (clic para toggle)" hint="Ubicaciones del cuerpo habilitadas para estampar este producto.">
         <div className="flex flex-wrap gap-2">
           {COMMON_ZONES.map((z) => (
             <button

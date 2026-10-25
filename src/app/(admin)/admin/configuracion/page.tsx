@@ -4,6 +4,7 @@ import { desc, asc } from "drizzle-orm";
 import { requireAgentAdmin } from "@/lib/agent/rbac";
 import { formatDateTime } from "@/lib/utils";
 import { Badge, Card, PageHeader } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { PricingRulesManager } from "./PricingRulesManager";
 import { WorkshopSettingsForm } from "./WorkshopSettingsForm";
 import { BusinessSettingsForm } from "./BusinessSettingsForm";
@@ -40,16 +41,25 @@ export default async function ConfiguracionPage() {
         action={<LinkButton href="/admin/configuracion/catalogo" variant="secondary">Catálogo de clasificación</LinkButton>}
       />
 
+      <PageGuide
+        what="Acá se definen las reglas que usa todo el sistema: precio, datos del taller y lo que ve el cliente."
+        whatFor="Solo una regla de precio puede estar activa. Los cambios impactan las próximas cotizaciones, no las ya confirmadas."
+        nextStep={{ href: "/admin/configuracion/catalogo", label: "Catálogo" }}
+      />
+
       <div className="flex flex-col gap-6">
         <Card title="Reglas de precio">
+          <p className="text-xs text-on-surface-variant mb-4">Margen, recargo urgente, seña mínima y redondeo. La regla activa es la que cotiza.</p>
           <PricingRulesManager initial={rules} />
         </Card>
 
         <Card title="Datos del taller">
+          <p className="text-xs text-on-surface-variant mb-4">Datos operativos que usa el sistema para calcular y comunicar.</p>
           <WorkshopSettingsForm initial={initial} />
         </Card>
 
         <Card title="Identidad del negocio (pública)">
+          <p className="text-xs text-on-surface-variant mb-4">Nombre, contacto y textos que aparecen en el presupuesto público y el seguimiento.</p>
           <BusinessSettingsForm initial={initial} />
         </Card>
 

@@ -2,8 +2,10 @@ import Link from "next/link";
 import { db } from "@/db/client";
 import { bomItems, bomRecipes, products, sizes, techniques } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { PageHeader, Card, EmptyState } from "@/components/ui/Card";
+import { PageHeader, Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
+import { PageGuide } from "@/components/admin/PageGuide";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { Layers, ArrowRight } from "lucide-react";
 
 export default async function RecetasPage() {
@@ -46,10 +48,17 @@ export default async function RecetasPage() {
         subtitle={`${rows.length} ${rows.length === 1 ? "receta" : "recetas"} en ${grouped.length} ${grouped.length === 1 ? "producto" : "productos"}`}
       />
 
+      <PageGuide
+        what="La receta (BOM) es la lista de materiales que consume un producto: tela, hilo, film, avíos."
+        whatFor="Con la receta el sistema calcula tu costo real y puede cotizar. Cada técnica y talle puede tener su propia receta."
+        nextStep={{ href: "/admin/productos", label: "Elegir producto" }}
+      />
+
       {rows.length === 0 ? (
-        <EmptyState
+        <AdminEmptyState
           title="Sin recetas"
-          description="Creá la primera receta desde el detalle de un producto para poder cotizar trazablemente."
+          what="Las recetas BOM definen qué materiales consume cada producto → así el sistema calcula tu costo real."
+          whatFor="Abrí un producto y creá su primera receta con los insumos que lleva."
           action={<LinkButton href="/admin/productos">Ir a productos</LinkButton>}
         />
       ) : (

@@ -8,6 +8,7 @@ import { decryptIfEncrypted } from "@/lib/crypto/secret-box";
 import { deriveWebhookPathToken, TELEGRAM_SECRET_HEADER } from "@/lib/channels/telegram";
 import { formatDateTime } from "@/lib/utils";
 import { Badge, Card, PageHeader } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { ArrowLeft } from "lucide-react";
 
 /**
@@ -49,6 +50,12 @@ export default async function TelegramStatusPage() {
             <ArrowLeft className="w-4 h-4" /> Configuración del agente
           </Link>
         }
+      />
+
+      <PageGuide
+        what="Estado del canal de Telegram: sirve para que el equipo reciba avisos y operadores vinculados."
+        whatFor="Necesita bot token y webhook secret guardados en la configuración del agente. La URL del webhook se muestra abajo."
+        nextStep={{ href: "/admin/agent", label: "Configurar agente" }}
       />
 
       <div className="flex flex-col gap-6">

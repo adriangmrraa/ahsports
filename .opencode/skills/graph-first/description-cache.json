@@ -4726,5 +4726,21 @@
   "src_app_public_presupuesto_2_step2form_deltalabel": "deltaLabel() — symbol declared in src/app/(public)/presupuesto/2/Step2Form.tsx: \"+ $1.500,00 c/u\" / \"− $500,00 c/u\" / \"Incluido\" — the option's sell delta.",
   "src_app_public_presupuesto_2_step2form_step2form_pickfabric": "pickFabric() — function declared in src/app/(public)/presupuesto/2/Step2Form.tsx (line 147).",
   "src_app_public_presupuesto_2_step2form_step2form_togglemethod": "toggleMethod() — symbol declared in src/app/(public)/presupuesto/2/Step2Form.tsx (line 156).",
-  "src_app_public_presupuesto_components_wizard_estimate_optiondeltalabel": "optionDeltaLabel() — symbol declared in src/app/(public)/presupuesto/_components/wizard-estimate.tsx: \"(+ $1.500,00)\" / \"(− $500,00)\" — option sell delta, hidden at zero."
+  "src_app_public_presupuesto_components_wizard_estimate_optiondeltalabel": "optionDeltaLabel() — symbol declared in src/app/(public)/presupuesto/_components/wizard-estimate.tsx: \"(+ $1.500,00)\" / \"(− $500,00)\" — option sell delta, hidden at zero.",
+  "src_components_admin_pageguide_pageguideprops": "PageGuideProps — type alias declared in src/components/admin/PageGuide.tsx (line 6).",
+  "src_components_admin_fieldhint_fieldhint": "FieldHint() — symbol exported from src/components/admin/FieldHint.tsx: Helper text shown under a control (or inline in a section).",
+  "src_components_admin_fieldhint_helptip": "HelpTip() — symbol exported from src/components/admin/FieldHint.tsx: Small inline affordance for secondary detail.",
+  "src_components_admin_adminemptystate_adminemptystate": "AdminEmptyState() — symbol exported from src/components/admin/AdminEmptyState.tsx: Empty list that teaches: what the thing is, what it is for, and the one primary action to create the first one.",
+  "src_components_admin_formsection_formsection": "FormSection() — symbol exported from src/components/admin/FormSection.tsx: Groups related form controls and states, in one line, what the section is for.",
+  "src_components_admin_pageguide_pageguide": "PageGuide() — symbol exported from src/components/admin/PageGuide.tsx (line 14).",
+  "src_components_admin_fieldhint": "src/components/admin/FieldHint.tsx — Helper text shown under a control (or inline in a section).",
+  "agent_task": "Markdown document .agent-task.md: \"TASK — Make the admin self-explanatory: contextual microcopy + guided empty states (AH Sports)\".",
+  "agent_task_deliverables": "Section \"Deliverables\" in .agent-task.md.",
+  "agent_task_gates": "Section \"Gates\" in .agent-task.md.",
+  "agent_task_goal_applies_to_every_admin_page": "Section \"Goal (applies to EVERY admin page)\" in .agent-task.md.",
+  "agent_task_rules": "Section \"Rules\" in .agent-task.md.",
+  "agent_task_task_make_the_admin_self_explanatory_contextual_microcopy_guided_empty_states_ah_sports": "Section \"TASK — Make the admin self-explanatory: contextual microcopy + guided empty states (AH Sports)\" in .agent-task.md.",
+  "src_components_admin_adminemptystate": "src/components/admin/AdminEmptyState.tsx — Empty list that teaches: what the thing is, what it is for, and the one primary action to create the first one.",
+  "src_components_admin_formsection": "src/components/admin/FormSection.tsx — Groups related form controls and states, in one line, what the section is for.",
+  "src_components_admin_pageguide": "Source file src/components/admin/PageGuide.tsx in src/components/admin."
 }

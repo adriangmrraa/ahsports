@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { paymentKindSchema, paymentMethodSchema } from "@/lib/validators";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { Badge, Card, PageHeader } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 
 export const metadata = { title: "Pagos · AH Sports" };
 
@@ -76,6 +77,12 @@ export default async function PagosPage({
   return (
     <div className="p-6">
       <PageHeader title="Pagos" subtitle={`Total filtrado (activos): ${formatCurrency(String(totalCents / 100))}`} />
+
+      <PageGuide
+        what="Listado global de cobros: seña, pagos parciales y saldo, de todos los pedidos."
+        whatFor="Los cancelados no suman al total. Filtrá por tipo, medio o fecha para conciliar la caja de un período."
+        nextStep={{ href: "/admin/caja", label: "Ver saldos" }}
+      />
 
       <form method="get" className="mb-4 flex flex-wrap items-end gap-2">
         <select name="kind" className={inputClass} defaultValue={kind ?? ""}>

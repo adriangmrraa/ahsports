@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { cancelPayment, registerPayment } from "@/app/actions/payments";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { FieldHint } from "@/components/admin/FieldHint";
 
 const KINDS = [
   { value: "sena", label: "Seña" },
@@ -70,6 +71,7 @@ export function RegisterPaymentForm({ orderId }: { orderId: string }) {
               <option key={k.value} value={k.value}>{k.label}</option>
             ))}
           </select>
+          <FieldHint>Seña confirma el pedido · Pago es parcial · Saldo lo cancela.</FieldHint>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-on-surface-variant">Medio</span>

@@ -6,6 +6,7 @@ import { eq, inArray } from "drizzle-orm";
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { loadOrderLineSizeQuantities, quoteOrder } from "@/lib/pricing";
 import { ArrowLeft, Settings } from "lucide-react";
@@ -177,6 +178,11 @@ export default async function CotizarPage({ params }: { params: Promise<{ id: st
             <Badge tone="muted">Pedido {order.status} — solo lectura</Badge>
           )
         }
+      />
+
+      <PageGuide
+        what="La cotización es una vista previa: suma recetas, telas, métodos y la regla de precio activa."
+        whatFor="Revisá costo, margen y seña. Nada se guarda hasta confirmar; confirmar recalcula en el servidor."
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

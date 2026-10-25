@@ -5,6 +5,7 @@ import { formatDateTime } from "@/lib/utils";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { channelBadgeTone, INBOX_CHANNEL_LABEL } from "../inbox/filters";
 import { DlqRetryButton } from "./DlqRetryButton";
 
@@ -29,6 +30,11 @@ export default async function AgentDlqPage() {
             : `${jobs.length} ${jobs.length === 1 ? "trabajo agotó" : "trabajos agotaron"} sus ${INBOUND_JOB_MAX_ATTEMPTS} reintentos`
         }
         action={<LinkButton href="/admin/agent/inbox">Ver conversaciones</LinkButton>}
+      />
+
+      <PageGuide
+        what="La DLQ guarda los mensajes entrantes que agotaron sus reintentos automáticos."
+        whatFor="Revisá el último error y reintentá cuando el problema esté resuelto. Reintentar vuelve a encolar el mensaje."
       />
 
       {jobs.length === 0 ? (

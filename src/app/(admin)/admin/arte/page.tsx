@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { attachments, orders, organizations } from "@/db/schema";
 import { desc, eq, inArray, or } from "drizzle-orm";
 import { PageHeader, Badge } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 
 export const metadata = { title: "Arte global · AH Sports" };
 
@@ -56,6 +57,12 @@ export default async function ArteGlobalPage({
   return (
     <div className="p-6">
       <PageHeader title="Arte global" subtitle="Todos los adjuntos del sistema" />
+
+      <PageGuide
+        what="Acá están todos los archivos del sistema: logos, diseños de pedido, personalizaciones y documentos."
+        whatFor="Cada adjunto tiene tipo y estado de aprobación. Filtrá para revisar qué falta aprobar antes de producir."
+        nextStep={{ href: "/admin/pedidos", label: "Ver pedidos" }}
+      />
 
       <form method="get" className="mb-4 flex flex-wrap gap-2">
         <select name="kind" className="rounded-lg border border-outline-variant bg-surface-container px-3 py-1.5 text-sm">

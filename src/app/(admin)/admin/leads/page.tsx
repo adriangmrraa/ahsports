@@ -7,6 +7,7 @@ const PAGE_SIZE = 50;
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Input } from "@/components/ui/Input";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { Search, Target } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 import { requireAgentAdmin } from "@/lib/agent/rbac";
@@ -94,6 +95,12 @@ export default async function LeadsPage({
       <PageHeader
         title="Leads"
         subtitle={`${total} leads capturados — atribución de campañas y canales`}
+      />
+
+      <PageGuide
+        what="Un lead es alguien que mostró interés: escribió por WhatsApp, entró a un link o pidió un presupuesto."
+        whatFor="El estado sigue nuevo → contactado → calificado → convertido. La campaña y el ref muestran de dónde vino."
+        nextStep={{ href: "/admin/analytics", label: "Ver analytics" }}
       />
 
       {/* Server-rendered list: any SSE event re-renders this page with fresh rows. */}

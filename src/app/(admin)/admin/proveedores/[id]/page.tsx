@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { materials, suppliers } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { ProveedorForm } from "../nuevo/ProveedorForm";
 import { EstadoButton } from "./EstadoButton";
 
@@ -17,6 +18,10 @@ export default async function ProveedorDetallePage({ params }: { params: Promise
         title={s.name}
         subtitle={`${linked.length} ${linked.length === 1 ? "insumo vinculado" : "insumos vinculados"} · ${s.active ? "activo" : "inactivo"}`}
         action={<EstadoButton id={s.id} active={s.active} />}
+      />
+      <PageGuide
+        what="La ficha del proveedor: datos de contacto y estado."
+        whatFor="Los insumos vinculados quedan asociados a este proveedor para saber a quién comprarle."
       />
       <Card>
         <ProveedorForm initial={s} />

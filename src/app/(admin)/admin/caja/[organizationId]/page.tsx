@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { fromCents, toCents } from "@/lib/payments";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { Badge, Card, PageHeader, StatCard } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 
 export const metadata = { title: "Cuenta corriente · AH Sports" };
 
@@ -86,6 +87,11 @@ export default async function CajaDetallePage({ params }: { params: Promise<{ or
             ← Volver a caja
           </Link>
         }
+      />
+
+      <PageGuide
+        what="La cuenta corriente de esta organización: cada pedido y cada pago en orden cronológico."
+        whatFor="Usala para conciliar cuánto se cotizó, cuánto entró y qué pedidos siguen abiertos."
       />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

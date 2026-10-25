@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { ProductoForm } from "../nuevo/ProductoForm";
 import { ProductImageCard } from "./ProductImageCard";
 import { ProductOptionsEditor } from "./ProductOptionsEditor";
@@ -39,14 +40,22 @@ export default async function ProductoDetallePage({ params }: { params: Promise<
         action={<LinkButton href={`/admin/productos/${id}/talles`} variant="secondary">Configurar talles</LinkButton>}
       />
 
+      <PageGuide
+        what="La ficha del producto reúne datos, talles, opciones que elige el cliente y la receta que calcula el costo."
+        whatFor="Editá los datos acá y usá cada sección para completar lo que falta antes de cotizar."
+        nextStep={{ href: `/admin/productos/${id}/recetas`, label: "Configurar receta" }}
+      />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <Card title="Datos del producto">
+          <p className="text-xs text-on-surface-variant mb-4">Datos generales del catálogo. El precio base es de referencia: el precio de venta sale de la receta más el margen.</p>
           <ProductoForm initial={{ ...product, zones: product.zones as string[], bundleItems: bundleItems.map((item) => ({ componentProductId: item.componentProductId, quantity: item.quantity, sizeMode: item.sizeMode, componentSizeId: item.componentSizeId })) }} molds={molds} componentProducts={componentProducts} taxonomy={taxonomy} />
         </Card>
 
         <div className="space-y-4">
           <ProductImageCard productId={product.id} imageUrl={product.imageUrl} name={product.name} />
           <Card title="Zonas válidas">
+            <p className="text-xs text-on-surface-variant mb-3">Ubicaciones donde se puede estampar este producto. Se ofrecen al cargar aplicaciones.</p>
             <div className="flex flex-wrap gap-2">
               {Array.isArray(product.zones) && (product.zones as string[]).length > 0 ? (
                 (product.zones as string[]).map((z: string) => (
@@ -62,6 +71,7 @@ export default async function ProductoDetallePage({ params }: { params: Promise<
 
       {product.productKind === "bundle" && (
         <Card title="Componentes del conjunto" className="mb-6">
+          <p className="text-xs text-on-surface-variant mb-3">Un conjunto reutiliza otros productos: cada componente mantiene su talle y su receta.</p>
           {bundleItems.length === 0 ? (
             <p className="text-sm text-on-surface-variant">Sin componentes configurados.</p>
           ) : (
@@ -76,6 +86,7 @@ export default async function ProductoDetallePage({ params }: { params: Promise<
       )}
 
       <Card title="Talles" className="mb-6" action={<LinkButton href={`/admin/productos/${id}/talles`} variant="ghost" size="sm">Editar →</LinkButton>}>
+        <p className="text-xs text-on-surface-variant mb-3">Talles que se pueden pedir y sus medidas. La planilla de cada pedido usa esta lista.</p>
         {productSizes.length === 0 ? (
           <p className="text-sm text-on-surface-variant">Sin talles definidos.</p>
         ) : (
@@ -95,6 +106,7 @@ export default async function ProductoDetallePage({ params }: { params: Promise<
       </Card>
 
       <Card title="Opciones del producto" className="mb-6">
+        <p className="text-xs text-on-surface-variant mb-4">Lo que el cliente puede elegir: telas (suman o restan al precio), métodos de estampado y descuentos por cantidad.</p>
         <ProductOptionsEditor
           productId={id}
           fabrics={allFabrics.map((f) => ({ id: f.id, name: f.name, sublimable: f.sublimable, priceModifier: f.priceModifier }))}
@@ -108,8 +120,13 @@ export default async function ProductoDetallePage({ params }: { params: Promise<
       </Card>
 
       <Card title="Recetas técnicas (BOM)" action={<LinkButton href={`/admin/productos/${id}/recetas`} variant="ghost" size="sm">Configurar →</LinkButton>}>
+        <p className="text-xs text-on-surface-variant mb-3">La receta dice qué materiales consume cada prenda. Sin receta el sistema no puede calcular el costo.</p>
         {recipes.length === 0 ? (
-          <p className="text-sm text-on-surface-variant">Sin recetas. Configurá qué consume este producto para poder cotizarlo trazablemente.</p>
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-4">
+            <p className="text-sm text-on-surface mb-1">Todavía no hay receta.</p>
+            <p className="text-xs text-on-surface-variant mb-3">Creá la primera y agregá sus materiales para poder cotizar este producto.</p>
+            <LinkButton href={`/admin/productos/${id}/recetas`} size="sm">Crear la primera receta</LinkButton>
+          </div>
         ) : (
           <div className="space-y-3">
             {recipes.map((r) => {

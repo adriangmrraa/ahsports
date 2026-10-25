@@ -5,6 +5,7 @@ import { applications, attachments, orders, organizations } from "@/db/schema";
 import { desc, eq, inArray } from "drizzle-orm";
 import { PageHeader } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { ArrowLeft } from "lucide-react";
 import { ArteManager, type AttachmentDTO } from "./ArteManager";
 
@@ -62,6 +63,10 @@ export default async function ArtePage({ params }: { params: Promise<{ id: strin
             Volver al pedido
           </LinkButton>
         }
+      />
+      <PageGuide
+        what="Los archivos de este pedido: logos, diseños y personalizaciones, con su estado de aprobación."
+        whatFor="Aprobá un diseño antes de producir y cargá las aplicaciones (zona, vista y técnica) para saber dónde va cada estampa."
       />
       <ArteManager orderId={id} initial={initial} counts={counts} />
     </>

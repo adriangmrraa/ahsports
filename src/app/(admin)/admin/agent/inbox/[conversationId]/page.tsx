@@ -10,6 +10,7 @@ import { INBOX_CHANNEL_LABEL } from "../filters";
 import { formatDateTime } from "@/lib/utils";
 import { isHumanOverrideActive } from "@/lib/whatsapp/human-handoff";
 import { Badge, Card, PageHeader } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { ArrowLeft } from "lucide-react";
 import { HandoffControls } from "./HandoffControls";
 import { MessagesTimeline } from "./MessagesTimeline";
@@ -115,6 +116,11 @@ export default async function ConversationTimelinePage({
             <ArrowLeft className="w-4 h-4" /> Volver a conversaciones
           </Link>
         }
+      />
+
+      <PageGuide
+        what="El hilo completo con una persona: mensajes entrantes, respuestas del agente y tus respuestas."
+        whatFor="Si tomás la conversación, el agente deja de responder. Respondé desde acá y devolvé el control cuando termines."
       />
 
       <div className="flex flex-col gap-6">

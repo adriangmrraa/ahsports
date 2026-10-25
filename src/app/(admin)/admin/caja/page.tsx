@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { fromCents, toCents } from "@/lib/payments";
 import { formatCurrency } from "@/lib/utils";
 import { Card, PageHeader } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 
 export const metadata = { title: "Caja · AH Sports" };
 
@@ -48,6 +49,11 @@ export default async function CajaPage() {
   return (
     <div className="p-6">
       <PageHeader title="Caja" subtitle="Saldos por organización · deudores primero" />
+
+      <PageGuide
+        what="La caja muestra, por organización, cuánto se cotizó, cuánto se pagó y cuánto debe."
+        whatFor="Cotizado = suma de pedidos. Pagado = pagos activos. Saldo en rojo significa que el cliente todavía debe."
+      />
 
       <Card>
         <div className="overflow-x-auto">

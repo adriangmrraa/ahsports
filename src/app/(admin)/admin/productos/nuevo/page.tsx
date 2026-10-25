@@ -1,4 +1,5 @@
 import { PageHeader, Card } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { ProductoForm } from "./ProductoForm";
 import { db } from "@/db/client";
 import { garmentMolds, products } from "@/db/schema";
@@ -14,6 +15,11 @@ export default async function NuevoProductoPage() {
   return (
     <>
       <PageHeader title="Nuevo producto" subtitle="Clasificar, definir precio base, zonas y pedido mínimo" />
+      <PageGuide
+        what="Un producto es lo que el cliente elige: una prenda, un conjunto o un servicio."
+        whatFor="La clasificación ordena el catálogo; el precio base es solo referencia y la receta define el costo real."
+        nextStep={{ href: "/admin/productos", label: "Ver catálogo" }}
+      />
       <Card>
         <ProductoForm molds={molds} componentProducts={componentProducts} taxonomy={taxonomy} />
       </Card>

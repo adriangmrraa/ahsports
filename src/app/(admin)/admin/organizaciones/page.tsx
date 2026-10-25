@@ -2,11 +2,13 @@ import Link from "next/link";
 import { db } from "@/db/client";
 import { contacts, organizations } from "@/db/schema";
 import { desc, eq, ilike, sql } from "drizzle-orm";
-import { PageHeader, Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Input } from "@/components/ui/Input";
-import { Building2, Plus, Search } from "lucide-react";
+import { PageGuide } from "@/components/admin/PageGuide";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { Plus, Search } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 const kindLabel: Record<string, string> = {
@@ -98,15 +100,19 @@ export default async function OrganizacionesPage({
         })}
       </div>
 
+      <PageGuide
+        what="Acá están tus clientes institucionales: clubes, empresas, colegios e instituciones."
+        whatFor="Cada organización agrupa sus contactos, pedidos, adjuntos y saldo. Los particulares se cargan directo en el pedido."
+        nextStep={{ href: "/admin/organizaciones/nuevo", label: "Nueva organización" }}
+      />
+
       {rows.length === 0 ? (
-        <Card>
-          <div className="text-center py-10">
-            <Building2 className="w-8 h-8 text-primary mx-auto mb-2" />
-            <p className="label-caps text-primary mb-2">Sin organizaciones</p>
-            <p className="text-sm text-on-surface-variant mb-4">Cuando se creen organizaciones aparecerán acá.</p>
-            <LinkButton href="/admin/organizaciones/nuevo">Crear la primera</LinkButton>
-          </div>
-        </Card>
+        <AdminEmptyState
+          title="Sin organizaciones"
+          what="Una organización reúne a todos los contactos y pedidos de un mismo cliente institucional."
+          whatFor="Creá la primera con su contacto inicial para empezar a cotizarle."
+          action={<LinkButton href="/admin/organizaciones/nuevo">Crear la primera</LinkButton>}
+        />
       ) : (
         <Table responsive>
           <THead>

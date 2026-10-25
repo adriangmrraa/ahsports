@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/ui/Card";
 import { getStringSetting } from "@/lib/settings";
 import { requireAgentAdmin } from "@/lib/agent/rbac";
 import { normalizePhone } from "@/lib/messaging/phone";
+import { PageGuide } from "@/components/admin/PageGuide";
 
 import { LinkGeneratorForm } from "./LinkGeneratorForm";
 
@@ -31,6 +32,11 @@ export default async function LinkGeneratorPage() {
       <PageHeader
         title="Generador de links"
         subtitle="Links de WhatsApp con atribución firmada para campañas"
+      />
+      <PageGuide
+        what="Genera links de WhatsApp con un código firmado que identifica la campaña o el vendedor."
+        whatFor="Cuando alguien entra por ese link, el lead queda atribuido a esa campaña. Ideal para redes, ferias y vendedores."
+        nextStep={{ href: "/admin/analytics", label: "Ver analytics" }}
       />
       <LinkGeneratorForm defaultPhone={defaultPhone} />
     </>

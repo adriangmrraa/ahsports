@@ -6,6 +6,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { ArrowLeft, Plus } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -83,6 +84,12 @@ export default async function OrganizacionPerfilPage({ params }: { params: Promi
         }
       />
 
+      <PageGuide
+        what="El perfil del cliente institucional: datos, personas de contacto, pedidos y biblioteca aprobada."
+        whatFor="Todo lo que se cargue desde acá queda asociado a la organización. La biblioteca son los archivos ya aprobados."
+        nextStep={{ href: "/admin/pedidos/nuevo", label: "Nuevo pedido" }}
+      />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <Card title="Datos">
           <dl className="space-y-2 text-sm">
@@ -110,6 +117,7 @@ export default async function OrganizacionPerfilPage({ params }: { params: Promi
         </Card>
 
         <Card title="Contactos" className="lg:col-span-2">
+          <p className="text-xs text-on-surface-variant mb-3">Personas de la organización. El estado indica en qué punto del vínculo están.</p>
           {orgContacts.length === 0 ? (
             <p className="text-sm text-on-surface-variant text-center py-4">Sin contactos registrados.</p>
           ) : (
@@ -134,6 +142,7 @@ export default async function OrganizacionPerfilPage({ params }: { params: Promi
       </div>
 
       <Card title="Pedidos" className="mb-6">
+        <p className="text-xs text-on-surface-variant mb-3">Pedidos de esta organización, del más nuevo al más viejo.</p>
         {orgOrders.length === 0 ? (
           <p className="text-sm text-on-surface-variant text-center py-4">Sin pedidos para esta organización.</p>
         ) : (
@@ -171,6 +180,7 @@ export default async function OrganizacionPerfilPage({ params }: { params: Promi
       </Card>
 
       <Card title="Biblioteca aprobada">
+        <p className="text-xs text-on-surface-variant mb-3">Logos y diseños aprobados listos para reutilizar en nuevos pedidos.</p>
         {approvedAttachments.length === 0 ? (
           <p className="text-sm text-on-surface-variant text-center py-4">Sin archivos aprobados.</p>
         ) : (

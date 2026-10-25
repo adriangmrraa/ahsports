@@ -2,6 +2,7 @@ import { db } from "@/db/client";
 import { contacts, organizations } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { NewOrderForm } from "./NewOrderForm";
 
 export default async function NuevoPedidoPage() {
@@ -19,6 +20,10 @@ export default async function NuevoPedidoPage() {
   return (
     <>
       <PageHeader title="Nuevo pedido" subtitle="Crear un pedido interno desde el panel" />
+      <PageGuide
+        what="Un pedido arranca con el cliente y, opcionalmente, el contacto que lo pidió."
+        whatFor="Después de crearlo vas a poder cargar líneas con productos y cantidades. Empezá en borrador si todavía no está confirmado."
+      />
       <Card>
         <NewOrderForm organizations={orgs} contacts={cts} />
       </Card>

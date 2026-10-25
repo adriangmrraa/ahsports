@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { FormSection } from "@/components/admin/FormSection";
+import { FieldHint } from "@/components/admin/FieldHint";
 import { Plus, Trash2 } from "lucide-react";
 
 export type OptionFabric = { id: string; name: string; sublimable: boolean; priceModifier: string };
@@ -95,8 +97,10 @@ export function ProductOptionsEditor({
 
   return (
     <form onSubmit={submit} className="space-y-6">
-      <div>
-        <p className="label-caps text-on-surface-variant mb-3">Telas habilitadas</p>
+      <FormSection
+        title="Telas habilitadas"
+        purpose="Tela = lo que el cliente elige. El Δ precio es cuánto suma o resta esa tela sobre el precio base."
+      >
         {fabrics.length === 0 ? (
           <p className="text-sm text-on-surface-variant">Sin telas en el catálogo. Cargalas en /admin/telas.</p>
         ) : (
@@ -133,10 +137,12 @@ export function ProductOptionsEditor({
             })}
           </div>
         )}
-      </div>
+      </FormSection>
 
-      <div>
-        <p className="label-caps text-on-surface-variant mb-3">Métodos habilitados</p>
+      <FormSection
+        title="Métodos habilitados"
+        purpose="Método = cómo se aplica el diseño (sublimación, DTF, bordado). Se pueden combinar y cada uno suma su Δ precio."
+      >
         {techniques.length === 0 ? (
           <p className="text-sm text-on-surface-variant">Sin técnicas activas. Cargalas en /admin/tecnicas.</p>
         ) : (
@@ -173,17 +179,19 @@ export function ProductOptionsEditor({
             })}
           </div>
         )}
-      </div>
+      </FormSection>
 
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <p className="label-caps text-on-surface-variant">Descuentos por volumen</p>
+      <FormSection
+        title="Descuentos por volumen"
+        purpose="Tramos de cantidad: desde X unidades, el precio baja ese porcentaje. Sin tramos, no hay descuento."
+        action={
           <Button type="button" variant="ghost" size="sm" onClick={() => { setTiers((prev) => [...prev, { minQty: "", discountPercent: "0" }]); setSaved(false); }}>
             <Plus className="w-3.5 h-3.5" /> Agregar tramo
           </Button>
-        </div>
+        }
+      >
         {tiers.length === 0 ? (
-          <p className="text-sm text-on-surface-variant">Sin tramos. El precio no tiene descuento por cantidad.</p>
+          <FieldHint>Sin tramos. El precio no tiene descuento por cantidad.</FieldHint>
         ) : (
           <div className="space-y-2">
             {tiers.map((tier, index) => (
@@ -221,7 +229,7 @@ export function ProductOptionsEditor({
             ))}
           </div>
         )}
-      </div>
+      </FormSection>
 
       {error && <p className="text-sm text-error">{error}</p>}
       {saved && <p className="text-sm text-primary">Opciones guardadas.</p>}

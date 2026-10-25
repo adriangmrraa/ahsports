@@ -115,7 +115,7 @@ export function AddLineForm({
 
   return (
     <form onSubmit={submit} className="space-y-4 max-w-2xl">
-      <Field label="Producto" htmlFor="productId">
+      <Field label="Producto" htmlFor="productId" hint="Solo aparecen productos activos del catálogo.">
         <Select id="productId" value={productId} onChange={(e) => changeProduct(e.target.value)} required>
           {products.map((p) => (
             <option key={p.id} value={p.id}>{p.name} · {p.sku} · {formatCurrency(p.basePrice)}</option>
@@ -183,6 +183,7 @@ export function AddLineForm({
           <p className="label-caps text-on-surface-variant block mb-1.5">
             Métodos de aplicación{optionConfig.techniqueIds.length === 0 && " (opcional)"}
           </p>
+          <p className="text-xs text-on-surface-variant mb-2">Podés combinar varios: cada método suma su costo. Algunos exigen tela sublimable.</p>
           <div className="space-y-1.5">
             {methodPool.map((technique) => {
               const disabled = fabricBlocksMethod(technique);

@@ -5,6 +5,7 @@ import { attachments, organizations } from "@/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { ArrowLeft, File, FileText } from "lucide-react";
 import { KIND_LABEL } from "@/app/(admin)/admin/pedidos/[id]/arte/ArteManager";
 import { CopyToOrderButton, type OpenOrder } from "./CopyToOrderButton";
@@ -62,6 +63,11 @@ export default async function BibliotecaOrgPage({
             Volver a la organización
           </LinkButton>
         }
+      />
+
+      <PageGuide
+        what="Archivos aprobados de la organización que todavía no están atados a un pedido: logos, diseños base."
+        whatFor="Copiarlos a un pedido comparte el mismo archivo sin duplicarlo. Así reutilizás el arte entre pedidos."
       />
 
       <div className="flex gap-2 flex-wrap mb-6">

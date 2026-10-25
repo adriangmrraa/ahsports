@@ -2,10 +2,12 @@ import Link from "next/link";
 import { db } from "@/db/client";
 import { orders, contacts, organizations } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
-import { PageHeader, Card, Badge } from "@/components/ui/Card";
+import { PageHeader, Badge } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Input } from "@/components/ui/Input";
+import { PageGuide } from "@/components/admin/PageGuide";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { Plus, Search } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -67,6 +69,12 @@ export default async function PedidosPage({ searchParams }: { searchParams: Prom
         }
       />
 
+      <PageGuide
+        what="Cada pedido es un trabajo real: líneas de productos, planilla por prenda, pagos y estado de producción."
+        whatFor="El estado avanza de borrador → presupuesto → aprobado → señado → producción → entregado. Usá los filtros para ver una etapa."
+        nextStep={{ href: "/admin/pedidos/nuevo", label: "Nuevo pedido" }}
+      />
+
       <form method="get" className="flex gap-2 mb-4">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
@@ -96,13 +104,12 @@ export default async function PedidosPage({ searchParams }: { searchParams: Prom
       </div>
 
       {filtered.length === 0 ? (
-        <Card>
-          <div className="text-center py-10">
-            <p className="label-caps text-primary mb-2">Sin pedidos</p>
-            <p className="text-sm text-on-surface-variant mb-4">Cuando se creen pedidos aparecerán acá.</p>
-            <LinkButton href="/admin/pedidos/nuevo">Crear el primero</LinkButton>
-          </div>
-        </Card>
+        <AdminEmptyState
+          title="Sin pedidos"
+          what="Un pedido agrupa las líneas que un cliente encarga y sigue su recorrido hasta la entrega."
+          whatFor="Creá el primero y después sumale líneas con cantidades por talle."
+          action={<LinkButton href="/admin/pedidos/nuevo">Crear el primero</LinkButton>}
+        />
       ) : (
         <Table responsive>
           <THead>

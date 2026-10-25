@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { products, sizes } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { SizesManager } from "./SizesManager";
 
 export default async function TallesPage({ params }: { params: Promise<{ id: string }> }) {
@@ -14,6 +15,10 @@ export default async function TallesPage({ params }: { params: Promise<{ id: str
   return (
     <>
       <PageHeader title={`Talles · ${product.name}`} subtitle="Configurar molde, medidas y consumos por talle" />
+      <PageGuide
+        what="Cada talle tiene su etiqueta, sus medidas y su consumo de tela."
+        whatFor="Estos talles aparecen al cargar una línea de pedido y alimentan la planilla y la ficha técnica."
+      />
       <Card>
         <SizesManager productId={id} initial={productSizes.map((s) => ({ id: s.id, label: s.label, order: s.order, measurements: s.measurements as Record<string, number> }))} />
       </Card>

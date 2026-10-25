@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { sumActivePaymentsCents, requiredAdvanceCents, toCents, fromCents } from "@/lib/payments";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { Badge, Card, PageHeader, StatCard } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { CancelPaymentButton, RegisterPaymentForm } from "./PagosForms";
 
 export const metadata = { title: "Pagos del pedido · AH Sports" };
@@ -70,6 +71,11 @@ export default async function PedidoPagosPage({ params }: { params: Promise<{ id
             ← Volver al pedido
           </Link>
         }
+      />
+
+      <PageGuide
+        what="Los cobros de este pedido: seña, pagos parciales y saldo pendiente."
+        whatFor="Registrá la seña para cubrir el mínimo y desbloquear producción. Cancelar un pago lo saca del total sin borrarlo."
       />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">

@@ -75,6 +75,7 @@ export function PromoForm({ initial, products }: { initial?: PromoInitial; produ
 
       <div className="space-y-2">
         <p className="label-caps text-content-secondary">Contenido (productos del catálogo)</p>
+        <p className="text-xs text-on-surface-variant">Elegí qué productos entran y cuántas unidades de cada uno. Sin precio promocional se cobra la suma real.</p>
         {items.map((item, i) => (
           <div key={i} className="flex gap-2 items-end">
             <div className="flex-1">

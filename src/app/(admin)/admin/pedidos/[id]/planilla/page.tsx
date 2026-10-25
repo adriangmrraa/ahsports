@@ -3,8 +3,10 @@ import Link from "next/link";
 import { db } from "@/db/client";
 import { orderItems, orderLines, orders, products, sizes } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
-import { PageHeader, EmptyState } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
+import { PageGuide } from "@/components/admin/PageGuide";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { PlanillaTable } from "./PlanillaTable";
 
 export default async function PlanillaPage({ params }: { params: Promise<{ id: string }> }) {
@@ -56,10 +58,16 @@ export default async function PlanillaPage({ params }: { params: Promise<{ id: s
           </>
         }
       />
+      <PageGuide
+        what="La planilla es la lista prenda por prenda: talle, nombre y número de cada unidad a producir."
+        whatFor="Se arma sola a partir de las líneas. Cada prenda avanza por etapas (corte, confección, estampado, control)."
+      />
+
       {lines.length === 0 ? (
-        <EmptyState
+        <AdminEmptyState
           title="Sin líneas aún"
-          description="Agregá la primera línea con cantidades por talle para armar la planilla."
+          what="Sin líneas no hay prendas que producir ni planilla que seguir."
+          whatFor="Agregá la primera línea con cantidades por talle."
           action={<LinkButton href={`/admin/pedidos/${id}/linea/nueva`}>Agregar línea</LinkButton>}
         />
       ) : (

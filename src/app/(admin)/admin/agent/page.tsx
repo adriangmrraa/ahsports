@@ -12,6 +12,7 @@ import {
 } from "@/lib/channels/agent-config-scope";
 import { formatDateTime } from "@/lib/utils";
 import { Badge, Card, PageHeader } from "@/components/ui/Card";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { AgentConfigForm, type AgentToolOption } from "./AgentConfigForm";
 import { OperatorBindingForm } from "./OperatorBindingForm";
 
@@ -84,8 +85,15 @@ export default async function AgentConfigPage({
         subtitle="Proveedor, modelo, herramientas y credenciales del canal. Solo admin y gerencia."
       />
 
+      <PageGuide
+        what="Acá configurás el agente que responde por WhatsApp: proveedor, modelo, instrucciones y herramientas."
+        whatFor="El alcance define a qué canal aplica cada configuración. Los operadores vinculados son las personas que pueden tomar la conversación."
+        nextStep={{ href: "/admin/canales", label: "Ver canales" }}
+      />
+
       <div className="flex flex-col gap-6">
         <Card title="Configuración del modelo">
+          <p className="text-xs text-on-surface-variant mb-4">Modelo, prompt del sistema y herramientas habilitadas. Cada alcance puede tener su propia configuración.</p>
           <AgentConfigForm
             key={`${scopeKey}:${config?.updatedAt ? new Date(config.updatedAt).getTime() : "empty"}`}
             initial={{
@@ -119,6 +127,7 @@ export default async function AgentConfigPage({
             )
           }
         >
+          <p className="text-xs text-on-surface-variant mb-4">Vínculos entre un identificador externo y un usuario del panel. Sin vínculo, el agente rechaza los mensajes internos.</p>
           {bindings.length === 0 ? (
             <p className="text-sm text-on-surface-variant mb-4">
               Ningún operador vinculado todavía. Sin vínculo, el agente interno rechaza los mensajes entrantes.

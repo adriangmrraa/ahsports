@@ -5,6 +5,7 @@ import { applications, attachments, orderLines, orders, products, techniques } f
 import { and, desc, eq } from "drizzle-orm";
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
+import { PageGuide } from "@/components/admin/PageGuide";
 import { ArrowLeft } from "lucide-react";
 import { ApplicationsManager, AppStatusBadge, type AppLine, type AppRow, type AppTechnique } from "./ApplicationsManager";
 import { KIND_LABEL } from "../ArteManager";
@@ -99,6 +100,10 @@ export default async function AttachmentDetailPage({
             Volver al arte
           </LinkButton>
         }
+      />
+      <PageGuide
+        what="Detalle del archivo: datos técnicos, aplicaciones cargadas e historial de versiones."
+        whatFor="En la pestaña Aplicaciones indicás en qué zona, vista y técnica se estampa este diseño."
       />
 
       <div className="flex gap-2 mb-6">

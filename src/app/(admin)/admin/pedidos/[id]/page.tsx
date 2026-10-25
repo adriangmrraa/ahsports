@@ -6,7 +6,8 @@ import { eq, desc, inArray } from "drizzle-orm";
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { LinkButton, Button } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
-import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
+import { PageGuide } from "@/components/admin/PageGuide";
+import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { formatPercent } from "@/lib/utils";
 import { ArrowLeft, Lock } from "lucide-react";
 import type { ReactNode } from "react";
@@ -157,6 +158,12 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
         }
       />
 
+      <PageGuide
+        what="La ficha del pedido concentra el estado, las líneas, el dinero y el historial de producción."
+        whatFor="Primero cargá líneas; después cotizá y registrá la seña. La planilla se genera sola con cada línea."
+        nextStep={{ href: `/admin/pedidos/${order.id}/cotizar`, label: "Cotizar" }}
+      />
+
       {bloqueado && (
         <div className="glass-panel rounded-lg p-4 mb-6 border-l-4 border-l-error flex items-start gap-3">
           <Lock className="w-5 h-5 text-error mt-0.5" />
@@ -169,6 +176,7 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <Card title="Estado" className="lg:col-span-1">
+          <p className="text-xs text-on-surface-variant mb-3">Etapa actual y dinero del pedido. El saldo baja con cada pago registrado.</p>
           <div className="flex items-center justify-between mb-3">
             <Badge tone={statusTone as never}>{statusLabel[order.status]}</Badge>
             {order.urgent && <Badge tone="error">Urgente</Badge>}
@@ -189,6 +197,7 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
         </Card>
 
         <Card title="Cliente" className="lg:col-span-2">
+          <p className="text-xs text-on-surface-variant mb-3">Quién encarga: organización y contacto. «Particular» es una venta sin organización.</p>
           {org ? (
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-on-surface-variant">Organización</span><Link href={`/admin/organizaciones/${org.id}`} className="text-primary hover:underline">{org.name}</Link></div>
@@ -214,6 +223,7 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
       </div>
 
       <Card title="Líneas del pedido" className="mb-6" action={<LinkButton href={`/admin/pedidos/${order.id}/linea/nueva`} variant="secondary" size="sm">Agregar línea</LinkButton>}>
+        <p className="text-xs text-on-surface-variant mb-3">Cada línea es un producto con sus cantidades y opciones. El subtotal sale del precio cotizado.</p>
         {lines.length === 0 ? (
           <p className="text-sm text-on-surface-variant text-center py-6">Sin líneas. Agregá la primera para poder cotizar.</p>
         ) : (
@@ -265,6 +275,7 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card title="Pagos">
+          <p className="text-xs text-on-surface-variant mb-3">Seña, pagos parciales y saldo. Solo cuentan los pagos activos.</p>
           {pays.length === 0 ? (
             <p className="text-sm text-on-surface-variant text-center py-4">Sin pagos registrados.</p>
           ) : (
@@ -283,6 +294,7 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
         </Card>
 
         <Card title="Adjuntos">
+          <p className="text-xs text-on-surface-variant mb-3">Arte y documentos del pedido. Se aprueban antes de mandar a producción.</p>
           {atts.length === 0 ? (
             <p className="text-sm text-on-surface-variant text-center py-4">
               Sin adjuntos.{" "}

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { createOrder } from "@/app/actions/orders";
-import { Input, Textarea, Select, Field } from "@/components/ui/Input";
+import { Textarea, Select, Field } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
 type Org = { id: string; name: string };
@@ -37,7 +37,7 @@ export function NewOrderForm({ organizations, contacts }: { organizations: Org[]
   return (
     <form onSubmit={submit} className="space-y-4 max-w-2xl">
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Organización" htmlFor="organizationId">
+        <Field label="Organización" htmlFor="organizationId" hint="Elegí «Particular» si es una venta sin institución.">
           <Select
             id="organizationId"
             name="organizationId"
@@ -50,7 +50,7 @@ export function NewOrderForm({ organizations, contacts }: { organizations: Org[]
             ))}
           </Select>
         </Field>
-        <Field label="Contacto" htmlFor="contactId">
+        <Field label="Contacto" htmlFor="contactId" hint="Solo aparecen contactos de la organización elegida.">
           <Select id="contactId" name="contactId" defaultValue="">
             <option value="">Sin contacto</option>
             {visibleContacts.map((c) => (
@@ -69,7 +69,7 @@ export function NewOrderForm({ organizations, contacts }: { organizations: Org[]
             <option value="true">Sí</option>
           </Select>
         </Field>
-        <Field label="Estado inicial">
+        <Field label="Estado inicial" hint="Borrador si todavía no lo confirmaste; presupuesto si ya está enviado.">
           <Select name="status" defaultValue="borrador">
             <option value="borrador">Borrador</option>
             <option value="presupuesto_enviado">Presupuesto enviado</option>
