@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import { DecalGeometry } from "three/examples/jsm/geometries/DecalGeometry.js";
 import {
+  BufferGeometry,
   Euler,
+  Float32BufferAttribute,
   MathUtils,
   Mesh,
   MeshStandardMaterial,
@@ -147,6 +149,7 @@ export function projectDecalGeometry(
   // component (e.g. two upper garments) and the front-most surface wins.
   let hit: Intersection | null = null;
   let bestDistance = Infinity;
+  let bestThickness = Infinity;
   for (const scope of resolveScopes(target, ZONE_SCOPE[placement.zone])) {
     scope.updateWorldMatrix(true, true);
     const local = zoneRay(placement.zone, placement);
@@ -161,6 +164,13 @@ export function projectDecalGeometry(
     if (candidate && candidate.distance < bestDistance) {
       hit = candidate;
       bestDistance = candidate.distance;
+      // Next same-object hit = the surface behind this one (solid back face
+      // or the garment's rear wall). The projector box must stay shallower
+      // than that or the decal bleeds through onto the opposite side.
+      const behind = hits.find(
+        (h) => h.object === candidate.object && h.distance > candidate.distance + 1e-4,
+      );
+      bestThickness = behind ? behind.distance - candidate.distance : Infinity;
     }
   }
   const face = hit?.face;
@@ -178,14 +188,66 @@ export function projectDecalGeometry(
   orientation.z += MathUtils.degToRad(placement.rotationDeg);
 
   const w = BASE_DECAL_SIZE * placement.scale;
-  const size = new Vector3(w, w / Math.max(0.2, aspect), PROJECTOR_DEPTH);
+  // Adaptive depth: real GLB shells are thin — the projector can never reach
+  // past the next surface along the ray or the artwork ghosts through to the
+  // garment's back. Thick procedural solids keep the full depth.
+  const depth = MathUtils.clamp(bestThickness * 0.85, 0.08, PROJECTOR_DEPTH);
+  const size = new Vector3(w, w / Math.max(0.2, aspect), depth);
 
   const geometry = new DecalGeometry(hit.object, hit.point, orientation, size);
   if (geometry.attributes.position?.count === 0) {
     geometry.dispose();
     return null;
   }
-  return geometry;
+  const culled = cullDecalBackfaces(geometry, normal) ?? geometry;
+  if (culled !== geometry) geometry.dispose();
+  if (culled.attributes.position?.count === 0) {
+    culled.dispose();
+    return null;
+  }
+  return culled;
+}
+
+/**
+ * Drops decal faces whose surface normal points away from the projector.
+ * DecalGeometry clips purely by box position — on thin garment shells the
+ * rear wall falls inside the box and would render the artwork mirrored on
+ * the garment's back. Faces aligned with the hit surface (or wrapping its
+ * curvature, dot ≈ 0) are kept. Returns null when normals are unavailable.
+ */
+export function cullDecalBackfaces(
+  geometry: DecalGeometry,
+  outward: Vector3,
+): BufferGeometry | null {
+  const pos = geometry.attributes.position;
+  const nrm = geometry.attributes.normal;
+  const uv = geometry.attributes.uv;
+  if (!pos || !nrm || pos.count % 3 !== 0) return null;
+
+  const keepP: number[] = [];
+  const keepN: number[] = [];
+  const keepU: number[] = [];
+  const n = new Vector3();
+
+  for (let i = 0; i < pos.count; i += 3) {
+    n.set(
+      nrm.getX(i) + nrm.getX(i + 1) + nrm.getX(i + 2),
+      nrm.getY(i) + nrm.getY(i + 1) + nrm.getY(i + 2),
+      nrm.getZ(i) + nrm.getZ(i + 1) + nrm.getZ(i + 2),
+    );
+    if (n.dot(outward) <= 0) continue;
+    for (let k = 0; k < 3; k++) {
+      keepP.push(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
+      keepN.push(nrm.getX(i + k), nrm.getY(i + k), nrm.getZ(i + k));
+      if (uv) keepU.push(uv.getX(i + k), uv.getY(i + k));
+    }
+  }
+
+  const culled = new BufferGeometry();
+  culled.setAttribute("position", new Float32BufferAttribute(keepP, 3));
+  culled.setAttribute("normal", new Float32BufferAttribute(keepN, 3));
+  if (uv) culled.setAttribute("uv", new Float32BufferAttribute(keepU, 2));
+  return culled;
 }
 
 function buildDecal(
