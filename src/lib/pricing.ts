@@ -163,8 +163,10 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
     // Options model (fabricId present): the line prices as
     // basePrice + fabricDelta + Σ methodDeltas + methods cost − volume tier,
     // instead of cost × margin. Membership in product_fabrics /
-    // product_techniques is strict — quoting an option the product does not
-    // allow is a hard error, never a silent fallback.
+    // product_techniques is strict once configured — quoting an option the
+    // product does not allow is a hard error, never a silent fallback. A
+    // product with zero product_fabrics rows accepts any active fabric at its
+    // catalog delta (public picker fallback).
     let optionsContext: {
       fabric: typeof fabrics.$inferSelect;
       fabricDelta: number;
@@ -176,7 +178,9 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
       if (!fabric || !fabric.active) throw new Error("La tela seleccionada no existe o está inactiva.");
       const fabricRows = await db.select().from(productFabrics).where(eq(productFabrics.productId, line.productId));
       const fabricRow = fabricRows.find((row) => row.fabricId === fabric.id);
-      if (!fabricRow) throw new Error(`La tela "${fabric.name}" no está habilitada para "${product.name}".`);
+      if (fabricRows.length > 0 && !fabricRow) {
+        throw new Error(`La tela "${fabric.name}" no está habilitada para "${product.name}".`);
+      }
       const techniqueRows = await db.select().from(productTechniques).where(eq(productTechniques.productId, line.productId));
       const methods: Array<{ technique: typeof techniques.$inferSelect; delta: number }> = [];
       for (const technique of lineTechniques) {
@@ -195,7 +199,7 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
       const tierRows = await db.select().from(productVolumeTiers).where(eq(productVolumeTiers.productId, line.productId));
       optionsContext = {
         fabric,
-        fabricDelta: Number(fabric.priceModifier) + Number(fabricRow.priceModifier),
+        fabricDelta: Number(fabric.priceModifier) + Number(fabricRow?.priceModifier ?? 0),
         methods,
         volumeTier: selectVolumeTier(
           tierRows.map((row) => ({ minQty: row.minQty, discountPercent: Number(row.discountPercent) })),

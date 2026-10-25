@@ -1,11 +1,11 @@
 # Graph Report - feat-wizard-options  (2026-10-25)
 
 ## Corpus Check
-- 488 files · ~388,011 words
+- 488 files · ~388,028 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3953 nodes · 9003 edges · 218 communities (196 shown, 22 thin omitted)
+- 3953 nodes · 9003 edges · 219 communities (197 shown, 22 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 27 edges (avg confidence: 0.67)
 - Token cost: 0 input · 0 output
 
@@ -22,7 +22,7 @@
 - tools/types.ts
 - db/schema.ts
 - /graphify
-- requireUser
+- client.ts
 - Card.tsx
 - $graphify
 - compilerOptions
@@ -96,7 +96,7 @@
 - eslint.config.mjs
 - opencode.json
 - package.json
-- products
+- validators.ts
 - next.config.ts
 - site.ts
 - NEON-MIGRATION-BASELINE.md
@@ -107,7 +107,7 @@
 - 0001_public_upload_sessions.sql
 - 0003_suppliers.sql
 - "product_taxonomy_nodes"
-- lib/auth.ts
+- attachments.ts
 - rbac.ts
 - tools-clients.ts
 - tools-cash.ts
@@ -120,7 +120,7 @@
 - intake.ts
 - inbound-pipeline.ts
 - messaging/types.ts
-- client.ts
+- products
 - conversations
 - config.ts
 - sdd-telegram-agent-exploration.md
@@ -171,7 +171,7 @@
 - ChannelsView.tsx
 - conversions.ts
 - env.ts
-- seed.ts
+- [itemId]/route.ts
 - RecetasEditor
 - cron/reconcile/route.ts
 - (public)/catalogo/page.tsx
@@ -209,6 +209,7 @@
 - "agent_config"
 - signatures.ts
 - PlanillaTable.tsx
+- RecetasEditor.tsx
 - protocol.ts
 - dlq.ts
 - register.ts
@@ -243,7 +244,7 @@
 ## Import Cycles
 - 3-file cycle: `src/lib/messaging/accounts.ts -> src/lib/messaging/registry.ts -> src/lib/messaging/providers/ycloud.ts -> src/lib/messaging/accounts.ts`
 
-## Communities (218 total, 22 thin omitted)
+## Communities (219 total, 22 thin omitted)
 
 ### Community 0 - "read.ts"
 Cohesion: 0.04
@@ -267,19 +268,19 @@ Nodes (20): detectInjectionAttempt(), InjectionSignal, SIGNATURES, AgentLoopInpu
 
 ### Community 5 - "db/schema.ts"
 Cohesion: 0.03
-Nodes (69): PATCH(), POST(), agentConfigRelations, AgentEnabledTools, agentInboundJobsRelations, agentKind, agentMemoryScope, AgentRawPayload (+61 more)
+Nodes (70): PATCH(), POST(), agentConfigRelations, AgentEnabledTools, agentInboundJobsRelations, agentKind, agentMemoryScope, AgentRawPayload (+62 more)
 
 ### Community 6 - "/graphify"
 Cohesion: 0.06
 Nodes (34): Configured Project Profiles, For --cluster-only, For git commit hook, For /graphify add, For /graphify explain, For /graphify path, For /graphify query, For native CLAUDE.md integration (+26 more)
 
-### Community 7 - "requireUser"
-Cohesion: 0.04
-Nodes (81): Fail, formStr(), listOrgLibrary(), uploadAttachment(), KIND_LABEL, metadata, METHOD_LABEL, DELETE() (+73 more)
+### Community 7 - "client.ts"
+Cohesion: 0.05
+Nodes (76): dynamic, EditarPromoPage(), dynamic, NuevaPromoPage(), PromoForm(), DELETE(), GET(), POST() (+68 more)
 
 ### Community 8 - "Card.tsx"
-Cohesion: 0.10
-Nodes (52): INBOX_CHANNEL_LABEL, dynamic, metadata, EMPTY, Row, ContactosPage(), dynamic, STATUS_TONE (+44 more)
+Cohesion: 0.09
+Nodes (54): dynamic, metadata, EMPTY, Row, ContactosPage(), dynamic, STATUS_TONE, InsumosTable() (+46 more)
 
 ### Community 9 - "$graphify"
 Cohesion: 0.07
@@ -310,8 +311,8 @@ Cohesion: 0.15
 Nodes (21): beginPublicUploadSession(), createPublicOrder(), PublicOrderDomainError, PublicOrderFailure, uploadAttachmentFromPublic(), WIZARD_RATE_LIMITED, wizardRateLimited(), KINDS (+13 more)
 
 ### Community 16 - "pricing.ts"
-Cohesion: 0.04
-Nodes (64): confirmQuote(), createOrder(), createOrderLine(), LINE_EDITABLE_STATUS, loadQuotableLines(), QuoteActionError, REQUOTE_BLOCKED_STATUS, reQuoteOrder() (+56 more)
+Cohesion: 0.06
+Nodes (43): confirmQuote(), createOrder(), LINE_EDITABLE_STATUS, loadQuotableLines(), QuoteActionError, REQUOTE_BLOCKED_STATUS, reQuoteOrder(), POST() (+35 more)
 
 ### Community 17 - "dependencies"
 Cohesion: 0.10
@@ -565,9 +566,9 @@ Nodes (3): plugin, $schema, .opencode/plugins/graphify.js
 Cohesion: 0.50
 Nodes (3): name, private, version
 
-### Community 81 - "products"
-Cohesion: 0.18
-Nodes (18): PATCH(), POST(), DELETE(), PATCH(), POST(), productBundleItems, productBundles, products (+10 more)
+### Community 81 - "validators.ts"
+Cohesion: 0.06
+Nodes (34): KIND_LABEL, metadata, METHOD_LABEL, PATCH(), POST(), POST(), emptyMeasurementSchema, POST() (+26 more)
 
 ### Community 83 - "site.ts"
 Cohesion: 0.14
@@ -581,9 +582,9 @@ Nodes (27): 0. Estado real: implementado vs. validado en vivo (leer primero), 10
 Cohesion: 0.12
 Nodes (32): AuthorizedOperator, resolveOperatorIdentity(), CommandContext, handleOperatorCommand(), HELP_TEXT, runAgentLoop(), wrapUntrustedContent(), resolveEnabledTools() (+24 more)
 
-### Community 95 - "lib/auth.ts"
-Cohesion: 0.10
-Nodes (16): dynamic, EditarPromoPage(), dynamic, NuevaPromoPage(), PromoForm(), POST(), GET(), MIME_MAP (+8 more)
+### Community 95 - "attachments.ts"
+Cohesion: 0.14
+Nodes (18): Fail, formStr(), listOrgLibrary(), uploadAttachment(), GET(), POST(), DELETE(), IMAGE_MIMES (+10 more)
 
 ### Community 101 - "rbac.ts"
 Cohesion: 0.24
@@ -633,9 +634,9 @@ Nodes (24): resolveScopeForConversation(), persistAgentOutbound(), autoReplyClai
 Cohesion: 0.09
 Nodes (27): ChannelEventContext, assertConversationAccount(), ConversationIdentityError, ConversationIdentityErrorCode, ConversationIdentityInsert, ConversationIdentityRecord, ConversationIdentityRepository, ConversationIdentityResult (+19 more)
 
-### Community 113 - "client.ts"
-Cohesion: 0.08
-Nodes (27): KIND_LABEL, metadata, STATUS_LABEL, stageLabel, GET(), POST(), PATCH(), POST() (+19 more)
+### Community 113 - "products"
+Cohesion: 0.07
+Nodes (40): createOrderLine(), KIND_LABEL, metadata, STATUS_LABEL, stageLabel, bodySchema, EDITABLE, POST() (+32 more)
 
 ### Community 114 - "conversations"
 Cohesion: 0.10
@@ -671,7 +672,7 @@ Nodes (4): Findings, Notes / non-findings, REVIEW R5 — Domain pack (W9): cart 
 
 ### Community 122 - "Button.tsx"
 Cohesion: 0.05
-Nodes (58): OperatorUserOption, labels, Node, MATERIAL_CATEGORIES, MaterialInitial, UNITS, ConfirmQuoteForm(), submit() (+50 more)
+Nodes (55): OperatorUserOption, labels, Node, FIELDS, settingValue(), WorkshopSettingsForm(), submit(), MATERIAL_CATEGORIES (+47 more)
 
 ### Community 123 - "BusinessSettingsForm.tsx"
 Cohesion: 0.15
@@ -820,9 +821,9 @@ Nodes (10): hashEmail(), hashName(), hashPhone(), MetaConversionCustomData, Meta
 Cohesion: 0.32
 Nodes (5): assertServerEnv(), isProduction(), loadServerEnv(), ServerEnv, serverEnvSchema
 
-### Community 170 - "seed.ts"
-Cohesion: 0.11
-Nodes (19): PATCH(), POST(), DELETE(), parseItem(), PATCH(), bomItems, bomRecipes, materials (+11 more)
+### Community 170 - "[itemId]/route.ts"
+Cohesion: 0.20
+Nodes (13): FichaTecnicaPage(), POST(), DELETE(), parseItem(), PATCH(), BomConsumption, BomConsumptionInput, calculateBomConsumption() (+5 more)
 
 ### Community 171 - "RecetasEditor"
 Cohesion: 0.33
@@ -917,8 +918,8 @@ Cohesion: 0.20
 Nodes (9): Build & Tests Execution, Coherence (Design), Completeness, Correctness (Static Evidence), Graph-first Orientation (note), Issues Found, Spec Compliance Matrix, Verdict (+1 more)
 
 ### Community 201 - "[conversationId]/page.tsx"
-Cohesion: 0.08
-Nodes (32): loadMessages(), sendReply(), AgentDlqPage(), MessagesTimeline(), ConversationTimelinePage(), ReplyComposer(), handleSubmit(), ConversationTable() (+24 more)
+Cohesion: 0.11
+Nodes (26): loadMessages(), sendReply(), AgentDlqPage(), MessagesTimeline(), ConversationTimelinePage(), ReplyComposer(), handleSubmit(), ConversationTable() (+18 more)
 
 ### Community 203 - "configuracion/catalogo/page.tsx"
 Cohesion: 0.33
@@ -943,6 +944,10 @@ Nodes (10): hasBytes(), isMarkup(), isTextLike(), MediaSniff, mimeKind(), OLE_SI
 ### Community 211 - "PlanillaTable.tsx"
 Cohesion: 0.20
 Nodes (6): Item, Line, PlanillaRow(), PlanillaTable(), STAGES, stageTone
+
+### Community 212 - "RecetasEditor.tsx"
+Cohesion: 0.25
+Nodes (7): ConsumptionMode, Item, ItemForm, Material, Recipe, Size, Technique
 
 ### Community 213 - "protocol.ts"
 Cohesion: 0.43
@@ -972,11 +977,11 @@ Nodes (11): deltaLabel(), Step2Form(), estimateInputSchema, estimateWizardQuote(
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `db` connect `client.ts` to `read.ts`, `requireAgentAdmin`, `tools-memory.ts`, `zernio-connect.ts`, `clientIpFromRequest`, `db/schema.ts`, `requireUser`, `Card.tsx`, `inbound-queue.ts`, `sql`, `productos/[id]/page.tsx`, `actions/inbox.ts`, `link-generator/page.tsx`, `public-orders.ts`, `pricing.ts`, `secret-box.ts`, `agent-config.ts`, `5/page.tsx`, `operator-send.ts`, `api/leads/route.ts`, `inbound.ts`, `tools-broadcast.ts`, `reconcile.ts`, `lead-identity.ts`, `tools-orders.ts`, `session-store.ts`, `channels/types.ts`, `(admin)/layout.tsx`, `seed.ts`, `login/route.ts`, `adjuntos/page.tsx`, `order-context.ts`, `session.ts`, `channels/accounts.ts`, `messaging/accounts.ts`, `agent/inbox.ts`, `tools-products.ts`, `sales-tools.ts`, `[conversationId]/page.tsx`, `confirmations.ts`, `sales-agent.ts`, `products`, `bot.ts`, `lib/auth.ts`, `rbac.ts`, `tools-clients.ts`, `tools-cash.ts`, `human-handoff.ts`, `agent-config-scope.ts`, `ApplicationsManager.tsx`, `runner.ts`, `intake.ts`, `inbound-pipeline.ts`, `messaging/types.ts`, `conversations`, `telegram.ts`, `temporal-context.ts`, `BusinessSettingsForm.tsx`, `ingress.test.ts`, `insumos/[id]/page.tsx`, `ref-code-sign.ts`, `storage.ts`?**
+- **Why does `db` connect `client.ts` to `read.ts`, `requireAgentAdmin`, `tools-memory.ts`, `zernio-connect.ts`, `clientIpFromRequest`, `db/schema.ts`, `Card.tsx`, `inbound-queue.ts`, `sql`, `productos/[id]/page.tsx`, `actions/inbox.ts`, `link-generator/page.tsx`, `public-orders.ts`, `pricing.ts`, `secret-box.ts`, `agent-config.ts`, `5/page.tsx`, `operator-send.ts`, `api/leads/route.ts`, `inbound.ts`, `tools-broadcast.ts`, `reconcile.ts`, `lead-identity.ts`, `tools-orders.ts`, `session-store.ts`, `channels/types.ts`, `(admin)/layout.tsx`, `[itemId]/route.ts`, `login/route.ts`, `adjuntos/page.tsx`, `order-context.ts`, `session.ts`, `channels/accounts.ts`, `messaging/accounts.ts`, `agent/inbox.ts`, `tools-products.ts`, `sales-tools.ts`, `[conversationId]/page.tsx`, `confirmations.ts`, `sales-agent.ts`, `validators.ts`, `bot.ts`, `attachments.ts`, `rbac.ts`, `tools-clients.ts`, `tools-cash.ts`, `human-handoff.ts`, `agent-config-scope.ts`, `ApplicationsManager.tsx`, `runner.ts`, `intake.ts`, `inbound-pipeline.ts`, `messaging/types.ts`, `products`, `conversations`, `telegram.ts`, `temporal-context.ts`, `BusinessSettingsForm.tsx`, `ingress.test.ts`, `insumos/[id]/page.tsx`, `ref-code-sign.ts`, `storage.ts`?**
   _High betweenness centrality (0.085) - this node is a cross-community bridge._
 - **Why does `FakeDb` connect `FakeDb` to `sales-tools.test.ts`, `inbound-pipeline.test.ts`, `confirmations.ts`, `fake-db.ts`, `ingress.test.ts`?**
   _High betweenness centrality (0.015) - this node is a cross-community bridge._
-- **Why does `requireUser()` connect `requireUser` to `read.ts`, `db/schema.ts`, `rbac.ts`, `(admin)/layout.tsx`, `Card.tsx`, `[conversationId]/page.tsx`, `seed.ts`, `ApplicationsManager.tsx`, `configuracion/catalogo/page.tsx`, `pricing.ts`, `client.ts`, `products`, `adjuntos/page.tsx`, `organizaciones/nuevo/page.tsx`, `lib/auth.ts`?**
+- **Why does `requireUser()` connect `client.ts` to `read.ts`, `db/schema.ts`, `rbac.ts`, `(admin)/layout.tsx`, `Card.tsx`, `[conversationId]/page.tsx`, `[itemId]/route.ts`, `ApplicationsManager.tsx`, `configuracion/catalogo/page.tsx`, `pricing.ts`, `products`, `validators.ts`, `adjuntos/page.tsx`, `organizaciones/nuevo/page.tsx`, `attachments.ts`?**
   _High betweenness centrality (0.012) - this node is a cross-community bridge._
 - **What connects `$schema`, `.opencode/plugins/graphify.js`, `HERE` to the rest of the system?**
   _1608 weakly-connected nodes found - possible documentation gaps or missing edges._

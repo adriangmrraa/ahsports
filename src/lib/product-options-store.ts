@@ -11,7 +11,8 @@ export { normalizeTechniqueIds };
  * instead of at quote time.
  *
  * - fabricId set → the fabric must exist, be active and be one of the
- *   product's configured product_fabrics (strict membership).
+ *   product's configured product_fabrics; when the product has NO
+ *   product_fabrics rows any active fabric is allowed (public fallback).
  * - product has configured methods (product_techniques) → at least one
  *   techniqueId is required and EVERY selected method must be a member;
  *   without configured methods any techniqueId is rejected only in options
@@ -48,7 +49,10 @@ export async function assertLineOptionsAllowed(input: {
     .select({ fabricId: productFabrics.fabricId })
     .from(productFabrics)
     .where(eq(productFabrics.productId, productId));
-  if (!fabricRows.some((row) => row.fabricId === fabric.id)) {
+  // No configured fabrics → the product accepts any active fabric (the
+  // wizard lists the full catalog as fallback). Once product_fabrics has
+  // rows, membership is strict.
+  if (fabricRows.length > 0 && !fabricRows.some((row) => row.fabricId === fabric.id)) {
     return `La tela "${fabric.name}" no está habilitada para ${productLabel}`;
   }
 
