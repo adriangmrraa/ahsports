@@ -27,6 +27,19 @@ export type PublicEstimate = {
   sizes: PublicEstimateSize[];
   advancePercent: number | null;
   advanceAmount: number | null;
+  /** Applied option breakdown — deltas and tier only, never costs. */
+  options?: {
+    fabricId: string;
+    fabricName: string;
+    fabricDelta: number;
+    /** Stackable methods the customer picked, each with its sell delta. */
+    methods: Array<{ techniqueId: string; techniqueName: string; delta: number }>;
+    /** Sum of every method delta. */
+    methodsDelta: number;
+    listUnitPrice: number;
+    volumeTier: { minQty: number; discountPercent: number } | null;
+    discountPercent: number;
+  };
 };
 
 /**
@@ -38,6 +51,11 @@ export type PublicEstimate = {
 export async function getPublicEstimate(input: {
   productId: string;
   sizeQuantities: SizeQuantity[];
+  fabricId?: string | null;
+  /** Stackable methods — every selected delta sums into the unit price. */
+  techniqueIds?: string[] | null;
+  /** Legacy single-method form; techniqueIds wins when both are sent. */
+  techniqueId?: string | null;
 }): Promise<PublicEstimate | null> {
   const sizeQuantities = input.sizeQuantities
     .map((s) => ({ sizeId: s.sizeId ?? null, quantity: Math.trunc(s.quantity) }))
@@ -54,7 +72,14 @@ export async function getPublicEstimate(input: {
 
   try {
     const quote = await quoteOrder({
-      lines: [{ productId: product.id, quantity, sizeQuantities }],
+      lines: [{
+        productId: product.id,
+        quantity,
+        sizeQuantities,
+        fabricId: input.fabricId ?? null,
+        techniqueIds: input.techniqueIds ?? null,
+        techniqueId: input.techniqueId ?? null,
+      }],
     });
     const line = quote.lines[0];
     if (!line || line.quantity === 0 || line.subtotal <= 0) return null;
@@ -74,6 +99,18 @@ export async function getPublicEstimate(input: {
       })),
       advancePercent,
       advanceAmount: (line.subtotal * advancePercent) / 100,
+      options: line.options
+        ? {
+            fabricId: line.options.fabricId,
+            fabricName: line.options.fabricName,
+            fabricDelta: line.options.fabricDelta,
+            methods: line.options.methods,
+            methodsDelta: line.options.methodsDelta,
+            listUnitPrice: line.options.listUnitPrice,
+            volumeTier: line.options.volumeTier,
+            discountPercent: line.options.discountPercent,
+          }
+        : undefined,
     };
   } catch {
     return null;

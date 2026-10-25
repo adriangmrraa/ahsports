@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/db/client";
-import { orders, orderLines, orderItems, payments, products, organizations, contacts, attachments, productionEvents } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { orders, orderLines, orderItems, orderLineTechniques, payments, products, organizations, contacts, attachments, productionEvents, techniques, fabrics } from "@/db/schema";
+import { eq, desc, inArray } from "drizzle-orm";
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { LinkButton, Button } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
@@ -60,6 +60,7 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
       quantity: orderLines.quantity,
       unitPrice: orderLines.unitPrice,
       unitCost: orderLines.unitCost,
+      fabricId: orderLines.fabricId,
       productId: orderLines.productId,
       productName: products.name,
       productSku: products.sku,
@@ -67,6 +68,37 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
     .from(orderLines)
     .leftJoin(products, eq(orderLines.productId, products.id))
     .where(eq(orderLines.orderId, id));
+
+  // Opciones elegidas por línea: tela + selección completa de métodos
+  // (order_line_techniques — apilables).
+  const lineIds = lines.map((line) => line.id);
+  const pickedFabricIds = [...new Set(lines.flatMap((line) => line.fabricId ? [line.fabricId] : []))];
+  const [lineTechniqueRows, lineFabricRows] = lineIds.length > 0
+    ? await Promise.all([
+        db.select({ orderLineId: orderLineTechniques.orderLineId, name: techniques.name })
+          .from(orderLineTechniques)
+          .innerJoin(techniques, eq(orderLineTechniques.techniqueId, techniques.id))
+          .where(inArray(orderLineTechniques.orderLineId, lineIds)),
+        pickedFabricIds.length > 0
+          ? db.select({ id: fabrics.id, name: fabrics.name }).from(fabrics).where(inArray(fabrics.id, pickedFabricIds))
+          : Promise.resolve([]),
+      ])
+    : [[], []];
+  const fabricNameById = new Map(lineFabricRows.map((row) => [row.id, row.name]));
+  const optionsByLine = new Map<string, { fabricName: string | null; methodNames: string[] }>();
+  for (const row of lineTechniqueRows) {
+    const entry = optionsByLine.get(row.orderLineId) ?? { fabricName: null, methodNames: [] };
+    entry.methodNames.push(row.name);
+    optionsByLine.set(row.orderLineId, entry);
+  }
+  for (const line of lines) {
+    const fabricName = line.fabricId ? (fabricNameById.get(line.fabricId) ?? null) : null;
+    if (fabricName) {
+      const entry = optionsByLine.get(line.id) ?? { fabricName: null, methodNames: [] };
+      entry.fabricName = fabricName;
+      optionsByLine.set(line.id, entry);
+    }
+  }
 
   // KI-03: items filtrados por orderId vía join con orderLines (nunca fetch global).
   const items = await db
@@ -204,6 +236,14 @@ export default async function PedidoDetallePage({ params }: { params: Promise<{ 
                     <TD>
                       <div className="text-on-surface">{l.productName ?? l.productId}</div>
                       <div className="text-xs text-on-surface-variant data-mono">{l.productSku}</div>
+                      {(() => {
+                        const options = optionsByLine.get(l.id);
+                        if (!options) return null;
+                        const parts = [options.fabricName, ...options.methodNames].filter(Boolean);
+                        return parts.length > 0
+                          ? <div className="text-xs text-on-surface-variant mt-0.5">{parts.join(" + ")}</div>
+                          : null;
+                      })()}
                     </TD>
                     <TD align="center" label="Cantidad">{l.quantity}</TD>
                     <TD align="right" label="Costo unit.">{formatCurrency(l.unitCost)}</TD>

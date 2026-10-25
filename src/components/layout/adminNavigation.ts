@@ -18,6 +18,7 @@ import {
   Ruler,
   Send,
   Settings,
+  Shirt,
   ShoppingCart,
   Target,
   Truck,
@@ -37,6 +38,7 @@ export type AdminNavIcon =
   | "materials"
   | "suppliers"
   | "techniques"
+  | "fabrics"
   | "customers"
   | "contacts"
   | "promos"
@@ -71,6 +73,7 @@ const navigation: Array<Omit<AdminNavItem, "badge">> = [
   { href: "/admin/insumos", label: "Insumos", icon: "materials" },
   { href: "/admin/proveedores", label: "Proveedores", icon: "suppliers" },
   { href: "/admin/tecnicas", label: "Técnicas", icon: "techniques" },
+  { href: "/admin/telas", label: "Telas", icon: "fabrics" },
   { href: "/admin/organizaciones", label: "Clientes", icon: "customers" },
   { href: "/admin/contactos", label: "Contactos", icon: "contacts" },
   { href: "/admin/promos", label: "Promos", icon: "promos" },
@@ -98,6 +101,7 @@ export const ADMIN_NAV_ICONS: Record<AdminNavIcon, LucideIcon> = {
   materials: Box,
   suppliers: Truck,
   techniques: Wrench,
+  fabrics: Shirt,
   customers: Users,
   contacts: Contact,
   promos: BadgePercent,

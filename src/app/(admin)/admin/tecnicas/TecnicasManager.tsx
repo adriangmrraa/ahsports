@@ -11,7 +11,7 @@ import type { techniques } from "@/db/schema";
 
 type Row = typeof techniques.$inferSelect;
 
-const EMPTY = { name: "", costPerUnit: "0", costPerSquareMeter: "0", setupCost: "0", description: "" };
+const EMPTY = { name: "", costPerUnit: "0", costPerSquareMeter: "0", setupCost: "0", description: "", requiresSublimableFabric: false };
 
 export function TecnicasManager({ initial }: { initial: Row[] }) {
   const router = useRouter();
@@ -28,6 +28,7 @@ export function TecnicasManager({ initial }: { initial: Row[] }) {
       costPerSquareMeter: row.costPerSquareMeter,
       setupCost: row.setupCost,
       description: row.description ?? "",
+      requiresSublimableFabric: row.requiresSublimableFabric,
     });
     setError(null);
   }
@@ -47,6 +48,7 @@ export function TecnicasManager({ initial }: { initial: Row[] }) {
       costPerSquareMeter: Number(form.costPerSquareMeter),
       setupCost: Number(form.setupCost),
       description: form.description || null,
+      requiresSublimableFabric: form.requiresSublimableFabric,
     };
     startTransition(async () => {
       const res = await fetch(editing ? `/api/techniques/${editing.id}` : "/api/techniques", {
@@ -95,6 +97,15 @@ export function TecnicasManager({ initial }: { initial: Row[] }) {
             <Field label="Costo por m²" hint="$ por metro cuadrado"><Input type="number" step="0.01" value={form.costPerSquareMeter} onChange={(e) => setForm({ ...form, costPerSquareMeter: e.target.value })} required /></Field>
             <Field label="Setup" hint="Costo fijo por trabajo"><Input type="number" step="0.01" value={form.setupCost} onChange={(e) => setForm({ ...form, setupCost: e.target.value })} required /></Field>
           </div>
+          <label className="flex items-center gap-2 text-sm text-on-surface cursor-pointer w-fit">
+            <input
+              type="checkbox"
+              checked={form.requiresSublimableFabric}
+              onChange={(e) => setForm({ ...form, requiresSublimableFabric: e.target.checked })}
+              className="w-4 h-4 accent-primary"
+            />
+            Requiere tela sublimable <span className="text-on-surface-variant text-xs">(solo se ofrece con telas aptas para sublimación)</span>
+          </label>
           {error && <p className="text-sm text-error">{error}</p>}
           <div className="flex justify-end gap-2">
             {editing && <Button type="button" variant="ghost" disabled={pending} onClick={cancelEdit}>Cancelar</Button>}
@@ -110,6 +121,7 @@ export function TecnicasManager({ initial }: { initial: Row[] }) {
             <TH align="right">Por unidad</TH>
             <TH align="right">Por m²</TH>
             <TH align="right">Setup</TH>
+            <TH>Tela sublimable</TH>
             <TH>Estado</TH>
             <TH align="right">Acciones</TH>
           </tr>
@@ -121,6 +133,13 @@ export function TecnicasManager({ initial }: { initial: Row[] }) {
               <TD align="right" label="Por unidad">{formatCurrency(t.costPerUnit)}</TD>
               <TD align="right" label="Por m²">{formatCurrency(t.costPerSquareMeter)}</TD>
               <TD align="right" label="Setup">{formatCurrency(t.setupCost)}</TD>
+              <TD label="Tela sublimable">
+                {t.requiresSublimableFabric ? (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border bg-primary/10 border-primary/40 text-primary">REQUERIDA</span>
+                ) : (
+                  <span className="text-[10px] px-1.5 py-0.5 text-on-surface-variant">—</span>
+                )}
+              </TD>
               <TD label="Estado">
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${t.active ? "bg-primary/10 border-primary/40 text-primary" : "border-outline-variant text-on-surface-variant"}`}>
                   {t.active ? "ACTIVA" : "INACTIVA"}

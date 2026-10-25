@@ -105,6 +105,9 @@ export async function createPublicOrder(input: unknown): Promise<
         organizationNotes: "Creada desde presupuesto público",
         notes: data.notes,
         productId: data.productId,
+        fabricId: data.fabricId ?? null,
+        techniqueId: data.techniqueId ?? null,
+        techniqueIds: data.techniqueIds ?? null,
         sizeQuantities: data.sizeQuantities,
         items: data.items,
       });

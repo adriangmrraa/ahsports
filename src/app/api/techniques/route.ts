@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     costPerSquareMeter: String(d.costPerSquareMeter),
     setupCost: String(d.setupCost),
     description: d.description ?? null,
+    requiresSublimableFabric: d.requiresSublimableFabric,
   }).returning();
   return NextResponse.json(row);
 }

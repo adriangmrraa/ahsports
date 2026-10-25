@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/db/client";
-import { orderLines, orders, pricingRules, products } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { orderLines, orderLineTechniques, orders, pricingRules, products } from "@/db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { PageHeader, Card, Badge } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
@@ -60,6 +60,7 @@ export default async function CotizarPage({ params }: { params: Promise<{ id: st
       id: orderLines.id,
       quantity: orderLines.quantity,
       techniqueId: orderLines.techniqueId,
+      fabricId: orderLines.fabricId,
       productId: orderLines.productId,
       productName: products.name,
       productSku: products.sku,
@@ -97,6 +98,19 @@ export default async function CotizarPage({ params }: { params: Promise<{ id: st
 
   const sizeQuantities = await loadOrderLineSizeQuantities(dbLines.map((line) => line.id));
 
+  // Selección apilable completa por línea; fallback al technique_id primario
+  // para líneas anteriores a order_line_techniques.
+  const lineTechniqueRows = await db
+    .select({ orderLineId: orderLineTechniques.orderLineId, techniqueId: orderLineTechniques.techniqueId })
+    .from(orderLineTechniques)
+    .where(inArray(orderLineTechniques.orderLineId, dbLines.map((line) => line.id)));
+  const techniqueIdsByLine = new Map<string, string[]>();
+  for (const row of lineTechniqueRows) {
+    const current = techniqueIdsByLine.get(row.orderLineId) ?? [];
+    current.push(row.techniqueId);
+    techniqueIdsByLine.set(row.orderLineId, current);
+  }
+
   // Preview: quoteOrder() SIN writes — nada se persiste en esta página.
   // F6 — quoteOrder() tira error de dominio (sin receta / sin rendimiento):
   // se muestra como tarjeta de error con CTA en vez de romper la página.
@@ -109,7 +123,8 @@ export default async function CotizarPage({ params }: { params: Promise<{ id: st
         productId: l.productId,
         quantity: l.quantity,
         sizeQuantities: sizeQuantities.get(l.id),
-        techniqueId: l.techniqueId,
+        techniqueIds: techniqueIdsByLine.get(l.id) ?? (l.techniqueId ? [l.techniqueId] : []),
+        fabricId: l.fabricId,
       })),
       urgent: order.urgent,
     });
@@ -216,6 +231,13 @@ export default async function CotizarPage({ params }: { params: Promise<{ id: st
                     <div className="text-on-surface">{l.productName}</div>
                     {sku && <div className="text-xs text-on-surface-variant data-mono">{sku}</div>}
                     {sizeSummary && <div className="text-xs text-on-surface-variant">{sizeSummary}</div>}
+                    {l.options && (
+                      <div className="text-xs text-on-surface-variant mt-0.5">
+                        {l.options.fabricName}
+                        {l.options.methods.length > 0 && ` + ${l.options.methods.map((m) => m.techniqueName).join(" + ")}`}
+                        {l.options.volumeTier && ` · −${l.options.discountPercent}% x${l.options.volumeTier.minQty}+`}
+                      </div>
+                    )}
                   </TD>
                   <TD align="center" label="Cant.">{l.quantity}</TD>
                   <TD align="right" label="Costo unit.">{formatCurrency(l.unitCost)}</TD>

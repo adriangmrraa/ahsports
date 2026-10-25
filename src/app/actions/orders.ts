@@ -3,13 +3,14 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { orderItems, orderLines, orders, payments, pricingRules, products, sizes, techniques } from "@/db/schema";
+import { orderItems, orderLines, orderLineTechniques, orders, payments, pricingRules, products, sizes, techniques } from "@/db/schema";
 import type { SnapshotHistoryEntry } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { generatePublicToken } from "@/lib/utils";
 import { loadOrderLineSizeQuantities, quoteOrder } from "@/lib/pricing";
+import { assertLineOptionsAllowed, getProductMethodDeltas, normalizeTechniqueIds } from "@/lib/product-options-store";
 import { confirmQuoteSchema, createOrderLineSchema, orderSchema, reQuoteOrderSchema } from "@/lib/validators";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 export async function createOrder(input: unknown) {
   const user = await requireUser();
@@ -61,10 +62,18 @@ export async function createOrderLine(input: unknown) {
   const [product] = await db.select().from(products).where(eq(products.id, d.productId)).limit(1);
   if (!product) return { ok: false as const, error: "Producto no encontrado" };
   if (!product.active) return { ok: false as const, error: "Producto inactivo" };
-  if (d.techniqueId) {
-    const [tech] = await db.select({ id: techniques.id }).from(techniques).where(eq(techniques.id, d.techniqueId)).limit(1);
-    if (!tech) return { ok: false as const, error: "Técnica no encontrada" };
+  const techniqueIds = normalizeTechniqueIds(d.techniqueIds, d.techniqueId);
+  if (techniqueIds.length > 0) {
+    const found = await db.select({ id: techniques.id }).from(techniques).where(inArray(techniques.id, techniqueIds));
+    if (found.length !== techniqueIds.length) return { ok: false as const, error: "Técnica no encontrada" };
   }
+  const optionsError = await assertLineOptionsAllowed({
+    productId: product.id,
+    productName: product.name,
+    fabricId: d.fabricId ?? null,
+    techniqueIds,
+  });
+  if (optionsError) return { ok: false as const, error: optionsError };
   const productSizes = await db.select().from(sizes).where(eq(sizes.productId, d.productId));
   const sizeIds = new Set(productSizes.map((s) => s.id));
   const entries = Object.entries(d.sizeQuantities ?? {}).filter(([, q]) => q > 0);
@@ -78,13 +87,14 @@ export async function createOrderLine(input: unknown) {
     : (d.quantity ?? 0);
   if (totalQty <= 0) return { ok: false as const, error: "Cantidad inválida" };
 
-  // 5. Writes secuenciales (Neon HTTP: sin tx) — línea + items.
+  // 5. Writes secuenciales (Neon HTTP: sin tx) — línea + métodos + items.
   const [line] = await db
     .insert(orderLines)
     .values({
       orderId: d.orderId,
       productId: d.productId,
-      techniqueId: d.techniqueId ?? null,
+      techniqueId: techniqueIds[0] ?? null,
+      fabricId: d.fabricId ?? null,
       quantity: totalQty,
       unitPrice: String(product.basePrice),
       unitCost: "0",
@@ -92,6 +102,16 @@ export async function createOrderLine(input: unknown) {
     })
     .returning({ id: orderLines.id });
   if (!line) return { ok: false as const, error: "No se pudo crear la línea" };
+
+  // Selección apilable completa con el delta de venta aplicado al crear.
+  const methodDeltas = await getProductMethodDeltas(d.productId, techniqueIds);
+  for (const techniqueId of techniqueIds) {
+    await db.insert(orderLineTechniques).values({
+      orderLineId: line.id,
+      techniqueId,
+      priceModifier: String(methodDeltas.get(techniqueId) ?? 0),
+    });
+  }
 
   if (entries.length > 0) {
     for (const [sizeId, qty] of entries) {
@@ -117,13 +137,28 @@ type QuoteActionError = { ok: false; error: string; issues?: unknown };
 async function loadQuotableLines(orderId: string) {
   const lines = await db.select().from(orderLines).where(eq(orderLines.orderId, orderId));
   const sizeQuantities = await loadOrderLineSizeQuantities(lines.map((line) => line.id));
+  // The stackable selection lives in order_line_techniques; lines predating
+  // that table fall back to the primary technique_id they already carry.
+  const lineTechniqueRows = lines.length > 0
+    ? await db
+        .select({ orderLineId: orderLineTechniques.orderLineId, techniqueId: orderLineTechniques.techniqueId })
+        .from(orderLineTechniques)
+        .where(inArray(orderLineTechniques.orderLineId, lines.map((line) => line.id)))
+    : [];
+  const techniqueIdsByLine = new Map<string, string[]>();
+  for (const row of lineTechniqueRows) {
+    const current = techniqueIdsByLine.get(row.orderLineId) ?? [];
+    current.push(row.techniqueId);
+    techniqueIdsByLine.set(row.orderLineId, current);
+  }
   return lines.map((line) => ({
     line,
     quoteInput: {
       orderLineId: line.id,
       productId: line.productId,
       quantity: line.quantity,
-      techniqueId: line.techniqueId,
+      techniqueIds: techniqueIdsByLine.get(line.id) ?? (line.techniqueId ? [line.techniqueId] : []),
+      fabricId: line.fabricId,
       sizeQuantities: sizeQuantities.get(line.id),
     },
   }));

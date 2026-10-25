@@ -20,6 +20,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (d.costPerSquareMeter !== undefined) patch.costPerSquareMeter = String(d.costPerSquareMeter);
   if (d.setupCost !== undefined) patch.setupCost = String(d.setupCost);
   if (d.description !== undefined) patch.description = d.description ?? null;
+  if (d.requiresSublimableFabric !== undefined) patch.requiresSublimableFabric = d.requiresSublimableFabric;
   if (body?.active !== undefined) patch.active = body.active !== false;
   const [row] = await db.update(techniques).set(patch).where(eq(techniques.id, id)).returning();
   if (!row) return NextResponse.json({ error: "Técnica no encontrada" }, { status: 404 });

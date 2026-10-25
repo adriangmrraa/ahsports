@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
-import { orders, products, sizes, techniques } from "@/db/schema";
+import { fabrics, orders, productFabrics, productTechniques, products, sizes, techniques } from "@/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
 import { AddLineForm } from "./AddLineForm";
@@ -19,13 +19,33 @@ export default async function NuevaLineaPage({ params }: { params: Promise<{ id:
     .orderBy(asc(products.name))
     .limit(200);
   const techs = await db
-    .select({ id: techniques.id, name: techniques.name })
+    .select({ id: techniques.id, name: techniques.name, requiresSublimableFabric: techniques.requiresSublimableFabric })
     .from(techniques)
     .where(eq(techniques.active, true))
     .orderBy(asc(techniques.name));
+  const fabricRows = await db
+    .select({ id: fabrics.id, name: fabrics.name, sublimable: fabrics.sublimable })
+    .from(fabrics)
+    .where(eq(fabrics.active, true))
+    .orderBy(asc(fabrics.sortOrder), asc(fabrics.name));
   const allSizes = prods.length > 0
     ? await db.select().from(sizes).where(inArray(sizes.productId, prods.map((p) => p.id)))
     : [];
+  const [fabricLinks, techniqueLinks] = prods.length > 0
+    ? await Promise.all([
+        db.select({ productId: productFabrics.productId, fabricId: productFabrics.fabricId })
+          .from(productFabrics).where(inArray(productFabrics.productId, prods.map((p) => p.id))),
+        db.select({ productId: productTechniques.productId, techniqueId: productTechniques.techniqueId })
+          .from(productTechniques).where(inArray(productTechniques.productId, prods.map((p) => p.id))),
+      ])
+    : [[], []];
+  const productOptions: Record<string, { fabricIds: string[]; techniqueIds: string[] }> = {};
+  for (const row of fabricLinks) {
+    (productOptions[row.productId] ??= { fabricIds: [], techniqueIds: [] }).fabricIds.push(row.fabricId);
+  }
+  for (const row of techniqueLinks) {
+    (productOptions[row.productId] ??= { fabricIds: [], techniqueIds: [] }).techniqueIds.push(row.techniqueId);
+  }
 
   return (
     <>
@@ -42,6 +62,8 @@ export default async function NuevaLineaPage({ params }: { params: Promise<{ id:
               zones: (p.zones ?? []) as string[],
             }))}
             techniques={techs}
+            fabrics={fabricRows}
+            productOptions={productOptions}
             sizes={allSizes.map((s) => ({ id: s.id, productId: s.productId, label: s.label, order: s.order }))}
           />
         ) : (
