@@ -231,6 +231,13 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
       () => productCapabilities(product, product?.zones),
       [product],
     );
+    // attachment id → URL for the decal layer. Whether an asset actually draws
+    // is decided by placements referencing it; non-image URLs fail texture
+    // load and are skipped honestly.
+    const assetUrls = useMemo(
+      () => Object.fromEntries(assets.map((a) => [a.id, a.url])),
+      [assets],
+    );
     const attachmentsEnabled = showAttachments && uploader !== null;
     const publicUploader = usePublicUploader(storageKey, onUploadSession);
     const upload = uploader ?? publicUploader;
@@ -364,6 +371,7 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
             descriptor={product}
             view={config.view}
             onViewChange={(view: ViewPreset) => update({ view })}
+            assetUrls={assetUrls}
           />
           {fallbackNotice && (
             <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-4 text-on-navy-variant">

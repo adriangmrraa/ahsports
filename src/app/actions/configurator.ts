@@ -8,11 +8,18 @@ import {
   ConfiguratorDraftError,
   createConfiguratorDraft,
   getConfiguratorDraftByToken,
+  getItemByOrderLine,
+  recordDesignRender,
   retargetDraftUploadSession,
   saveDraftItem,
+  saveOrderLineDesign,
   updateDraftPayload,
 } from "@/lib/configurator/drafts";
 import { draftItemInputSchema, draftPayloadSchema, isDraftToken } from "@/configurator/schemas";
+import { VIEW_PRESETS } from "@/configurator/model";
+import { db } from "@/db/client";
+import { attachments, designRevisions, orderLines } from "@/db/schema";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 /**
@@ -137,4 +144,85 @@ export async function appendDesignRevisionAdmin(
   } catch (e) {
     return { ok: false, error: e instanceof ConfiguratorDraftError ? e.message : "No se pudo registrar la revisión" };
   }
+}
+
+/**
+ * Admin design save on an order line: creates the item under an admin draft
+ * container on first edit, appends an immutable revision, and points the line
+ * at it. The placement asset refs must belong to the line's order.
+ */
+export async function saveOrderDesignRevision(
+  orderLineId: unknown,
+  config: unknown,
+  note?: unknown,
+): Promise<ActionOk<{ itemId: string; revisionId: string; revisionNo: number }> | ActionFailure> {
+  const user = await requireUser();
+  const parsed = z.string().uuid().safeParse(orderLineId);
+  if (!parsed.success) return { ok: false, error: "Línea inválida" };
+  try {
+    const result = await saveOrderLineDesign({
+      orderLineId: parsed.data,
+      config,
+      note: typeof note === "string" ? note.slice(0, 500) : undefined,
+      createdById: user.id,
+    });
+    return { ok: true, ...result };
+  } catch (e) {
+    return { ok: false, error: e instanceof ConfiguratorDraftError ? e.message : "No se pudo guardar el diseño" };
+  }
+}
+
+/**
+ * Admin render registration: stores provenance (revision, view, attachment)
+ * for a frame already uploaded through the order's attachment pipeline.
+ */
+export async function recordOrderDesignRender(
+  orderLineId: unknown,
+  view: unknown,
+  attachmentId: unknown,
+): Promise<ActionOk<{ renderId: string }> | ActionFailure> {
+  await requireUser();
+  const lineId = z.string().uuid().safeParse(orderLineId);
+  const viewParsed = z.enum(VIEW_PRESETS).safeParse(view);
+  const attachParsed = z.string().uuid().safeParse(attachmentId);
+  if (!lineId.success || !viewParsed.success || !attachParsed.success) {
+    return { ok: false, error: "Datos de render inválidos" };
+  }
+
+  const [line] = await db
+    .select({ id: orderLines.id, orderId: orderLines.orderId })
+    .from(orderLines)
+    .where(eq(orderLines.id, lineId.data))
+    .limit(1);
+  if (!line) return { ok: false, error: "Línea de pedido no encontrada" };
+
+  // The recorded frame must be an attachment of THIS order.
+  const [attachment] = await db
+    .select({ id: attachments.id })
+    .from(attachments)
+    .where(
+      and(
+        eq(attachments.id, attachParsed.data),
+        eq(attachments.orderId, line.orderId),
+        isNull(attachments.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!attachment) return { ok: false, error: "El archivo no pertenece a este pedido" };
+
+  const item = await getItemByOrderLine(line.id);
+  if (!item) return { ok: false, error: "La línea todavía no tiene diseño" };
+  const [revision] = await db
+    .select({ id: designRevisions.id })
+    .from(designRevisions)
+    .where(and(eq(designRevisions.itemId, item.id), eq(designRevisions.revisionNo, item.currentRevisionNo)))
+    .limit(1);
+  if (!revision) return { ok: false, error: "Sin revisión vigente" };
+
+  const render = await recordDesignRender({
+    revisionId: revision.id,
+    view: viewParsed.data,
+    attachmentId: attachment.id,
+  });
+  return { ok: true, renderId: render.id };
 }

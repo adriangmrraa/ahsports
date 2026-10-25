@@ -32,6 +32,8 @@ interface Props {
     descriptor: ProductGarmentDescriptor;
     fabricName: string | null;
     revisionNo: number;
+    /** attachment id → public URL so placement decals draw in the summary. */
+    assetUrls: Record<string, string>;
   } | null;
 }
 
@@ -130,6 +132,7 @@ export function Step5Form({ draftToken, productName, optionNames, items, total, 
             <GarmentViewer
               config={design.config}
               descriptor={design.descriptor}
+              assetUrls={design.assetUrls}
               showViewControls
               className="h-56 sm:h-64"
             />

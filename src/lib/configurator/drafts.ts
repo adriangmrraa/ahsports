@@ -298,6 +298,96 @@ export async function appendItemRevision(
   });
 }
 
+/**
+ * Admin path — order lines carry designs that may predate any draft. Every
+ * item must live under a draft container (draft_id is NOT NULL), so the first
+ * admin edit creates a minimal admin-sourced draft to hold the item.
+ */
+export async function ensureOrderLineItemTx(
+  tx: DbTransaction,
+  orderLineId: string,
+  productId: string,
+): Promise<DraftItemRow> {
+  const [existing] = await tx
+    .select()
+    .from(configuratorItems)
+    .where(eq(configuratorItems.orderLineId, orderLineId))
+    .limit(1);
+  if (existing) {
+    // The line's product may have been swapped after the design was created —
+    // keep the item aligned so capabilities/renderers match the priced line.
+    if (existing.productId !== productId) {
+      await tx
+        .update(configuratorItems)
+        .set({ productId, updatedAt: new Date() })
+        .where(eq(configuratorItems.id, existing.id));
+      return { ...existing, productId };
+    }
+    return existing;
+  }
+
+  const { draftId } = await createConfiguratorDraftTx(tx, { productId });
+  const [item] = await tx
+    .insert(configuratorItems)
+    .values({ draftId, productId, orderLineId })
+    .returning();
+  if (!item) throw new ConfiguratorDraftError("No se pudo crear el diseño del producto");
+  return item;
+}
+
+/** Loads the configurator item bound to an order line, if any. */
+export async function getItemByOrderLine(orderLineId: string): Promise<DraftItemRow | null> {
+  const rows = await db
+    .select()
+    .from(configuratorItems)
+    .where(eq(configuratorItems.orderLineId, orderLineId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Admin save: appends an immutable revision, applies it as the item's current
+ * config, and points the order line at the new revision. Previous revisions
+ * stay untouched — full audit history.
+ */
+export async function saveOrderLineDesign(input: {
+  orderLineId: string;
+  config: unknown;
+  note?: string;
+  createdById?: string | null;
+}): Promise<{ itemId: string; revisionId: string; revisionNo: number }> {
+  const parsed = garmentConfigSchema.safeParse(input.config);
+  if (!parsed.success) throw new ConfiguratorDraftError("Configuración inválida");
+  const config = parsed.data as GarmentConfig;
+
+  return withDbTransaction(async (tx) => {
+    const [line] = await tx
+      .select({ id: orderLines.id, orderId: orderLines.orderId, productId: orderLines.productId })
+      .from(orderLines)
+      .where(eq(orderLines.id, input.orderLineId))
+      .limit(1);
+    if (!line) throw new ConfiguratorDraftError("Línea de pedido no encontrada");
+
+    // A config can only pin attachments this order owns (admin uploads land
+    // on the order) or files still staged in an upload session.
+    const refs = config.placements
+      .map((p) => p.assetRef)
+      .filter((x): x is string => Boolean(x));
+    if (!(await assertPlacementAssetsUsable(refs, line.orderId))) {
+      throw new ConfiguratorDraftError("El diseño referencia archivos que no pertenecen a este pedido");
+    }
+
+    const item = await ensureOrderLineItemTx(tx, line.id, line.productId);
+    await tx
+      .update(configuratorItems)
+      .set({ config: config as unknown as Record<string, unknown>, updatedAt: new Date() })
+      .where(eq(configuratorItems.id, item.id));
+    const rev = await appendRevisionTx(tx, item.id, config, "admin", input.createdById ?? null, input.note);
+    await tx.update(orderLines).set({ designRevisionId: rev.id }).where(eq(orderLines.id, line.id));
+    return { itemId: item.id, revisionId: rev.id, revisionNo: rev.revisionNo };
+  });
+}
+
 /** Items of a draft, tx-visible — used by the order conversion path. */
 export async function getDraftItemsTx(tx: DbTransaction, draftId: string): Promise<DraftItemRow[]> {
   return tx

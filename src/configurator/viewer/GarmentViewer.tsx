@@ -38,6 +38,8 @@ export type GarmentViewerProps = {
   view?: ViewPreset;
   onViewChange?: (view: ViewPreset) => void;
   showViewControls?: boolean;
+  /** attachment id → image URL so placements draw as real on-mesh decals. */
+  assetUrls?: Record<string, string>;
   className?: string;
 };
 
@@ -62,7 +64,7 @@ function detectWebGLSupport(): boolean {
  */
 export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>(
   function GarmentViewer(
-    { config, descriptor, view, onViewChange, showViewControls = true, className },
+    { config, descriptor, view, onViewChange, showViewControls = true, assetUrls, className },
     ref,
   ) {
     const normalized = normalizeGarmentConfig(config);
@@ -124,6 +126,7 @@ export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>
               descriptor={descriptor}
               view={activeView}
               onCaptureBridge={onCaptureBridge}
+              assetUrls={assetUrls}
             />
           </Canvas>
         )}

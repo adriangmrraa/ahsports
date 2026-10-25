@@ -28,7 +28,7 @@ function formStr(form: FormData, key: string): string | undefined {
 export async function uploadAttachment(
   orderId: string,
   formData: FormData,
-): Promise<{ ok: true; id: string } | Fail> {
+): Promise<{ ok: true; id: string; url: string; name: string; kind: string } | Fail> {
   await requireUser();
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order) return { ok: false as const, error: "Pedido no encontrado" };
@@ -74,7 +74,7 @@ export async function uploadAttachment(
 
   revalidatePath(`/admin/pedidos/${orderId}/arte`);
   revalidatePath(`/admin/pedidos/${orderId}`);
-  return { ok: true as const, id: row.id };
+  return { ok: true as const, id: row.id, url: stored.url, name, kind: kindParsed.data };
 }
 
 /**

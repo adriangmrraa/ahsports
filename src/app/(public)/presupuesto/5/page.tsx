@@ -106,6 +106,19 @@ export default async function PresupuestoStep5({
     designFabricName = fabric?.name ?? null;
   }
 
+  // Placements reference attachments by id — resolve their public URLs so the
+  // summary viewer draws the same decals the user designed in step 4.
+  const assetRefs = (item?.config.placements ?? [])
+    .map((p) => p.assetRef)
+    .filter((x): x is string => Boolean(x));
+  const assetRows = assetRefs.length > 0
+    ? await db
+        .select({ id: attachments.id, url: attachments.url })
+        .from(attachments)
+        .where(and(inArray(attachments.id, assetRefs), isNull(attachments.deletedAt)))
+    : [];
+  const assetUrls = Object.fromEntries(assetRows.map((a) => [a.id, a.url]));
+
   const stagedFiles = payload.uploadSessionId
     ? await db
         .select({ id: attachments.id })
@@ -164,6 +177,7 @@ export default async function PresupuestoStep5({
             },
             fabricName: designFabricName,
             revisionNo: item.currentRevisionNo,
+            assetUrls,
           } : null}
         />
       </div>

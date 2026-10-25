@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { PMREMGenerator, Spherical, Vector3 } from "three";
+import { PMREMGenerator, Spherical, Vector3, type Group } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import type { GarmentConfig, ProductGarmentDescriptor, ViewPreset } from "../model";
 import {
@@ -11,6 +11,7 @@ import {
 } from "../camera";
 import { SCENE_TOKENS } from "../render-tokens";
 import { ProductGarment } from "../renderers";
+import { PlacementDecals } from "./PlacementDecals";
 
 export type CaptureImageFn = (type?: string, quality?: number) => Promise<Blob | null>;
 
@@ -204,9 +205,12 @@ export type GarmentSceneProps = {
   descriptor?: ProductGarmentDescriptor | null;
   view: ViewPreset;
   onCaptureBridge: (fn: CaptureImageFn | null) => void;
+  /** attachment id → public URL — feeds the on-mesh decal layer. */
+  assetUrls?: Record<string, string>;
 };
 
-export function GarmentScene({ config, descriptor, view, onCaptureBridge }: GarmentSceneProps) {
+export function GarmentScene({ config, descriptor, view, onCaptureBridge, assetUrls }: GarmentSceneProps) {
+  const garmentRef = useRef<Group>(null);
   return (
     <>
       <color attach="background" args={[SCENE_TOKENS.backdrop]} />
@@ -217,9 +221,15 @@ export function GarmentScene({ config, descriptor, view, onCaptureBridge }: Garm
       <GarmentOrbit view={view} />
       <CaptureBridge onBridge={onCaptureBridge} />
       <Suspense fallback={null}>
-        <group position-y={0.1}>
+        <group ref={garmentRef} position-y={0.1}>
           <ProductGarment descriptor={descriptor} config={config} />
         </group>
+        <PlacementDecals
+          target={garmentRef}
+          placements={config.placements}
+          assetUrls={assetUrls ?? {}}
+          shapeKey={`${descriptor?.garmentFamily ?? "x"}:${descriptor?.garmentType ?? "x"}:${descriptor?.productType ?? "x"}:${descriptor?.productKind ?? "x"}:${config.collar}:${config.sleeves}`}
+        />
       </Suspense>
     </>
   );
