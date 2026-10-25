@@ -4722,5 +4722,9 @@
   "src_db_schema_orderlinetechniques": "orderLineTechniques — constant exported from src/db/schema.ts: Stackable decoration methods picked per order line — a garment can be 100% sublimado AND also carry DTF/bordado for logos & sponsors, so the selection is a set,.",
   "src_db_schema_orderlinetechniquesrelations": "orderLineTechniquesRelations — function exported from src/db/schema.ts (line 702).",
   "src_db_migrations_0029_stackable_line_methods": "Source file src/db/migrations/0029_stackable_line_methods.sql in src/db/migrations.",
-  "src_db_migrations_0029_stackable_line_methods_order_line_techniques": "\"order_line_techniques\" — symbol declared in src/db/migrations/0029_stackable_line_methods.sql (line 16)."
+  "src_db_migrations_0029_stackable_line_methods_order_line_techniques": "\"order_line_techniques\" — symbol declared in src/db/migrations/0029_stackable_line_methods.sql (line 16).",
+  "src_app_public_presupuesto_2_step2form_deltalabel": "deltaLabel() — symbol declared in src/app/(public)/presupuesto/2/Step2Form.tsx: \"+ $1.500,00 c/u\" / \"− $500,00 c/u\" / \"Incluido\" — the option's sell delta.",
+  "src_app_public_presupuesto_2_step2form_step2form_pickfabric": "pickFabric() — function declared in src/app/(public)/presupuesto/2/Step2Form.tsx (line 147).",
+  "src_app_public_presupuesto_2_step2form_step2form_togglemethod": "toggleMethod() — symbol declared in src/app/(public)/presupuesto/2/Step2Form.tsx (line 156).",
+  "src_app_public_presupuesto_components_wizard_estimate_optiondeltalabel": "optionDeltaLabel() — symbol declared in src/app/(public)/presupuesto/_components/wizard-estimate.tsx: \"(+ $1.500,00)\" / \"(− $500,00)\" — option sell delta, hidden at zero."
 }
