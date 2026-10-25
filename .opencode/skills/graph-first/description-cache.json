@@ -3463,7 +3463,7 @@
   "src_app_admin_admin_recetas_page": "admin/recetas/page.tsx — symbol declared in src/app/(admin)/admin/recetas/page.tsx (line 1).",
   "src_app_admin_admin_tecnicas_page": "Source file src/app/(admin)/admin/tecnicas/page.tsx in src/app/(admin)/admin/tecnicas.",
   "src_app_api_attachments_id_applications_route": "Source file src/app/api/attachments/[id]/applications/route.ts in src/app/api/attachments/[id]/applications.",
-  "src_app_api_orders_id_lines_route": "Source file src/app/api/orders/[id]/lines/route.ts in src/app/api/orders/[id]/lines.",
+  "src_app_api_orders_id_lines_route": "src/app/api/orders/[id]/lines/route.ts — Stackable methods — the full selection; techniqueId stays as primary.",
   "src_app_api_public_order_token_route": "order/[token]/route.ts — symbol declared in src/app/api/public/order/[token]/route.ts (line 1).",
   "src_app_api_recipes_route": "Source file src/app/api/recipes/route.ts in src/app/api/recipes.",
   "src_app_public_presupuesto_2_page": "Source file src/app/(public)/presupuesto/2/page.tsx in src/app/(public)/presupuesto/2.",
@@ -4711,5 +4711,16 @@
   "src_app_public_presupuesto_2_step2form_step2form_pickproduct": "pickProduct() — symbol declared in src/app/(public)/presupuesto/2/Step2Form.tsx (line 95).",
   "src_components_public_pagehero_pagehero": "PageHero() — symbol exported from src/components/public/PageHero.tsx: Banda hero navy compartida por las páginas públicas interiores (/catalogo, /presupuesto, /seguimiento).",
   "src_components_public_pagehero": "src/components/public/PageHero.tsx — Banda hero navy compartida por las páginas públicas interiores (/catalogo, /presupuesto, /seguimiento).",
-  "src_app_public_presupuesto_1_step1form_type_options": "TYPE_OPTIONS — constant declared in src/app/(public)/presupuesto/1/Step1Form.tsx (line 10)."
+  "src_app_public_presupuesto_1_step1form_type_options": "TYPE_OPTIONS — constant declared in src/app/(public)/presupuesto/1/Step1Form.tsx (line 10).",
+  "src_app_admin_admin_pedidos_id_linea_nueva_addlineform_fabricoption": "FabricOption — type alias declared in src/app/(admin)/admin/pedidos/[id]/linea/nueva/AddLineForm.tsx (line 13).",
+  "src_app_admin_admin_pedidos_id_linea_nueva_addlineform_productoptionconfig": "ProductOptionConfig — type alias declared in src/app/(admin)/admin/pedidos/[id]/linea/nueva/AddLineForm.tsx (line 15).",
+  "src_app_admin_admin_pedidos_id_linea_nueva_addlineform_techniqueoption": "TechniqueOption — type alias declared in src/app/(admin)/admin/pedidos/[id]/linea/nueva/AddLineForm.tsx (line 14).",
+  "src_app_admin_admin_pedidos_id_linea_nueva_addlineform_addlineform_changeproduct": "changeProduct() — symbol declared in src/app/(admin)/admin/pedidos/[id]/linea/nueva/AddLineForm.tsx (line 83).",
+  "src_app_admin_admin_pedidos_id_linea_nueva_addlineform_addlineform_togglemethod": "toggleMethod() — constant declared in src/app/(admin)/admin/pedidos/[id]/linea/nueva/AddLineForm.tsx (line 74).",
+  "src_lib_product_options_normalizetechniqueids": "normalizeTechniqueIds() — symbol exported from src/lib/product-options.ts: Normalizes a method selection: dedupes preserving pick order (the first element is the \"primary\" method written to order_lines.technique_id) and folds the legac.",
+  "src_lib_product_options_store_getproductmethoddeltas": "getProductMethodDeltas() — constant exported from src/lib/product-options-store.ts: Per-product sell deltas for a set of methods, keyed by techniqueId.",
+  "src_db_schema_orderlinetechniques": "orderLineTechniques — constant exported from src/db/schema.ts: Stackable decoration methods picked per order line — a garment can be 100% sublimado AND also carry DTF/bordado for logos & sponsors, so the selection is a set,.",
+  "src_db_schema_orderlinetechniquesrelations": "orderLineTechniquesRelations — function exported from src/db/schema.ts (line 702).",
+  "src_db_migrations_0029_stackable_line_methods": "Source file src/db/migrations/0029_stackable_line_methods.sql in src/db/migrations.",
+  "src_db_migrations_0029_stackable_line_methods_order_line_techniques": "\"order_line_techniques\" — symbol declared in src/db/migrations/0029_stackable_line_methods.sql (line 16)."
 }
