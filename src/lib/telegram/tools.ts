@@ -9,6 +9,10 @@ import {
 import { orderMutationTools, orderReadTools } from "@/lib/telegram/tools-orders";
 import { clientTools } from "@/lib/telegram/tools-clients";
 import { productTools } from "@/lib/telegram/tools-products";
+import { recipeTools } from "@/lib/telegram/tools-recipes";
+import { materialTools } from "@/lib/telegram/tools-materials";
+import { catalogTools } from "@/lib/telegram/tools-catalogs";
+import { productOptionTools } from "@/lib/telegram/tools-product-options";
 import { cashTools } from "@/lib/telegram/tools-cash";
 import { analyticsTools } from "@/lib/telegram/tools-analytics";
 import { broadcastTools } from "@/lib/telegram/tools-broadcast";
@@ -46,6 +50,10 @@ export const OPERATOR_TOOLS: readonly AgentTool[] = [
   ...orderMutationTools,
   ...clientTools,
   ...productTools,
+  ...productOptionTools,
+  ...recipeTools,
+  ...materialTools,
+  ...catalogTools,
   ...cashTools,
   ...analyticsTools,
   ...broadcastTools,

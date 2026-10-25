@@ -445,7 +445,8 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
   return { lines, totals, rule, snapshot };
 }
 
-function consumptionUnitCost(material: { name: string; unit: string; unitPrice: string; metersPerKilo: string | null }) {
+/** Per-consumption-unit material cost; kilo purchases are normalized to metres. */
+export function consumptionUnitCost(material: { name: string; unit: string; unitPrice: string; metersPerKilo: string | null }) {
   const price = Number(material.unitPrice);
   if (material.unit !== "kilo") return price;
   const metersPerKilo = Number(material.metersPerKilo);
