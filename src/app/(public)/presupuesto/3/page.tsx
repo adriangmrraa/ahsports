@@ -4,6 +4,8 @@ import { products } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Step3Form } from "./Step3Form";
 import { StepIndicator } from "../_components/StepIndicator";
+import { WizardEstimateChip } from "../_components/wizard-estimate";
+import { getPublicEstimate, resolveWizardSizeQuantities } from "@/lib/public/estimate";
 import {
   WizardRateLimitNotice,
   wizardRateLimitReached,
@@ -25,12 +27,13 @@ function parseSizes(raw: string | undefined): { label: string; qty: number }[] {
 
 /**
  * F4-10 — Paso 3: personalizaciones individuales (nombre/número por prenda).
- * Server component: lee productId/total del paso 2 y deja que el form genere filas.
+ * Server component: lee productId/total del paso 2, deja que el form genere
+ * filas y muestra el estimado del motor de pricing cuando puede cotizar.
  */
 export default async function PresupuestoStep3({
   searchParams,
 }: {
-  searchParams: Promise<{ productId?: string; sizeQuantities?: string; total?: string }>;
+  searchParams: Promise<{ productId?: string; sizeQuantities?: string; sq?: string; total?: string }>;
 }) {
   if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
 
@@ -43,13 +46,22 @@ export default async function PresupuestoStep3({
   const sizes = parseSizes(sp.sizeQuantities);
   const total = Number(sp.total || sizes.reduce((a, s) => a + s.qty, 0)) || 0;
 
+  const quantities = await resolveWizardSizeQuantities({
+    productId: sp.productId,
+    sq: sp.sq,
+    sizeQuantities: sp.sizeQuantities,
+    total,
+  });
+  const estimate = await getPublicEstimate({ productId: sp.productId, sizeQuantities: quantities });
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <StepIndicator current={3} />
       <h1 className="mb-2 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Personalización</h1>
-      <p className="mb-6 text-center text-sm text-on-surface-variant">
+      <p className="mb-4 text-center text-sm text-on-surface-variant">
         {product.name} · {total} prendas
       </p>
+      <WizardEstimateChip estimate={estimate} />
       <Step3Form productName={product.name} sizes={sizes} total={total} noSize={sizes.length === 0} />
     </div>
   );

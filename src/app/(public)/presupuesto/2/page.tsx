@@ -12,7 +12,7 @@ export const metadata = { title: "Presupuesto · Paso 2 · AH Sports" };
 
 /**
  * F4-09 — Paso 2: seleccionar producto + talles + cantidades.
- * Server component carga productods activos y sus talles reales (no inventa).
+ * Server component carga productos activos y sus talles reales (no inventa).
  */
 export default async function PresupuestoStep2({
   searchParams,
@@ -23,8 +23,20 @@ export default async function PresupuestoStep2({
 
   const sp = await searchParams;
   const [productRows, sizeRows] = await Promise.all([
-    // Keep the public catalog compatible while the additive product-classification migration is pending.
-    db.select({ id: products.id, name: products.name, description: products.description, imageUrl: products.imageUrl, basePrice: products.basePrice, minOrder: products.minOrder }).from(products).where(eq(products.active, true)).orderBy(products.name),
+    db
+      .select({
+        id: products.id,
+        name: products.name,
+        description: products.description,
+        imageUrl: products.imageUrl,
+        basePrice: products.basePrice,
+        minOrder: products.minOrder,
+        productKind: products.productKind,
+        productSubcategory: products.productSubcategory,
+      })
+      .from(products)
+      .where(eq(products.active, true))
+      .orderBy(products.name),
     db
       .select({ id: sizes.id, productId: sizes.productId, label: sizes.label, order: sizes.order })
       .from(sizes)
@@ -45,6 +57,8 @@ export default async function PresupuestoStep2({
     imageUrl: p.imageUrl,
     basePrice: p.basePrice,
     minOrder: p.minOrder,
+    productKind: p.productKind,
+    productSubcategory: p.productSubcategory || "otros",
     sizes: sizesByProduct.get(p.id) ?? [],
   }));
   const initialProductId = catalog.some((p) => p.id === sp.productId) ? sp.productId : undefined;
