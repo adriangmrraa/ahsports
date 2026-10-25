@@ -51,6 +51,8 @@ export type DraftOrderTxResult = {
   publicToken: string;
   contactId: string;
   organizationId: string | null;
+  /** Created order line — used to bind the configurator design revision. */
+  orderLineId: string;
 };
 
 export async function createOrderDraftTx(
@@ -149,5 +151,5 @@ export async function createOrderDraftTx(
     individualName: item.individualName || null, individualNumber: item.individualNumber || null,
   })));
 
-  return { orderId: order.id, number: order.number, publicToken, contactId, organizationId };
+  return { orderId: order.id, number: order.number, publicToken, contactId, organizationId, orderLineId: line.id };
 }

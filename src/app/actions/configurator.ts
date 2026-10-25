@@ -8,10 +8,12 @@ import {
   ConfiguratorDraftError,
   createConfiguratorDraft,
   getConfiguratorDraftByToken,
+  retargetDraftUploadSession,
   saveDraftItem,
   updateDraftPayload,
 } from "@/lib/configurator/drafts";
 import { draftItemInputSchema, draftPayloadSchema, isDraftToken } from "@/configurator/schemas";
+import { z } from "zod";
 
 /**
  * Shared server surface for the 3D configurator — one code path for home,
@@ -95,6 +97,25 @@ export async function updateConfiguratorDraftPayload(token: unknown, patch: unkn
   if (!parsed.success) return { ok: false, error: "Datos inválidos" };
   const updated = await updateDraftPayload(token, parsed.data);
   return updated ? { ok: true } : { ok: false, error: "El diseño venció o no existe" };
+}
+
+/**
+ * Binds a fresh upload session to the draft. If the draft already pointed at
+ * an earlier session (browser storage lost across reloads), its still-pending
+ * attachments are re-pointed so order conversion claims them all.
+ */
+export async function bindDraftUploadSession(token: unknown, sessionId: unknown): Promise<{ ok: true } | ActionFailure> {
+  if (await rateLimited("patch", 60)) return RATE_LIMITED;
+  if (!isDraftToken(token)) return { ok: false, error: "Borrador inválido" };
+  const parsed = z.string().uuid().safeParse(sessionId);
+  if (!parsed.success) return { ok: false, error: "Sesión inválida" };
+  try {
+    const rebound = await retargetDraftUploadSession(token, parsed.data);
+    if (!rebound) return { ok: false, error: "El diseño venció o no existe" };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof ConfiguratorDraftError ? e.message : "No se pudo vincular la sesión" };
+  }
 }
 
 /** Admin-only: appends a revision to an item bound to an order. */

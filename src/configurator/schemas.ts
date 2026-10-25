@@ -57,6 +57,8 @@ export type StoredGarmentConfig = z.infer<typeof garmentConfigSchema>;
  */
 export const draftPayloadSchema = z
   .object({
+    /** Order flow type — mirrors createPublicOrder's client-kind switch. */
+    type: z.enum(["new", "returning"]).optional(),
     customerType: z.enum(["club", "empresa", "colegio", "institucion", "particular"]).optional(),
     contactId: z.string().max(64).nullish(),
     organizationId: z.string().max(64).nullish(),
@@ -64,15 +66,28 @@ export const draftPayloadSchema = z
     email: z.string().max(255).optional(),
     phone: z.string().max(64).optional(),
     organizationName: z.string().max(255).optional(),
-    notes: z.string().max(2000).optional(),
+    notes: z.string().max(4000).optional(),
     productId: z.string().max(64).optional(),
     fabricId: z.string().max(64).nullish(),
     techniqueId: z.string().max(64).nullish(),
-    techniqueIds: z.array(z.string().max(64)).max(12).optional(),
-    sizeQuantities: z.record(z.string().max(32), z.number().int().min(0).max(9999)).optional(),
-    items: z.array(z.unknown()).max(200).optional(),
+    techniqueIds: z.array(z.string().max(64)).max(20).optional(),
+    sizeQuantities: z
+      .array(z.object({ sizeId: z.string().max(64).nullable(), quantity: z.number().int().min(1).max(1000) }))
+      .max(32)
+      .optional(),
+    /** Per-unit personalization (names/numbers) — PII stays server-side, never in URL. */
+    lineItems: z
+      .array(
+        z.object({
+          sizeId: z.string().max(64).nullable(),
+          sizeLabel: z.string().max(32).optional(),
+          individualName: z.string().max(128).nullish(),
+          individualNumber: z.string().max(32).nullish(),
+        }),
+      )
+      .max(1000)
+      .optional(),
     uploadSessionId: z.string().max(64).optional(),
-    /** Referencia del adjunto en sesión de carga — el secreto NUNCA se persiste. */
     urgent: z.boolean().optional(),
     step: z.number().int().min(1).max(5).optional(),
   })

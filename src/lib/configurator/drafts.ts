@@ -11,6 +11,7 @@ import {
   designRevisions,
   fabrics,
   orderLines,
+  uploadSessions,
 } from "@/db/schema";
 import { withDbTransaction, type DbTransaction } from "@/lib/db-transaction";
 import { normalizeGarmentConfig, type GarmentConfig, type GarmentConfigInput } from "@/configurator/model";
@@ -58,7 +59,11 @@ function configsEqual(a: GarmentConfig, b: GarmentConfig): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-async function findLiveDraftByTokenTx(tx: DbTransaction, token: string) {
+/**
+ * Tx-visible draft lookup used inside order conversion: the caller proves
+ * possession of the bearer token, we resolve the live draft row.
+ */
+export async function findLiveDraftByTokenTx(tx: DbTransaction, token: string) {
   const rows = await tx
     .select()
     .from(configuratorDrafts)
@@ -122,6 +127,54 @@ export async function updateDraftPayload(token: string, patch: DraftPayload): Pr
     const draft = await findLiveDraftByTokenTx(tx, token);
     if (!draft) return false;
     const merged = { ...(draft.payload as Record<string, unknown>), ...parsed.data };
+    await tx
+      .update(configuratorDrafts)
+      .set({ payload: merged, updatedAt: new Date() })
+      .where(eq(configuratorDrafts.id, draft.id));
+    return true;
+  });
+}
+
+/**
+ * Re-binds the draft to a fresh upload session: files staged under the old
+ * bound session move to the new one so the conversion claim still gets them.
+ * Only unclaimed, client-uploaded, pending rows are moved — the draft token
+ * is the ownership proof, and claimed/foreign rows never move.
+ */
+export async function retargetDraftUploadSession(token: string, sessionId: string): Promise<boolean> {
+  if (!isDraftToken(token)) return false;
+  return withDbTransaction(async (tx) => {
+    const draft = await findLiveDraftByTokenTx(tx, token);
+    if (!draft) return false;
+    const previous = (draft.payload as DraftPayload).uploadSessionId;
+    if (previous === sessionId) return true;
+
+    const [session] = await tx
+      .select({ id: uploadSessions.id, expiresAt: uploadSessions.expiresAt })
+      .from(uploadSessions)
+      .where(and(eq(uploadSessions.id, sessionId), eq(uploadSessions.status, "active")))
+      .limit(1);
+    if (!session || session.expiresAt <= new Date()) {
+      throw new ConfiguratorDraftError("La sesión de carga venció. Volvé a cargar los archivos.");
+    }
+
+    if (previous) {
+      await tx
+        .update(attachments)
+        .set({ uploadSessionId: session.id, expiresAt: session.expiresAt })
+        .where(
+          and(
+            eq(attachments.uploadSessionId, previous),
+            isNull(attachments.orderId),
+            isNull(attachments.organizationId),
+            eq(attachments.status, "pendiente_revision"),
+            eq(attachments.uploadedByRole, "cliente"),
+            isNull(attachments.deletedAt),
+          ),
+        );
+    }
+
+    const merged = { ...(draft.payload as Record<string, unknown>), uploadSessionId: session.id };
     await tx
       .update(configuratorDrafts)
       .set({ payload: merged, updatedAt: new Date() })
@@ -243,6 +296,15 @@ export async function appendItemRevision(
     }
     return appendRevisionTx(tx, itemId, parsed.data as GarmentConfig, opts.source, opts.createdById ?? null, opts.note);
   });
+}
+
+/** Items of a draft, tx-visible — used by the order conversion path. */
+export async function getDraftItemsTx(tx: DbTransaction, draftId: string): Promise<DraftItemRow[]> {
+  return tx
+    .select()
+    .from(configuratorItems)
+    .where(eq(configuratorItems.draftId, draftId))
+    .orderBy(asc(configuratorItems.sortOrder), asc(configuratorItems.createdAt));
 }
 
 /** Links the current revision of a draft item to an order line (conversion). */

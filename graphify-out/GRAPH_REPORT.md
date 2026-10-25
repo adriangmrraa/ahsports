@@ -1,36 +1,36 @@
 # Graph Report - configurator-foundation  (2026-10-25)
 
 ## Corpus Check
-- 511 files · ~406,112 words
+- 516 files · ~410,489 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4149 nodes · 9502 edges · 215 communities (192 shown, 23 thin omitted)
+- 4166 nodes · 9646 edges · 211 communities (191 shown, 20 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 30 edges (avg confidence: 0.67)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `7883906d`
+- Built from commit: `1f98f140`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - lib/payments.ts
-- GarmentScene.tsx
+- configurator/index.ts
 - whatsapp/webhook/[token]/route.ts
 - drafts.ts
-- loop.ts
+- bot.ts
 - db/schema.ts
 - /graphify
 - requireUser
-- Card.tsx
+- Button.tsx
 - $graphify
 - compilerOptions
-- analytics/page.tsx
+- sql
 - productos/[id]/page.tsx
-- actions/inbox.ts
+- ReplyComposer.tsx
 - (public)/layout.tsx
-- public-orders.ts
+- validators.ts
 - pricing.ts
 - dependencies
 - devDependencies
@@ -45,7 +45,7 @@
 - 04 · BUSINESS RULES — Lenguaje del dominio y reglas operativas
 - 08 · ROADMAP — Post-MVP
 - HANDOFF — Para el próximo agente de código
-- reconcile.ts
+- telegram.ts
 - 06 · STANDARDS BUILDING — Reglas de código
 - 07 · DEPLOYMENT — Render + Neon
 - tools-orders.ts
@@ -82,7 +82,7 @@
 - messaging/accounts.ts
 - channels/accounts.ts
 - sales-tools.ts
-- agent/inbox.ts
+- actions/inbox.ts
 - F6 — Proveedores, BOM por talle y costos trazables
 - ycloud.ts
 - RELEASE NOTES — AH Sports OS (MVP v1.0)
@@ -90,7 +90,7 @@
 - PricingRulesManager
 - describe-new-nodes.mjs
 - confirmations.ts
-- ProductOptionsEditor
+- ProductOptionsEditor.tsx
 - (public)/page.tsx
 - sales-agent.ts
 - eslint.config.mjs
@@ -102,13 +102,13 @@
 - NEON-MIGRATION-BASELINE.md
 - 10 · GUÍA DE CANALES DEL AGENTE — Telegram interno + WhatsApp/YCloud ventas
 - next-env.d.ts
-- bot.ts
+- Card.tsx
 - postcss.config.mjs
 - 0001_public_upload_sessions.sql
 - 0003_suppliers.sql
 - "product_taxonomy_nodes"
 - checkRateLimit
-- capabilities.ts
+- model.ts
 - tools-clients.ts
 - tools-cash.ts
 - human-handoff.ts
@@ -120,25 +120,25 @@
 - import.ts
 - inbound-pipeline.ts
 - utm-capture.ts
-- orders.ts
-- conversations
+- cotizar/page.tsx
+- authorizeAgentApi
 - config.ts
 - sdd-telegram-agent-exploration.md
-- PageHeader
+- formatCurrency
 - buffer.ts
 - temporal-context.ts
 - 3. Detalle por área
 - REVIEW R5 — Domain pack (W9): cart · cash · broadcast · promos · public feeds
-- promos/[id]/page.tsx
-- BusinessSettingsForm.tsx
+- reconcile.ts
+- configuracion/page.tsx
 - conversation-identity.ts
 - jersey-geometry.ts
 - ref-code-sign.ts
 - storage.ts
-- rbac.ts
-- requireAgentAdmin
+- Channel
+- channel-accounts.ts
 - session-policy.ts
-- draft.ts
+- products/route.ts
 - check-agent-tools.mts
 - inbound.ts
 - send.ts
@@ -147,20 +147,20 @@
 - migrate-descriptions-v0946.mjs
 - inbound-pipeline.test.ts
 - telegram/reconcile/route.ts
-- [token]/page.tsx
+- tools-memory.ts
 - vision.ts
 - APPLY REPORT — `ai-telegram-sales-agent` · P7 Hardening, migration reconciliation & docs (final)
 - Muzapp → AH Sports OS — Parity Explore (Telegram + WhatsApp)
-- MessagesTimeline.tsx
+- ApplicationsManager.tsx
 - secret-box.ts
 - tools/schema.ts
 - router.ts
 - operator-send.ts
 - 0025_stored_files.sql
 - api/leads/route.ts
+- agent/reconcile/route.ts
 - isSchemaNotReady
-- Channel
-- configurator/index.ts
+- GarmentConfigurator.tsx
 - pdf-parse.d.ts
 - tools-broadcast.ts
 - client.ts
@@ -168,114 +168,110 @@
 - link-generator/page.tsx
 - AgentConfigForm.tsx
 - channels/types.ts
-- zernio-connect.ts
+- requireAgentAdmin
 - conversions.ts
 - env.ts
-- order-context.ts
-- tools/types.ts
+- messaging/errors.ts
+- orders/[id]/stage/route.ts
 - cron/reconcile/route.ts
-- lead-identity.ts
-- product-options.ts
+- normalizePhone
+- protocol.ts
 - downloader.ts
 - 0022_cash_sessions.sql
 - 0021_promotions.sql
 - "conversations"
 - "agent_config"
 - Review R2 — Outbound: notificaciones, ventana 24h, handoff, cron
-- [attachmentId]/page.tsx
+- adjuntos/page.tsx
 - Review R1 — Messaging core seams (merged parity code)
 - Review R3 — Leads, attribution, Meta pixel/CAPI, analytics (W6)
 - REVIEW R4 — Agent config, providers, zernio embedded connect
 - signatures.ts
 - Proposal: ai-telegram-sales-agent
 - ingress.ts
-- login/page.tsx
+- register.ts
 - Specification: AI Telegram Sales Agent
-- insumos/[id]/page.tsx
+- proveedores/[id]/page.tsx
 - RecetasEditor
 - 2. Variables de entorno y secretos (SOLO POR NOMBRE)
-- resolveGarmentLine
+- PromoRowActions.tsx
 - @react-three/fiber
 - Tasks: ai-telegram-sales-agent
 - 5. Webhook de Telegram: URL pública y configuración
 - Design: ai-telegram-sales-agent
 - Verification Report
-- session-metadata.ts
+- ingress.test.ts
 - three
-- Step3Form
 - Skill Registry — sdd-init-agent-platform
 - TelasManager
 - TecnicasManager
 - "agent_config"
-- CatalogManager
-- PlanillaTable
-- Step1Form
-- (public)/catalogo/page.tsx
+- PlanillaTable.tsx
 
 ## God Nodes (most connected - your core abstractions)
-1. `db` - 164 edges
+1. `db` - 166 edges
 2. `requireUser()` - 129 edges
 3. `Selected skills and compact rules` - 93 edges
 4. `Card()` - 58 edges
 5. `PageHeader()` - 53 edges
-6. `Button()` - 47 edges
-7. `products` - 46 edges
+6. `Button()` - 48 edges
+7. `products` - 48 edges
 8. `requireAgentAdmin()` - 45 edges
 9. `orders` - 44 edges
 10. `checkRateLimit()` - 44 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `connectZernio()` --calls--> `startZernioConnect()`  [EXTRACTED]
-  src/app/(admin)/admin/canales/ChannelsView.tsx → src/app/actions/channel-connect.ts
-- `EditarPromoPage()` --calls--> `requireUser()`  [EXTRACTED]
-  src/app/(admin)/admin/promos/[id]/page.tsx → src/lib/auth.ts
-- `NuevaPromoPage()` --calls--> `requireUser()`  [EXTRACTED]
-  src/app/(admin)/admin/promos/nuevo/page.tsx → src/lib/auth.ts
-- `PUT()` --calls--> `requireUser()`  [EXTRACTED]
-  src/app/api/products/[id]/options/route.ts → src/lib/auth.ts
-- `DELETE()` --calls--> `requireUser()`  [EXTRACTED]
-  src/app/api/recipes/items/[itemId]/route.ts → src/lib/auth.ts
+- `ContactosPage()` --calls--> `requireUser()`  [EXTRACTED]
+  src/app/(admin)/admin/contactos/page.tsx → src/lib/auth.ts
+- `submitUpload()` --calls--> `uploadAttachment()`  [EXTRACTED]
+  src/app/(admin)/admin/pedidos/[id]/arte/ArteManager.tsx → src/app/actions/attachments.ts
+- `submit()` --calls--> `confirmQuote()`  [EXTRACTED]
+  src/app/(admin)/admin/pedidos/[id]/cotizar/QuoteActions.tsx → src/app/actions/orders.ts
+- `submit()` --calls--> `reQuoteOrder()`  [EXTRACTED]
+  src/app/(admin)/admin/pedidos/[id]/cotizar/QuoteActions.tsx → src/app/actions/orders.ts
+- `submit()` --calls--> `createOrderLine()`  [EXTRACTED]
+  src/app/(admin)/admin/pedidos/[id]/linea/nueva/AddLineForm.tsx → src/app/actions/orders.ts
 
 ## Import Cycles
 - 3-file cycle: `src/lib/messaging/accounts.ts -> src/lib/messaging/registry.ts -> src/lib/messaging/providers/ycloud.ts -> src/lib/messaging/accounts.ts`
 
-## Communities (215 total, 23 thin omitted)
+## Communities (211 total, 20 thin omitted)
 
 ### Community 0 - "lib/payments.ts"
-Cohesion: 0.10
-Nodes (32): cancelPayment(), notifyStatusQuietly(), registerPayment(), CancelPaymentButton(), cancel(), KINDS, METHODS, RegisterPaymentForm() (+24 more)
+Cohesion: 0.12
+Nodes (28): cancelPayment(), notifyStatusQuietly(), registerPayment(), cancel(), submit(), DELETE(), POST(), paymentEvents (+20 more)
 
-### Community 1 - "GarmentScene.tsx"
-Cohesion: 0.15
-Nodes (16): CameraPose, cameraPoseToPosition(), ORBIT_LIMITS, VIEW_CAMERA_PRESETS, VIEW_PRESET_LABELS, VIEW_TARGET, ProductGarmentDescriptor, CaptureImageFn (+8 more)
+### Community 1 - "configurator/index.ts"
+Cohesion: 0.08
+Nodes (45): COLLAR_LABELS, COLOR_ROLE_LABELS, Props, SLEEVE_LABELS, Step5Form(), confirm(), CameraPose, cameraPoseToPosition() (+37 more)
 
 ### Community 2 - "whatsapp/webhook/[token]/route.ts"
-Cohesion: 0.09
-Nodes (37): POST(), contactNameFor(), dynamic, EventType, GET(), mapMessageType(), mediaRefsFor(), metaDeliveryId() (+29 more)
+Cohesion: 0.06
+Nodes (51): POST(), contactNameFor(), dynamic, EventType, GET(), mapMessageType(), mediaRefsFor(), metaDeliveryId() (+43 more)
 
 ### Community 3 - "drafts.ts"
 Cohesion: 0.07
-Nodes (45): ActionFailure, ActionOk, appendDesignRevisionAdmin(), ensureConfiguratorDraft(), loadConfiguratorDraft(), RATE_LIMITED, rateLimited(), saveConfiguratorItem() (+37 more)
+Nodes (55): ActionFailure, ActionOk, appendDesignRevisionAdmin(), bindDraftUploadSession(), ensureConfiguratorDraft(), loadConfiguratorDraft(), RATE_LIMITED, rateLimited() (+47 more)
 
-### Community 4 - "loop.ts"
-Cohesion: 0.19
-Nodes (11): detectInjectionAttempt(), InjectionSignal, SIGNATURES, AgentLoopInput, AgentLoopResult, AgentToolCallTrace, parseToolArguments(), runAgentLoop() (+3 more)
+### Community 4 - "bot.ts"
+Cohesion: 0.13
+Nodes (23): detectInjectionAttempt(), InjectionSignal, SIGNATURES, AgentLoopInput, AgentLoopResult, AgentToolCallTrace, parseToolArguments(), runAgentLoop() (+15 more)
 
 ### Community 5 - "db/schema.ts"
 Cohesion: 0.03
-Nodes (74): OperatorBindingForm(), agentConfigRelations, AgentEnabledTools, agentInboundJobs, agentInboundJobsRelations, agentKind, agentMemoryScope, AgentRawPayload (+66 more)
+Nodes (78): InsumoForm(), PATCH(), POST(), agentConfigRelations, AgentEnabledTools, agentInboundJobsRelations, agentKind, agentMemoryScope (+70 more)
 
 ### Community 6 - "/graphify"
 Cohesion: 0.06
 Nodes (34): Configured Project Profiles, For --cluster-only, For git commit hook, For /graphify add, For /graphify explain, For /graphify path, For /graphify query, For native CLAUDE.md integration (+26 more)
 
 ### Community 7 - "requireUser"
-Cohesion: 0.03
-Nodes (95): addApplication(), Fail, formStr(), listOrgLibrary(), uploadAttachment(), createOrganizationWithContact(), ContactosPage(), OrgForm() (+87 more)
-
-### Community 8 - "Card.tsx"
 Cohesion: 0.05
-Nodes (90): AgentDlqPage(), ReplyComposer(), channelBadgeTone(), INBOX_CHANNEL_LABEL, OperatorUserOption, labels, Node, EMPTY (+82 more)
+Nodes (53): createOrder(), dynamic, EditarPromoPage(), dynamic, NuevaPromoPage(), PromoForm(), DELETE(), GET() (+45 more)
+
+### Community 8 - "Button.tsx"
+Cohesion: 0.04
+Nodes (66): createOrganizationWithContact(), OperatorUserOption, CHANNEL_LABELS, CHANNELS, CREDENTIALS_DEFAULTS, FLASH_ERRORS, MANUAL_PROVIDER_NOTES, Notice (+58 more)
 
 ### Community 9 - "$graphify"
 Cohesion: 0.07
@@ -285,29 +281,29 @@ Nodes (28): Configured Project Profiles, For --cluster-only, For $graphify add, 
 Cohesion: 0.07
 Nodes (27): dom, dom.iterable, esnext, next-env.d.ts, .next/types/**/*.ts, node_modules, **/*.ts, **/*.tsx (+19 more)
 
-### Community 11 - "analytics/page.tsx"
-Cohesion: 0.19
-Nodes (17): AnalyticsPage(), dynamic, metadata, percent(), sql, hashPasswordSeed(), main(), CampaignPerformance (+9 more)
+### Community 11 - "sql"
+Cohesion: 0.22
+Nodes (13): AnalyticsPage(), percent(), sql, CampaignPerformance, ChannelBreakdown, DailyLeads, FunnelStats, getCampaignPerformance() (+5 more)
 
 ### Community 12 - "productos/[id]/page.tsx"
-Cohesion: 0.05
-Nodes (50): CatalogoPage(), MoldesManager(), formatDate(), ProductoDetallePage(), ProductImageCard(), OptionFabric, OptionTechnique, ProductOptionsInitial (+42 more)
+Cohesion: 0.06
+Nodes (36): CatalogManager(), CatalogoPage(), Mold, MoldesManager(), formatDate(), ProductoDetallePage(), ProductImageCard(), NuevoProductoPage() (+28 more)
 
-### Community 13 - "actions/inbox.ts"
-Cohesion: 0.15
-Nodes (18): auditHandoffAction(), conversationExists(), conversationsInputSchema, isoDateTime, messagesInputSchema, resolveHandoff(), resolveHandoffSchema, sendReply() (+10 more)
+### Community 13 - "ReplyComposer.tsx"
+Cohesion: 0.67
+Nodes (3): sendReply(), ReplyComposer(), handleSubmit()
 
 ### Community 14 - "(public)/layout.tsx"
 Cohesion: 0.18
 Nodes (12): PublicLayout(), PublicLanding(), Fbq, installPixel(), MetaPixel(), Window, Logo(), SiteFooter() (+4 more)
 
-### Community 15 - "public-orders.ts"
-Cohesion: 0.15
-Nodes (20): beginPublicUploadSession(), PublicOrderDomainError, PublicOrderFailure, uploadAttachmentFromPublic(), WIZARD_RATE_LIMITED, wizardRateLimited(), KINDS, Step4Form() (+12 more)
+### Community 15 - "validators.ts"
+Cohesion: 0.05
+Nodes (54): Fail, formStr(), listOrgLibrary(), uploadAttachment(), beginPublicUploadSession(), createPublicOrder(), PublicOrderDomainError, PublicOrderFailure (+46 more)
 
 ### Community 16 - "pricing.ts"
-Cohesion: 0.14
-Nodes (14): LineOptionsSnapshot, MaterialConsumptionSnapshot, consumptionUnitCost(), MaterialSummary, quoteBundleLine(), QuoteLineInput, quoteOrder(), round2() (+6 more)
+Cohesion: 0.05
+Nodes (54): confirmQuote(), LINE_EDITABLE_STATUS, loadQuotableLines(), QuoteActionError, REQUOTE_BLOCKED_STATUS, reQuoteOrder(), FichaTecnicaPage(), POST() (+46 more)
 
 ### Community 17 - "dependencies"
 Cohesion: 0.09
@@ -318,12 +314,12 @@ Cohesion: 0.09
 Nodes (23): drizzle-kit, eslint, eslint-config-next, devDependencies, drizzle-kit, eslint, eslint-config-next, tailwindcss (+15 more)
 
 ### Community 19 - "agent-config.ts"
-Cohesion: 0.12
-Nodes (24): bindAgentOperator(), BindAgentOperatorInput, bindOperatorSchema, copyAgentConfig(), copyAgentConfigSchema, insertConfigRow(), isUniqueViolation(), ListAiProviderModelsResult (+16 more)
+Cohesion: 0.10
+Nodes (34): bindAgentOperator(), BindAgentOperatorInput, bindOperatorSchema, copyAgentConfig(), copyAgentConfigSchema, insertConfigRow(), isUniqueViolation(), ListAiProviderModelsResult (+26 more)
 
 ### Community 20 - "5/page.tsx"
-Cohesion: 0.18
-Nodes (20): metadata, PresupuestoStep1(), metadata, PresupuestoStep2(), metadata, parseSizes(), PresupuestoStep3(), metadata (+12 more)
+Cohesion: 0.06
+Nodes (47): CatalogoPage(), dynamic, metadata, normalizeSearch(), SUBCATEGORY_ORDER, metadata, PresupuestoStep1(), Step1Form() (+39 more)
 
 ### Community 21 - "2. Todo lo que el usuario pidió en este chat (cronológico)"
 Cohesion: 0.11
@@ -334,8 +330,8 @@ Cohesion: 0.11
 Nodes (17): 1. Hard rule: graph first, code second, 2. Command reference, 3. 1:1 parity with the code (mandatory), 4. Full rebuild, 5. Semantic enrichment (this is what makes the graph queryable), 6. The graph IS versioned, 7. Agent integration, 8. Known graphify defects and version split (verified empirically) (+9 more)
 
 ### Community 23 - "read.ts"
-Cohesion: 0.07
-Nodes (30): findMissingInfoInput, findMissingInfoTool, getConversationInput, getConversationTool, idLike, lookupCustomerInput, lookupCustomerTool, lookupOrderInput (+22 more)
+Cohesion: 0.05
+Nodes (49): DRAFT_LEAD_ROLES, draftLeadInput, draftLeadRole, draftLeadTool, draftOrderInput, draftOrderTool, draftQuoteInput, draftQuoteTool (+41 more)
 
 ### Community 24 - "03 · API ROUTES — Inventario"
 Cohesion: 0.11
@@ -361,9 +357,9 @@ Nodes (14): 08 · ROADMAP — Post-MVP, Backlog sin fecha, 🟠 Bot de WhatsApp 
 Cohesion: 0.13
 Nodes (14): Contacto con el usuario, Convenciones clave, Cuando termines una fase, Estructura mental del proyecto, Fix KI-01 (rompe build), Fix KI-05, KI-06, KI-12 — antes de F3, Fix KI-09 (F2-20) — bloqueante, HANDOFF — Para el próximo agente de código (+6 more)
 
-### Community 30 - "reconcile.ts"
-Cohesion: 0.05
-Nodes (61): AuthorizationResult, authorize(), dynamic, expectedCronSecret(), GET(), handle(), POST(), presentedCronSecret() (+53 more)
+### Community 30 - "telegram.ts"
+Cohesion: 0.14
+Nodes (20): TelegramStatusPage(), dynamic, POST(), runtime, agentConfig, updateMessageDelivery(), deriveWebhookPathToken(), idSchema (+12 more)
 
 ### Community 31 - "06 · STANDARDS BUILDING — Reglas de código"
 Cohesion: 0.13
@@ -382,8 +378,8 @@ Cohesion: 0.02
 Nodes (93): agent-coordination, argentina-al-espacio-comms, argentina-al-espacio-envio-masivo, argentina-al-espacio-historias, argentina-al-espacio-html, argentina-al-espacio-pdf, argentina-al-espacio-publicidad, argentina-al-espacio-video (+85 more)
 
 ### Community 35 - "session-store.ts"
-Cohesion: 0.11
-Nodes (19): agentSessionEvents, AssetKind, BoundarySignal, ConversationSessionState, SessionEventType, SessionPolicyRepository, MemorySessionRepository, CasConflictError (+11 more)
+Cohesion: 0.10
+Nodes (21): agentSessionEvents, AssetKind, BoundarySignal, CommercialIntent, ConversationSessionState, PendingQuestion, SessionEventType, SessionPolicyRepository (+13 more)
 
 ### Community 36 - "messaging/send-account.ts"
 Cohesion: 0.31
@@ -431,11 +427,11 @@ Nodes (29): 10. Appendix — parity scorecard, 1. Method & evidence, 2. Systems 
 
 ### Community 48 - "ai/registry.ts"
 Cohesion: 0.11
-Nodes (17): ChatCompletionsOptions, completionResponseSchema, createChatCompletionsProvider(), errorResponseSchema, ChatCompletion, ChatCompletionRequest, ChatMessage, ChatProvider (+9 more)
+Nodes (19): CHAT_COMPLETIONS_PROTOCOL, ChatCompletionsOptions, completionResponseSchema, createChatCompletionsProvider(), errorResponseSchema, ResolvedAgentRuntime, ChatCompletion, ChatCompletionRequest (+11 more)
 
 ### Community 49 - "login/route.ts"
-Cohesion: 0.17
-Nodes (13): POST(), createSession(), sign(), checkLoginThrottle(), createMemoryThrottle(), checkWindow(), evictExpired(), DUMMY_PASSWORD_HASH (+5 more)
+Cohesion: 0.18
+Nodes (12): POST(), users, createSession(), checkLoginThrottle(), createMemoryThrottle(), checkWindow(), evictExpired(), DUMMY_PASSWORD_HASH (+4 more)
 
 ### Community 50 - "✅ AH Sports OS — BUILD_PROGRESS (Checklist de Construcción)"
 Cohesion: 0.22
@@ -459,14 +455,14 @@ Nodes (7): cache, graph, HERE, misses, PRIMARY_CACHE, REPO_ROOT, SKILL_DIR
 
 ### Community 55 - "fake-db.ts"
 Cohesion: 0.05
-Nodes (35): agentSessionStates, fake, {
+Nodes (37): agentSessionStates, chatMessages, idempotencyKeys, fake, {
   INTAKE_IDEMPOTENCY_SCOPE,
   intakeIdempotencyKey,
   persistCanonicalMessage,
   persistCustomerInbound,
   persistAgentOutbound,
   importOperatorOutbound,
-}, camelName(), collect(), collectParams(), ConflictUpdate, evaluate() (+27 more)
+}, camelName(), collect(), collectParams() (+29 more)
 
 ### Community 56 - "✅ F1 — Fundación (Next.js + Drizzle + Neon + Auth + Design system)"
 Cohesion: 0.25
@@ -501,20 +497,20 @@ Cohesion: 0.29
 Nodes (7): Agente IA (Telegram + WhatsApp), AH Sports OS, Deploy en Render, Estructura, Mapeo Stitch → Rutas, Quick start, Troubleshooting
 
 ### Community 64 - "messaging/accounts.ts"
-Cohesion: 0.08
-Nodes (45): firstScopedValue(), accountStore, ChannelAccountResolution, ChannelAccountStore, classifyRowsError(), createEnvAccountStore(), credentialsFromAgentConfigScope(), credentialsFromEnv() (+37 more)
+Cohesion: 0.09
+Nodes (39): firstScopedValue(), accountStore, ChannelAccountResolution, ChannelAccountResolutionError, ChannelAccountRow, channelAccountRowId(), ChannelAccountStore, classifyRowsError() (+31 more)
 
 ### Community 65 - "channels/accounts.ts"
-Cohesion: 0.09
-Nodes (36): AgentTestReport, classifyStatus(), pingHttp(), pingProvider(), ProviderPing, testChannel(), ChannelAccountResolution, ChannelAccountResolutionError (+28 more)
+Cohesion: 0.08
+Nodes (39): ChannelAccountResolution, ChannelAccountResolutionError, ChannelAccountRow, classifyRowsError(), credentialsFromAgentConfig(), credentialsFromEnv(), credentialsFromProviderEnvScope(), decryptColumn() (+31 more)
 
 ### Community 66 - "sales-tools.ts"
 Cohesion: 0.03
-Nodes (56): addCartItemInput, addCartItemTool, AR_DAYS, BusinessHourDay, businessHoursInput, cancelDraftInput, cancelDraftTool, checkAvailabilityInput (+48 more)
+Nodes (70): orderContextItems, addOrderContextItem(), cleanExpiredItems(), clearOrderContext(), consumeOrderContextItems(), futureDate(), getOrderContextSummary(), OrderContextItem (+62 more)
 
-### Community 67 - "agent/inbox.ts"
-Cohesion: 0.13
-Nodes (27): loadConversations(), ConversationTable(), accountOptionLabel(), InboxAccountFilter, InboxAccountOption, InboxConversationItem, InboxConversationPage, normalizeAccountParam() (+19 more)
+### Community 67 - "actions/inbox.ts"
+Cohesion: 0.06
+Nodes (56): auditHandoffAction(), conversationExists(), conversationsInputSchema, isoDateTime, loadConversations(), loadMessages(), messagesInputSchema, resolveHandoff() (+48 more)
 
 ### Community 68 - "F6 — Proveedores, BOM por talle y costos trazables"
 Cohesion: 0.33
@@ -522,7 +518,7 @@ Nodes (5): Estado, F6 — Proveedores, BOM por talle y costos trazables, Migraci
 
 ### Community 69 - "ycloud.ts"
 Cohesion: 0.11
-Nodes (32): asString(), baseEvent(), classifySignatureFailure(), ECHO_EVENT_TYPES, ECHO_MESSAGE_KEYS, ENVELOPE_KEYS, EVENT_ENVELOPE_KEYS, extractContextReplyId() (+24 more)
+Nodes (33): asString(), baseEvent(), classifySignatureFailure(), ECHO_EVENT_TYPES, ECHO_MESSAGE_KEYS, ENVELOPE_KEYS, EVENT_ENVELOPE_KEYS, extractContextReplyId() (+25 more)
 
 ### Community 70 - "RELEASE NOTES — AH Sports OS (MVP v1.0)"
 Cohesion: 0.33
@@ -541,8 +537,12 @@ Cohesion: 0.21
 Nodes (14): answers, describe(), detectKind(), docAbove(), fileCache, firstSentence(), graph, headerDoc() (+6 more)
 
 ### Community 74 - "confirmations.ts"
-Cohesion: 0.06
-Nodes (35): cancelPendingInput, CONFIRMABLE_TOOLS, confirmActionInput, confirmActionTool, ConfirmationRequest, Describer, describers, listPendingInput (+27 more)
+Cohesion: 0.07
+Nodes (31): auditEvents, AuditPayload, AgentToolContext, auditOperatorAction(), auditSafeArgs(), extractEntityRef(), OperatorAuditInput, SAFE_ARG_KEYS (+23 more)
+
+### Community 75 - "ProductOptionsEditor.tsx"
+Cohesion: 0.20
+Nodes (5): OptionFabric, OptionTechnique, ProductOptionsEditor(), ProductOptionsInitial, TierRow
 
 ### Community 76 - "(public)/page.tsx"
 Cohesion: 0.12
@@ -550,7 +550,7 @@ Nodes (14): metadata, Categories, CtaBand(), Faq(), FAQS, Hero(), TRUST_POINTS, 
 
 ### Community 77 - "sales-agent.ts"
 Cohesion: 0.14
-Nodes (24): updateMessageDelivery(), defaultInboundTurnDispatcher, isHumanOverrideActive(), deliverAgentReply(), dispatchSalesTurn(), FIXED_ACK_REPLY, FIXED_CLARIFICATION_REPLY, inReplyToMessageIdOrNull() (+16 more)
+Nodes (25): defaultInboundTurnDispatcher, analyzeConversationState(), classifyMessageType(), ConversationMetadata, MessageType, isHumanOverrideActive(), deliverAgentReply(), dispatchSalesTurn() (+17 more)
 
 ### Community 78 - "eslint.config.mjs"
 Cohesion: 0.50
@@ -565,8 +565,8 @@ Cohesion: 0.50
 Nodes (3): name, private, version
 
 ### Community 81 - "zernio.ts"
-Cohesion: 0.16
-Nodes (20): API_SENT_VIA, asString(), ATTACHMENT_TYPE_MAP, buildCreateBody(), classifyEvent(), commentSender(), createTemplateParams(), echoOrigin() (+12 more)
+Cohesion: 0.15
+Nodes (21): API_SENT_VIA, asString(), ATTACHMENT_TYPE_MAP, buildCreateBody(), classifyEvent(), commentSender(), createTemplateParams(), echoOrigin() (+13 more)
 
 ### Community 83 - "site.ts"
 Cohesion: 0.14
@@ -576,21 +576,21 @@ Nodes (10): archivo, inter, metadata, viewport, alt, contentType, size, SITE_NAM
 Cohesion: 0.07
 Nodes (27): 0. Estado real: implementado vs. validado en vivo (leer primero), 10.1 Pre-vuelo (sin proveedor), 10.2 Telegram (canal interno), 10.3 WhatsApp (canal de ventas), 10.4 Reconciliación, 10. Checklist de pruebas (mensajes reales), 10 · GUÍA DE CANALES DEL AGENTE — Telegram interno + WhatsApp/YCloud ventas, 11. Troubleshooting (+19 more)
 
-### Community 88 - "bot.ts"
-Cohesion: 0.14
-Nodes (20): agentMemories, AuthorizedOperator, OPERATOR_BINDING_SCOPE, OperatorIdentity, resolveOperatorIdentity(), AGENT_ADMIN_ROLES, AgentAdminRole, CommandContext (+12 more)
+### Community 88 - "Card.tsx"
+Cohesion: 0.11
+Nodes (42): INBOX_CHANNEL_LABEL, dynamic, metadata, ContactosPage(), dynamic, STATUS_TONE, InsumosTable(), Row (+34 more)
 
 ### Community 95 - "checkRateLimit"
-Cohesion: 0.09
-Nodes (34): RFC-1918, GET(), MIME_MAP, runtime, isPrivateIp(), extractMeta(), fetchPinned(), GET() (+26 more)
+Cohesion: 0.07
+Nodes (43): RFC-1918, wizardRateLimited(), GET(), GET(), MIME_MAP, runtime, isPrivateIp(), extractMeta() (+35 more)
 
-### Community 101 - "capabilities.ts"
-Cohesion: 0.14
-Nodes (20): COLOR_ROLES_ALL, ColorRole, jerseyCapabilities(), mapProductZoneLabel(), productCapabilities, ZONE_LABEL_TO_GARMENT_ZONE, COLLAR_VARIANTS, GARMENT_ZONES (+12 more)
+### Community 101 - "model.ts"
+Cohesion: 0.16
+Nodes (20): clamp01(), COLLAR_VARIANTS, DEFAULT_GARMENT_CONFIG, FABRIC_PRESET_IDS, GARMENT_ZONES, isGarmentZone(), isHexColor(), normalizeGarmentConfig() (+12 more)
 
 ### Community 102 - "tools-clients.ts"
-Cohesion: 0.06
-Nodes (33): AgentTool, buildReconcileTools(), buildReportCandidateTool(), CANDIDATE_KEY_PREFIX, reportCandidateInput, clientTools, getContactDetailInput, getContactDetailTool (+25 more)
+Cohesion: 0.05
+Nodes (37): leadIdentities, lookupCustomerTool, lookupOrderTool, buildReconcileTools(), buildReportCandidateTool(), CANDIDATE_KEY_PREFIX, reportCandidateInput, withAuditLog() (+29 more)
 
 ### Community 103 - "tools-cash.ts"
 Cohesion: 0.06
@@ -598,7 +598,7 @@ Nodes (43): cashMovements, cashSessions, addMovement(), CashSession, CashSnapsho
 
 ### Community 104 - "human-handoff.ts"
 Cohesion: 0.10
-Nodes (18): ClaimOutcome, DrizzleHandoffEffectRepository, HANDOFF_EFFECTS, HandoffClaimInput, handoffClaimKey(), HandoffClaimResult, HandoffEffectClaimant, HandoffEffectKind (+10 more)
+Nodes (22): activateHumanOverride(), ClaimOutcome, deactivateHumanOverride(), DrizzleHandoffEffectRepository, HANDOFF_EFFECTS, HandoffClaimInput, handoffClaimKey(), HandoffClaimResult (+14 more)
 
 ### Community 105 - "agent-config-scope.ts"
 Cohesion: 0.12
@@ -609,56 +609,56 @@ Cohesion: 0.07
 Nodes (27): 0. Executive summary, 10. Test / build state, 11. Security requirements & current posture, 12.1 Telegram internal agent, 12.2 AI sales agent, 12. Integration seams (concrete), 13. Blockers & migration risks (precise), 14. Precise affected files / symbols (change map) (+19 more)
 
 ### Community 107 - "intake.ts"
-Cohesion: 0.18
-Nodes (18): AuditEntry, findMessage(), importOperatorOutbound(), insertMessage(), INTAKE_IDEMPOTENCY_SCOPE, INTAKE_IDEMPOTENCY_TTL_MS, IntakeFailure, intakeIdempotencyKey() (+10 more)
+Cohesion: 0.21
+Nodes (16): AuditEntry, findMessage(), importOperatorOutbound(), insertMessage(), INTAKE_IDEMPOTENCY_SCOPE, INTAKE_IDEMPOTENCY_TTL_MS, IntakeFailure, intakeIdempotencyKey() (+8 more)
 
 ### Community 108 - "runner.ts"
-Cohesion: 0.14
-Nodes (22): neutralizeUntrustedSentinel(), buildReconcileSystemPrompt(), audit(), buildTranscriptEvidence(), buildUserMessage(), CandidatesReconcileSummary, claimRunLock(), ConversationReconcileResult (+14 more)
+Cohesion: 0.12
+Nodes (24): neutralizeUntrustedSentinel(), PROMPT_INJECTION_GUARD, buildReconcileSystemPrompt(), RECONCILE_DOMAIN_PROMPT, audit(), buildTranscriptEvidence(), buildUserMessage(), CandidatesReconcileSummary (+16 more)
 
 ### Community 109 - "whatsapp/index.ts"
 Cohesion: 0.16
 Nodes (16): BASE_SALES_PROMPT, buildSalesSystemPrompt(), CustomerPromptContext, formatPermittedSessionFacts(), SalesPromptInput, detectInjection(), INJECTION_PATTERNS, InjectionPatternId (+8 more)
 
 ### Community 110 - "import.ts"
-Cohesion: 0.09
-Nodes (24): IntakeSuccess, MessageContentType, contentFor(), contentTypeFor(), NormalizedWhatsAppCustomerMessage, NormalizedWhatsAppOperatorMessage, normalizeWhatsAppInbound(), normalizeWhatsAppWebhook() (+16 more)
+Cohesion: 0.10
+Nodes (23): IntakeSuccess, contentFor(), contentTypeFor(), NormalizedWhatsAppCustomerMessage, NormalizedWhatsAppOperatorMessage, normalizeWhatsAppInbound(), normalizeWhatsAppWebhook(), PendingInbound (+15 more)
 
 ### Community 111 - "inbound-pipeline.ts"
-Cohesion: 0.10
-Nodes (31): register(), resolveScopeForConversation(), channelAccountRowId(), matchSenderToChannelAccount(), autoReplyClaimKey(), shouldSendAutoReply(), matchesAssistantBubble(), splitIntoBubbles() (+23 more)
+Cohesion: 0.14
+Nodes (26): resolveScopeForConversation(), persistAgentOutbound(), autoReplyClaimKey(), shouldSendAutoReply(), matchesAssistantBubble(), splitIntoBubbles(), scheduleBufferProcessing(), canonicalExternalUserId() (+18 more)
 
 ### Community 112 - "utm-capture.ts"
-Cohesion: 0.15
-Nodes (15): createPublicOrder(), Props, Step5Form(), confirm(), UtmCaptureScript(), attributionSuffix(), WhatsAppCta(), COOKIE_EXPIRY_DAYS (+7 more)
+Cohesion: 0.21
+Nodes (11): UtmCaptureScript(), attributionSuffix(), WhatsAppCta(), COOKIE_EXPIRY_DAYS, COOKIE_NAME, captureUTMFromURL(), getCookie(), getStoredUTM() (+3 more)
 
-### Community 113 - "orders.ts"
-Cohesion: 0.07
-Nodes (39): confirmQuote(), createOrder(), createOrderLine(), LINE_EDITABLE_STATUS, loadQuotableLines(), QuoteActionError, REQUOTE_BLOCKED_STATUS, reQuoteOrder() (+31 more)
+### Community 113 - "cotizar/page.tsx"
+Cohesion: 0.25
+Nodes (9): CLOSED_STATUS, CotizarPage(), ConfirmQuoteForm(), submit(), ReQuoteForm(), submit(), orderLineTechniques, loadOrderLineSizeQuantities() (+1 more)
 
-### Community 114 - "conversations"
-Cohesion: 0.11
-Nodes (29): cursorSchema, dynamic, GET(), paramsSchema, runtime, cursorSchema, dynamic, GET() (+21 more)
+### Community 114 - "authorizeAgentApi"
+Cohesion: 0.09
+Nodes (34): cursorSchema, dynamic, GET(), paramsSchema, runtime, cursorSchema, dynamic, GET() (+26 more)
 
 ### Community 115 - "config.ts"
-Cohesion: 0.14
-Nodes (20): AGENT_DOMAIN_TERMS, buildSystemPrompt(), DOMAIN_PROMPT, PROMPT_INJECTION_GUARD, AGENT_CONFIG_ID, AgentConfigRow, agentConfigRowSchema, AgentRuntimeResolution (+12 more)
+Cohesion: 0.18
+Nodes (17): AGENT_DOMAIN_TERMS, buildSystemPrompt(), DOMAIN_PROMPT, AGENT_CONFIG_ID, AgentConfigRow, agentConfigRowSchema, AgentRuntimeResolution, catalogDefaultEndpoint() (+9 more)
 
 ### Community 116 - "sdd-telegram-agent-exploration.md"
 Cohesion: 0.08
 Nodes (25): 10. Recommendation, 1. Verification log (adversarial cross-check of the four reports), 2. Current State, 3.1 Telegram internal agent (management bot for staff), 3.2 AI sales agent (customer-facing), 3.3 Platform / cross-cutting, 3. Target capability inventory (verified), 4. Port vs Adapt vs Rebuild (decision rationale) (+17 more)
 
-### Community 117 - "PageHeader"
-Cohesion: 0.08
-Nodes (39): TelegramStatusPage(), KIND_LABEL, metadata, STATUS_LABEL, CajaDetallePage(), KIND_LABEL, metadata, CajaPage() (+31 more)
+### Community 117 - "formatCurrency"
+Cohesion: 0.07
+Nodes (39): AgentDlqPage(), ConversationTable(), channelBadgeTone(), CajaDetallePage(), KIND_LABEL, metadata, CajaPage(), metadata (+31 more)
 
 ### Community 118 - "buffer.ts"
 Cohesion: 0.13
-Nodes (20): BUFFER_CONFIG, BufferChannelConfig, BufferManager, configFor(), DeadLetterEntry, DEFAULT_CONFIG, getLastProcessedContent(), getOrCreateEntry() (+12 more)
+Nodes (19): BUFFER_CONFIG, BufferChannelConfig, BufferManager, configFor(), DeadLetterEntry, DEFAULT_CONFIG, getLastProcessedContent(), getOrCreateEntry() (+11 more)
 
 ### Community 119 - "temporal-context.ts"
-Cohesion: 0.18
-Nodes (16): buildTemporalAgentMessages(), dedupeHistoryWithBuffered(), HistoryTurn, loadConversationHistory(), ARGENTINA_TIMEZONE, dayKeyArgentina(), formatArgentinaTimestamp(), getArgentinaHour() (+8 more)
+Cohesion: 0.14
+Nodes (21): buildTemporalAgentMessages(), dedupeHistoryWithBuffered(), HistoryTurn, loadConversationHistory(), ARGENTINA_TIMEZONE, classifyTurnIntent(), dayKeyArgentina(), evaluateOrderRecency() (+13 more)
 
 ### Community 120 - "3. Detalle por área"
 Cohesion: 0.11
@@ -668,45 +668,45 @@ Nodes (17): 12 — Auditoría de paridad SocialCRM → AH Sports, 1. Resumen eje
 Cohesion: 0.40
 Nodes (4): Findings, Notes / non-findings, REVIEW R5 — Domain pack (W9): cart · cash · broadcast · promos · public feeds, Verified OK
 
-### Community 122 - "promos/[id]/page.tsx"
-Cohesion: 0.22
-Nodes (5): dynamic, EditarPromoPage(), dynamic, NuevaPromoPage(), PromoForm()
+### Community 122 - "reconcile.ts"
+Cohesion: 0.13
+Nodes (24): AuditInput, AuditRecorder, AuditWriter, createAuditRecorder(), deleteExpiredMemories(), NO_REPLY_IDEMPOTENCY_SCOPE, purgeExpiredIdempotencyKeys(), reconcileInboundWithoutReply() (+16 more)
 
-### Community 123 - "BusinessSettingsForm.tsx"
-Cohesion: 0.12
-Nodes (19): BUSINESS_SETTING_KEYS, updateSetting(), updateSettingSchema, WORKSHOP_SETTING_KEYS, BusinessSettingsForm(), submit(), DEFAULT_SLOT, FIELDS (+11 more)
+### Community 123 - "configuracion/page.tsx"
+Cohesion: 0.13
+Nodes (18): updateSetting(), BusinessSettingsForm(), submit(), DEFAULT_SLOT, FIELDS, settingValue(), EMPTY, Row (+10 more)
 
 ### Community 124 - "conversation-identity.ts"
 Cohesion: 0.12
-Nodes (18): ChannelEventContext, assertConversationAccount(), ConversationIdentityError, ConversationIdentityErrorCode, ConversationIdentityInsert, ConversationIdentityRecord, ConversationIdentityRepository, ConversationIdentityResult (+10 more)
+Nodes (16): ChannelEventContext, assertConversationAccount(), ConversationIdentityError, ConversationIdentityErrorCode, ConversationIdentityInsert, ConversationIdentityRecord, ConversationIdentityRepository, ConversationIdentityResult (+8 more)
 
 ### Community 125 - "jersey-geometry.ts"
-Cohesion: 0.13
-Nodes (25): FallbackGarment(), GarmentModelProps, SportsJersey(), buildCollarGeometry(), buildCuffGeometry(), buildJerseyGeometries(), buildSleeveGeometry(), buildTorsoGeometry() (+17 more)
+Cohesion: 0.12
+Nodes (27): FallbackGarment(), GarmentModelProps, SportsJersey(), buildCollarGeometry(), buildCuffGeometry(), buildJerseyGeometries(), buildSleeveGeometry(), buildTorsoGeometry() (+19 more)
 
 ### Community 126 - "ref-code-sign.ts"
-Cohesion: 0.27
-Nodes (10): decodeRefCode(), RefCodeData, RefAttribution, refCodeKey(), sign(), DATA, loadSignModule(), SignModule (+2 more)
+Cohesion: 0.22
+Nodes (12): BodySchema, POST(), decodeRefCode(), RefCodeData, RefAttribution, refCodeKey(), sign(), signRefCode() (+4 more)
 
 ### Community 127 - "storage.ts"
 Cohesion: 0.10
 Nodes (20): ALLOWED_MIMES, AllowedMime, ATTACHMENT_MIMES, dbClient(), dbPrivateStorageAdapter, dbStorageAdapter, DEFAULT_PUBLIC_UPLOADS_DIR, deleteStoredFile() (+12 more)
 
-### Community 128 - "rbac.ts"
-Cohesion: 0.13
-Nodes (21): dynamic, GET(), querySchema, runtime, BodySchema, POST(), GET(), POST() (+13 more)
+### Community 128 - "Channel"
+Cohesion: 0.14
+Nodes (16): GET(), POST(), AgentTestReport, ChannelTestReport, classifyStatus(), pingHttp(), pingProvider(), ProviderPing (+8 more)
 
-### Community 129 - "requireAgentAdmin"
-Cohesion: 0.07
-Nodes (38): ChannelAccountRow, createChannelAccount(), createChannelAccountSchema, credentialsRefSchema, listChannelAccounts(), setChannelAccountStatus(), setChannelAccountStatusSchema, updateChannelAccount() (+30 more)
+### Community 129 - "channel-accounts.ts"
+Cohesion: 0.14
+Nodes (16): ChannelAccountRow, createChannelAccount(), createChannelAccountSchema, credentialsRefSchema, setChannelAccountStatus(), setChannelAccountStatusSchema, updateChannelAccount(), updateChannelAccountSchema (+8 more)
 
 ### Community 130 - "session-policy.ts"
-Cohesion: 0.17
-Nodes (16): applyCommercialFacts(), assertSessionContext(), classifyBoundary(), CommercialFacts, CommercialIntent, createInitialSessionState(), nextState(), PendingQuestion (+8 more)
+Cohesion: 0.19
+Nodes (14): applyCommercialFacts(), assertSessionContext(), classifyBoundary(), CommercialFacts, createInitialSessionState(), nextState(), PERMITTED_CONTEXT_KEYS, RoutingDecision (+6 more)
 
-### Community 131 - "draft.ts"
-Cohesion: 0.08
-Nodes (21): DRAFT_LEAD_ROLES, draftLeadInput, draftLeadRole, draftLeadTool, draftOrderInput, draftOrderTool, draftQuoteInput, draftQuoteTool (+13 more)
+### Community 131 - "products/route.ts"
+Cohesion: 0.17
+Nodes (18): PATCH(), POST(), DELETE(), PATCH(), POST(), productBundleItems, productBundles, ProductStructureInput (+10 more)
 
 ### Community 132 - "check-agent-tools.mts"
 Cohesion: 0.15
@@ -714,39 +714,39 @@ Nodes (12): check(), CheckableTool, checkToolSet(), injectedRole, knownRole, lea
 
 ### Community 133 - "inbound.ts"
 Cohesion: 0.14
-Nodes (20): ResolvedAgentRuntime, extractDocumentText(), analyzeMedia(), attachmentKindFor(), effectiveMediaAccount(), hostMatches(), InboundMediaItem, mediaApiKey() (+12 more)
+Nodes (20): loadAgentConfigRow(), resolveAgentRuntime(), extractDocumentText(), analyzeMedia(), attachmentKindFor(), effectiveMediaAccount(), hostMatches(), InboundMediaItem (+12 more)
 
 ### Community 134 - "send.ts"
 Cohesion: 0.22
 Nodes (12): clean(), EnvRecord, isWhatsAppSendConfigured(), resolveWhatsAppSendConfig(), sendWhatsAppMessage(), sendWhatsAppMessageWithConfig(), SendWhatsAppResult, toYCloudContent() (+4 more)
 
 ### Community 135 - "messaging/channel-events.ts"
-Cohesion: 0.19
-Nodes (15): idempotencyKeys, accountPartition(), ChannelEventInsert, channelEventKey(), ChannelEventPersistResult, ChannelEventRepository, claimChannelDelivery(), deliveryMarkerKey() (+7 more)
+Cohesion: 0.21
+Nodes (14): accountPartition(), ChannelEventInsert, channelEventKey(), ChannelEventPersistResult, ChannelEventRepository, claimChannelDelivery(), deliveryMarkerKey(), drizzleChannelEventRepository (+6 more)
 
 ### Community 136 - "inbound-queue.ts"
-Cohesion: 0.08
-Nodes (43): retryDlqJob(), retryDlqJobSchema, DlqRetryButton(), retry(), BufferedMessage, classifyError(), ErrorClass, errorCode() (+35 more)
+Cohesion: 0.09
+Nodes (34): retryDlqJob(), retryDlqJobSchema, DlqRetryButton(), retry(), dynamic, GET(), querySchema, runtime (+26 more)
 
 ### Community 137 - "migrate-descriptions-v0946.mjs"
 Cohesion: 0.17
 Nodes (10): CACHE, HERE, misses, NEW_GRAPH, newGraph, OLD_GRAPH, oldByKey, oldGraph (+2 more)
 
 ### Community 138 - "inbound-pipeline.test.ts"
-Cohesion: 0.08
-Nodes (22): ChannelAccountRow, account, { accountScopedInboundKey }, { BufferManager, scheduleBufferProcessing }, ctx, fake, findById(), {
+Cohesion: 0.16
+Nodes (10): account, { accountScopedInboundKey }, { BufferManager, scheduleBufferProcessing }, ctx, fake, findById(), {
   handleNormalizedEvent,
   isMessageDuplicate,
   setInboundTurnDispatcher,
-} (+14 more)
+}, listByChannel() (+2 more)
 
 ### Community 139 - "telegram/reconcile/route.ts"
 Cohesion: 0.27
 Nodes (10): AuthorizationResult, authorize(), dynamic, expectedCronSecret(), GET(), handle(), POST(), presentedCronSecret() (+2 more)
 
-### Community 140 - "[token]/page.tsx"
-Cohesion: 0.16
-Nodes (13): GET(), metadata, SeguimientoPage(), STATUS_LABEL, TIMELINE, asString(), BUSINESS_SETTING_KEYS, BusinessInfo (+5 more)
+### Community 140 - "tools-memory.ts"
+Cohesion: 0.12
+Nodes (15): CANDIDATE_STATUSES, forgetInput, forgetThisTool, getCandidatesInput, getReconcileCandidatesTool, idLike, memoryTools, recallInput (+7 more)
 
 ### Community 141 - "vision.ts"
 Cohesion: 0.27
@@ -760,65 +760,65 @@ Nodes (9): 1. Hardening fixes, 2. Migration bootstrap + journal reconciliation (
 Cohesion: 0.22
 Nodes (8): Comparación de variables de entorno, Comparación funcional (canales), Modelo de datos de mensajes, Muzapp → AH Sports OS — Parity Explore (Telegram + WhatsApp), Qué falta para replicar el funcionamiento real de Muzapp, Qué se incorporó en App de gestión (P0–P7, ya mergeado), UI de conversaciones, Verdict
 
-### Community 144 - "MessagesTimeline.tsx"
-Cohesion: 0.14
-Nodes (18): loadMessages(), MessagesTimeline(), BOARD_STATUSES, columnOf(), columns, KanbanBoard(), OrderRow, LiveRefresher() (+10 more)
+### Community 144 - "ApplicationsManager.tsx"
+Cohesion: 0.23
+Nodes (9): addApplication(), ApplicationsManager(), submit(), AppLine, AppRow, AppStatusBadge(), AppTechnique, VIEWS (+1 more)
 
 ### Community 145 - "secret-box.ts"
-Cohesion: 0.20
-Nodes (8): { encryptSecret }, { resolveRuntimeFromConfig }, encryptSecret(), getKey(), isEncrypted(), resolveSecretUpdate(), SECRET_CLEAR, SecretResolution
+Cohesion: 0.15
+Nodes (15): retryFailedDeliveries(), { encryptSecret }, { resolveRuntimeFromConfig }, sendTelegramMessage(), decryptSecret(), encryptSecret(), getKey(), isEncrypted() (+7 more)
 
 ### Community 146 - "tools/schema.ts"
 Cohesion: 0.54
 Nodes (7): AnySchema, JsonSchema, kindOf(), objectSchema(), toJsonSchema(), unwrap(), zodToParameters()
 
 ### Community 148 - "router.ts"
-Cohesion: 0.26
-Nodes (13): handleOperatorCommand(), resolveEnabledTools(), resolveAgentRuntime(), createChatProvider(), AgentConfigResolutionError, denialMessage(), outboundPlatformId(), PersistedInbound (+5 more)
+Cohesion: 0.17
+Nodes (17): AuthorizedOperator, resolveOperatorIdentity(), CommandContext, handleOperatorCommand(), HELP_TEXT, resolveEnabledTools(), createChatProvider(), AgentConfigResolutionError (+9 more)
 
 ### Community 149 - "operator-send.ts"
-Cohesion: 0.10
-Nodes (34): POST(), chatMessages, resolveAgentConfig(), ConversationRow, deliver(), deliverViaMessenger(), deliverViaTelegram(), loadProviderThreadId() (+26 more)
+Cohesion: 0.12
+Nodes (29): conversations, resolveAgentConfig(), ConversationRow, deliver(), deliverViaMessenger(), deliverViaTelegram(), loadProviderThreadId(), OperatorSendResult (+21 more)
 
 ### Community 151 - "api/leads/route.ts"
 Cohesion: 0.19
-Nodes (15): corsHeaders(), parseAllowedOrigins(), isUniqueViolation(), CreateLeadSchema, json(), OPTIONS(), POST(), leads (+7 more)
+Nodes (15): corsHeaders(), parseAllowedOrigins(), isUniqueViolation(), CreateLeadSchema, json(), OPTIONS(), POST(), extractRefCode() (+7 more)
 
-### Community 152 - "isSchemaNotReady"
-Cohesion: 0.17
-Nodes (18): channelAccounts, classifyError(), ErrorClass, errorCode(), ErrorLike, errorMessage(), isRetryableDbError(), isSchemaNotReady() (+10 more)
+### Community 152 - "agent/reconcile/route.ts"
+Cohesion: 0.27
+Nodes (10): AuthorizationResult, authorize(), dynamic, expectedCronSecret(), GET(), handle(), POST(), presentedCronSecret() (+2 more)
 
-### Community 154 - "Channel"
+### Community 154 - "isSchemaNotReady"
 Cohesion: 0.12
-Nodes (20): channelEvents, ChannelTestReport, ChannelEventContext, ChannelEventEnvelope, ChannelEventInsert, channelEventKey(), ChannelEventPersistResult, ChannelEventRepository (+12 more)
+Nodes (25): channelEvents, ChannelEventContext, ChannelEventEnvelope, channelEventKey(), ChannelEventPersistResult, ChannelEventRepository, DrizzleChannelEventRepository, eventTimestamp() (+17 more)
 
-### Community 155 - "configurator/index.ts"
-Cohesion: 0.10
-Nodes (39): clamp01(), CollarVariant, DEFAULT_GARMENT_CONFIG, GarmentColors, GarmentConfigInput, GarmentZone, HexColor, isGarmentZone() (+31 more)
+### Community 155 - "GarmentConfigurator.tsx"
+Cohesion: 0.12
+Nodes (20): GarmentColors, VisualAssetPlacement, AttachmentPanel(), ControlSection(), SegmentedControl(), SelectField(), SwatchField(), ATTACHMENT_KINDS (+12 more)
 
 ### Community 157 - "tools-broadcast.ts"
-Cohesion: 0.09
-Nodes (22): AR_TIMEZONE, arDayRange(), dateFormatter, dateTimeFormatter, formatDateTimeAr(), maskTail(), moneyFormatter, audienceSchema (+14 more)
+Cohesion: 0.08
+Nodes (23): AR_TIMEZONE, arDayRange(), dateFormatter, dateTimeFormatter, formatDateTimeAr(), maskTail(), moneyFormatter, audienceSchema (+15 more)
 
 ### Community 159 - "client.ts"
-Cohesion: 0.06
-Nodes (48): FichaTecnicaPage(), ItemEditor(), CYCLE, ItemStageAdvance(), stageLabel, PATCH(), POST(), PATCH() (+40 more)
+Cohesion: 0.07
+Nodes (41): createOrderLine(), KIND_LABEL, metadata, STATUS_LABEL, stageLabel, bodySchema, EDITABLE, POST() (+33 more)
 
 ### Community 161 - "link-generator/page.tsx"
-Cohesion: 0.25
-Nodes (8): LinkGeneratorForm(), handleSubmit(), validatePhone(), LinkGeneratorPage(), metadata, buildWhatsAppLink(), getSetting(), getStringSetting()
+Cohesion: 0.23
+Nodes (9): LinkGeneratorForm(), handleSubmit(), validatePhone(), LinkGeneratorPage(), metadata, settings, buildWhatsAppLink(), getSetting() (+1 more)
 
 ### Community 165 - "AgentConfigForm.tsx"
 Cohesion: 0.11
-Nodes (21): listAiProviderModels(), AgentConfigForm(), onProviderSelect(), AgentConfigInitial, AgentSecretStatus, AgentToolOption, PROVIDER_SECRET_FIELDS, SECRET_FIELDS (+13 more)
+Nodes (20): listAiProviderModels(), AgentConfigForm(), onProviderSelect(), AgentConfigInitial, AgentSecretStatus, AgentToolOption, PROVIDER_SECRET_FIELDS, SECRET_FIELDS (+12 more)
 
 ### Community 166 - "channels/types.ts"
-Cohesion: 0.10
-Nodes (21): CHANNEL_KINDS, CHANNEL_PROVIDER, PROVIDER_IDS, ChannelAccountStatus, channelAccountStatusSchema, channelAccountStatusValues, channelValues, contentTypeSchema (+13 more)
+Cohesion: 0.11
+Nodes (17): ChannelAccountStatus, channelAccountStatusSchema, channelAccountStatusValues, contentTypeSchema, contentTypeValues, DeliveryState, deliveryStateSchema, deliveryStateValues (+9 more)
 
-### Community 167 - "zernio-connect.ts"
-Cohesion: 0.18
-Nodes (16): startConnectSchema, startZernioConnect(), backToCanales(), GET(), connectStateCookieName(), fetchZernioAccount(), getZernioConnectUrl(), isZernioConnectPlatform() (+8 more)
+### Community 167 - "requireAgentAdmin"
+Cohesion: 0.09
+Nodes (32): listChannelAccounts(), registerZernioWebhookAction(), startConnectSchema, startZernioConnect(), BUSINESS_SETTING_KEYS, updateSettingSchema, WORKSHOP_SETTING_KEYS, ConversationTimelinePage() (+24 more)
 
 ### Community 168 - "conversions.ts"
 Cohesion: 0.29
@@ -828,37 +828,37 @@ Nodes (10): hashEmail(), hashName(), hashPhone(), MetaConversionCustomData, Meta
 Cohesion: 0.32
 Nodes (5): assertServerEnv(), isProduction(), loadServerEnv(), ServerEnv, serverEnvSchema
 
-### Community 170 - "order-context.ts"
-Cohesion: 0.22
-Nodes (10): orderContextItems, DbTransaction, addOrderContextItem(), cleanExpiredItems(), clearOrderContext(), consumeOrderContextItems(), futureDate(), getOrderContextSummary() (+2 more)
+### Community 170 - "messaging/errors.ts"
+Cohesion: 0.27
+Nodes (10): ErrorClass, errorCode(), ErrorLike, errorMessage(), isRetryableDbError(), readError(), RETRYABLE_CODES, RETRYABLE_MESSAGES (+2 more)
 
-### Community 171 - "tools/types.ts"
-Cohesion: 0.13
-Nodes (13): auditEvents, AuditPayload, AgentToolContext, AgentToolEffect, auditOperatorAction(), auditSafeArgs(), extractEntityRef(), OperatorAuditInput (+5 more)
+### Community 171 - "orders/[id]/stage/route.ts"
+Cohesion: 0.22
+Nodes (7): POST(), POST(), PRODUCTIVE, STAGE_TO_EVENT, productionEvents, orderItemStageSchema, stageSchema
 
 ### Community 172 - "cron/reconcile/route.ts"
 Cohesion: 0.24
 Nodes (11): dynamic, MODE_DEFAULTS, POST(), ReconcileMode, resolveLimit(), runtime, authorizeCronRequest(), bearerToken() (+3 more)
 
-### Community 173 - "lead-identity.ts"
-Cohesion: 0.16
-Nodes (12): leadIdentities, canonicalExternalUserId(), ConversationIdentityError, ConversationIdentityErrorCode, ConversationIdentityRecord, PHONE_CHANNELS, ensureLeadIdentity(), LeadIdentityInput (+4 more)
+### Community 173 - "normalizePhone"
+Cohesion: 0.22
+Nodes (8): canonicalExternalUserId(), ConversationIdentityError, ConversationIdentityErrorCode, ConversationIdentityRecord, PHONE_CHANNELS, looksLikePhone(), normalizePhone(), phoneMatches()
 
-### Community 174 - "product-options.ts"
-Cohesion: 0.18
-Nodes (15): computeOptionUnitPrice(), FabricLike, filterTechniquesForFabric(), OptionUnitPrice, OptionUnitPriceInput, round2(), roundToStep(), selectVolumeTier() (+7 more)
+### Community 174 - "protocol.ts"
+Cohesion: 0.43
+Nodes (7): ECHO_EVENT_TYPES, ECHO_MESSAGE_KEYS, echoMessageHasContent(), extractEchoMessage(), isProtocolArtifact(), isRecord(), STATUS_MESSAGE_TYPES
 
 ### Community 175 - "downloader.ts"
 Cohesion: 0.24
-Nodes (12): ALLOWED_DOMAINS, downloadMedia(), downloadYCloudMedia(), isAllowedDomain(), mediaUploadsDir(), mimeTypeToExt(), sanitizeFilename(), sanitizeScope() (+4 more)
+Nodes (13): ALLOWED_DOMAINS, downloadMedia(), downloadYCloudMedia(), isAllowedDomain(), mediaUploadsDir(), mimeTypeToExt(), sanitizeFilename(), sanitizeScope() (+5 more)
 
 ### Community 182 - "Review R2 — Outbound: notificaciones, ventana 24h, handoff, cron"
 Cohesion: 0.29
 Nodes (6): 1. Hallazgos, 2. Cadenas de evidencia (los tres altos), 3. Verificado OK, 4. Límites de esta revisión, 5. Estado para Engram (`parity/review-r2`), Review R2 — Outbound: notificaciones, ventana 24h, handoff, cron
 
-### Community 183 - "[attachmentId]/page.tsx"
-Cohesion: 0.09
-Nodes (19): copyAttachmentToOrder(), listOpenOrgOrders(), CopyToOrderButton(), copy(), OpenOrder, BibliotecaOrgPage(), ArteManager(), AttachmentDTO (+11 more)
+### Community 183 - "adjuntos/page.tsx"
+Cohesion: 0.14
+Nodes (14): copyAttachmentToOrder(), listOpenOrgOrders(), CopyToOrderButton(), copy(), OpenOrder, BibliotecaOrgPage(), ArteManager(), submitUpload() (+6 more)
 
 ### Community 184 - "Review R1 — Messaging core seams (merged parity code)"
 Cohesion: 0.40
@@ -873,28 +873,24 @@ Cohesion: 0.40
 Nodes (4): Findings, Notas de cobertura, REVIEW R4 — Agent config, providers, zernio embedded connect, Verificado OK
 
 ### Community 187 - "signatures.ts"
-Cohesion: 0.30
-Nodes (11): assertMediaBytes(), hasBytes(), isMarkup(), isTextLike(), MediaSniff, mimeKind(), OLE_SIGNATURE, PNG_SIGNATURE (+3 more)
+Cohesion: 0.31
+Nodes (10): hasBytes(), isMarkup(), isTextLike(), MediaSniff, mimeKind(), OLE_SIGNATURE, PNG_SIGNATURE, sniffMatchesMime() (+2 more)
 
 ### Community 188 - "Proposal: ai-telegram-sales-agent"
 Cohesion: 0.13
 Nodes (14): Affected Areas, Approach, Capabilities, Dependencies, In Scope, Intent, Modified Capabilities, New Capabilities (+6 more)
 
 ### Community 189 - "ingress.ts"
-Cohesion: 0.15
-Nodes (18): canonicalExternalUserId(), asNonEmptyString(), eventConversationExternalUserId(), eventSelfAddresses(), handlePassiveChannelEvent(), isRecord(), logAckedWithoutPersistence(), PASSIVE_PERSISTED_KINDS (+10 more)
+Cohesion: 0.14
+Nodes (19): ensureLeadIdentity(), linkConversationToContact(), asNonEmptyString(), eventConversationExternalUserId(), eventSelfAddresses(), handlePassiveChannelEvent(), isRecord(), logAckedWithoutPersistence() (+11 more)
 
-### Community 190 - "login/page.tsx"
-Cohesion: 0.33
-Nodes (4): LoginForm(), LoginPage(), navigation, PublicShell()
+### Community 190 - "register.ts"
+Cohesion: 0.47
+Nodes (4): register(), setInboundTurnDispatcher(), registerWhatsAppSalesDispatcher(), whatsappSalesDispatcher
 
 ### Community 191 - "Specification: AI Telegram Sales Agent"
 Cohesion: 0.13
 Nodes (14): Requirement: Admin visibility, resilience, and audit, Requirement: Canonical omnichannel conversation record, Requirement: Configurable AI sales assistance, Requirement: Guardrailed commerce drafting, Requirement: Secure agent configuration and access, Requirement: Telegram internal agent, Scenario: Analyse a customer conversation, Scenario: Import an operator reply (+6 more)
-
-### Community 192 - "insumos/[id]/page.tsx"
-Cohesion: 0.14
-Nodes (5): DesactivarButton(), InsumoForm(), EstadoButton(), ProveedorForm(), suppliers
 
 ### Community 193 - "RecetasEditor"
 Cohesion: 0.33
@@ -903,10 +899,6 @@ Nodes (6): RecetasEditor(), addItem(), editItem(), formFor(), setForm(), updateI
 ### Community 194 - "2. Variables de entorno y secretos (SOLO POR NOMBRE)"
 Cohesion: 0.33
 Nodes (6): 2.1 Base (obligatorias), 2.2 Channel runtime del agente (runtime IA — provider-neutral), 2.3 WhatsApp (webhook de entrada — config-gated), 2.4 WhatsApp (envío de salida — YCloud, config-gated), 2.5 Cron de reconciliación, 2. Variables de entorno y secretos (SOLO POR NOMBRE)
-
-### Community 195 - "resolveGarmentLine"
-Cohesion: 0.50
-Nodes (5): candidateNames(), resolveGarmentLine(), resolveProductByName(), resolveSizeQuantities(), resolveTechniqueByName()
 
 ### Community 197 - "Tasks: ai-telegram-sales-agent"
 Cohesion: 0.17
@@ -924,9 +916,24 @@ Nodes (9): Admin surfaces, Architecture, Channels, Credentials + RBAC, Design: a
 Cohesion: 0.20
 Nodes (9): Build & Tests Execution, Coherence (Design), Completeness, Correctness (Static Evidence), Graph-first Orientation (note), Issues Found, Spec Compliance Matrix, Verdict (+1 more)
 
-### Community 201 - "session-metadata.ts"
-Cohesion: 0.33
-Nodes (7): analyzeConversationState(), classifyMessageType(), ConversationMetadata, MessageType, isRecord(), METADATA_CAS_MAX_RETRIES, updateSessionMetadataCAS()
+### Community 201 - "ingress.test.ts"
+Cohesion: 0.16
+Nodes (10): account, { ChannelAccountResolutionError }, {
+  channelEventKey,
+  deliveryMarkerKey,
+  isChannelDeliveryRecorded,
+  persistChannelEvent,
+  releaseChannelDeliveryMarker,
+  releaseChannelEventMarker,
+}, envelope(), event(), {
+  eventConversationExternalUserId,
+  eventSelfAddresses,
+  handlePassiveChannelEvent,
+  resolveEventChannel,
+  resolveIngressContext,
+  resolveWebhookSecret,
+  verifyAndResolveEvents,
+}, fake, passiveEvent() (+2 more)
 
 ### Community 204 - "Skill Registry — sdd-init-agent-platform"
 Cohesion: 0.29
@@ -940,29 +947,29 @@ Nodes (3): TelasManager(), cancelEdit(), submit()
 Cohesion: 0.50
 Nodes (3): TecnicasManager(), cancelEdit(), submit()
 
-### Community 217 - "(public)/catalogo/page.tsx"
-Cohesion: 0.12
-Nodes (16): CatalogoPage(), dynamic, metadata, normalizeSearch(), SUBCATEGORY_ORDER, deltaLabel(), Step2Form(), optionDeltaLabel() (+8 more)
+### Community 212 - "PlanillaTable.tsx"
+Cohesion: 0.20
+Nodes (6): Item, Line, PlanillaRow(), PlanillaTable(), STAGES, stageTone
 
 ## Knowledge Gaps
-- **1648 isolated node(s):** `$schema`, `.opencode/plugins/graphify.js`, `HERE`, `REPO_ROOT`, `graph` (+1643 more)
+- **1649 isolated node(s):** `$schema`, `.opencode/plugins/graphify.js`, `HERE`, `REPO_ROOT`, `graph` (+1644 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **23 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **20 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `db` connect `client.ts` to `rbac.ts`, `requireAgentAdmin`, `drafts.ts`, `db/schema.ts`, `inbound.ts`, `requireUser`, `Card.tsx`, `messaging/channel-events.ts`, `inbound-queue.ts`, `analytics/page.tsx`, `productos/[id]/page.tsx`, `actions/inbox.ts`, `[token]/page.tsx`, `public-orders.ts`, `pricing.ts`, `agent-config.ts`, `5/page.tsx`, `operator-send.ts`, `api/leads/route.ts`, `read.ts`, `isSchemaNotReady`, `Channel`, `tools-broadcast.ts`, `reconcile.ts`, `link-generator/page.tsx`, `tools-orders.ts`, `session-store.ts`, `zernio-connect.ts`, `(admin)/layout.tsx`, `order-context.ts`, `tools/types.ts`, `lead-identity.ts`, `login/route.ts`, `[attachmentId]/page.tsx`, `insumos/[id]/page.tsx`, `channels/accounts.ts`, `messaging/accounts.ts`, `agent/inbox.ts`, `sales-tools.ts`, `session-metadata.ts`, `confirmations.ts`, `sales-agent.ts`, `bot.ts`, `checkRateLimit`, `tools-clients.ts`, `tools-cash.ts`, `human-handoff.ts`, `agent-config-scope.ts`, `intake.ts`, `runner.ts`, `inbound-pipeline.ts`, `orders.ts`, `conversations`, `PageHeader`, `temporal-context.ts`, `promos/[id]/page.tsx`, `BusinessSettingsForm.tsx`, `conversation-identity.ts`?**
-  _High betweenness centrality (0.096) - this node is a cross-community bridge._
-- **Why does `requireUser()` connect `requireUser` to `lib/payments.ts`, `rbac.ts`, `drafts.ts`, `(admin)/layout.tsx`, `Card.tsx`, `productos/[id]/page.tsx`, `orders.ts`, `PageHeader`, `operator-send.ts`, `[attachmentId]/page.tsx`, `promos/[id]/page.tsx`, `checkRateLimit`, `client.ts`?**
+- **Why does `db` connect `client.ts` to `channel-accounts.ts`, `products/route.ts`, `drafts.ts`, `db/schema.ts`, `inbound.ts`, `requireUser`, `messaging/channel-events.ts`, `inbound-queue.ts`, `bot.ts`, `sql`, `productos/[id]/page.tsx`, `tools-memory.ts`, `validators.ts`, `pricing.ts`, `ApplicationsManager.tsx`, `secret-box.ts`, `agent-config.ts`, `5/page.tsx`, `operator-send.ts`, `api/leads/route.ts`, `read.ts`, `isSchemaNotReady`, `tools-broadcast.ts`, `telegram.ts`, `link-generator/page.tsx`, `tools-orders.ts`, `session-store.ts`, `requireAgentAdmin`, `(admin)/layout.tsx`, `orders/[id]/stage/route.ts`, `login/route.ts`, `adjuntos/page.tsx`, `ingress.ts`, `proveedores/[id]/page.tsx`, `channels/accounts.ts`, `messaging/accounts.ts`, `actions/inbox.ts`, `sales-tools.ts`, `confirmations.ts`, `sales-agent.ts`, `Card.tsx`, `checkRateLimit`, `tools-clients.ts`, `tools-cash.ts`, `human-handoff.ts`, `agent-config-scope.ts`, `intake.ts`, `runner.ts`, `inbound-pipeline.ts`, `cotizar/page.tsx`, `authorizeAgentApi`, `formatCurrency`, `temporal-context.ts`, `reconcile.ts`, `configuracion/page.tsx`, `conversation-identity.ts`?**
+  _High betweenness centrality (0.097) - this node is a cross-community bridge._
+- **Why does `checkRateLimit()` connect `checkRateLimit` to `whatsapp/webhook/[token]/route.ts`, `drafts.ts`, `products/route.ts`, `telegram/reconcile/route.ts`, `cron/reconcile/route.ts`, `validators.ts`, `inbound-pipeline.ts`, `5/page.tsx`, `api/leads/route.ts`, `agent/reconcile/route.ts`, `telegram.ts`, `client.ts`?**
+  _High betweenness centrality (0.012) - this node is a cross-community bridge._
+- **Why does `requireUser()` connect `requireUser` to `lib/payments.ts`, `drafts.ts`, `products/route.ts`, `db/schema.ts`, `(admin)/layout.tsx`, `Button.tsx`, `requireAgentAdmin`, `orders/[id]/stage/route.ts`, `productos/[id]/page.tsx`, `validators.ts`, `ApplicationsManager.tsx`, `pricing.ts`, `formatCurrency`, `adjuntos/page.tsx`, `Card.tsx`, `checkRateLimit`, `client.ts`?**
   _High betweenness centrality (0.011) - this node is a cross-community bridge._
-- **Why does `Channel` connect `Channel` to `channels/accounts.ts`, `agent/inbox.ts`, `channels/types.ts`, `inbound-queue.ts`, `agent-config-scope.ts`, `intake.ts`, `lead-identity.ts`, `operator-send.ts`, `isSchemaNotReady`, `conversation-identity.ts`?**
-  _High betweenness centrality (0.010) - this node is a cross-community bridge._
 - **What connects `$schema`, `.opencode/plugins/graphify.js`, `HERE` to the rest of the system?**
-  _1648 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1649 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `lib/payments.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.10241820768136557 - nodes in this community are weakly interconnected._
-- **Should `GarmentScene.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.14624505928853754 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11931818181818182 - nodes in this community are weakly interconnected._
+- **Should `configurator/index.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.07831677381648158 - nodes in this community are weakly interconnected._
 - **Should `whatsapp/webhook/[token]/route.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.08787878787878788 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06448087431693988 - nodes in this community are weakly interconnected._

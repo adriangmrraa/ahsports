@@ -61,6 +61,17 @@ export function mapProductZoneLabel(label: string): GarmentZone | null {
   return mapped ?? null;
 }
 
+/** Spanish display labels for model zones — summaries and placement lists. */
+export const GARMENT_ZONE_LABELS: Readonly<Record<GarmentZone, string>> = {
+  "chest-left": "Pecho izquierdo",
+  "chest-right": "Pecho derecho",
+  "front-center": "Frente central",
+  "back-upper": "Espalda alta",
+  "back-lower": "Espalda baja",
+  "sleeve-left": "Manga izquierda",
+  "sleeve-right": "Manga derecha",
+};
+
 /** All model zones when the catalog row carries no zone list at all. */
 const DEFAULT_ZONES: readonly GarmentZone[] = GARMENT_ZONES;
 

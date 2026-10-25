@@ -3,6 +3,7 @@ import { products, sizes, fabrics, techniques, productFabrics, productTechniques
 import { asc, eq } from "drizzle-orm";
 import { Step2Form } from "./Step2Form";
 import { StepIndicator } from "../_components/StepIndicator";
+import { resolveWizardDraft } from "../_components/wizard-draft";
 import { PageHero } from "@/components/public/PageHero";
 import {
   WizardRateLimitNotice,
@@ -18,11 +19,12 @@ export const metadata = { title: "Presupuesto · Paso 2 · AH Sports" };
 export default async function PresupuestoStep2({
   searchParams,
 }: {
-  searchParams: Promise<{ productId?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
 
   const sp = await searchParams;
+  const { token, payload } = await resolveWizardDraft(2, sp);
   const [productRows, sizeRows, fabricRows, techniqueOptionRows, tierRows, allFabricRows] = await Promise.all([
     db
       .select({
@@ -122,7 +124,13 @@ export default async function PresupuestoStep2({
     methods: methodsByProduct.get(p.id) ?? [],
     volumeTiers: tiersByProduct.get(p.id) ?? [],
   }));
-  const initialProductId = catalog.some((p) => p.id === sp.productId) ? sp.productId : undefined;
+  const initialProductId = catalog.some((p) => p.id === payload.productId) ? payload.productId : undefined;
+  // Draft-held picks restore the form when the user navigates back.
+  const initialQuantities: Record<string, number> = {};
+  for (const sq of payload.sizeQuantities ?? []) {
+    if (sq.sizeId) initialQuantities[sq.sizeId] = sq.quantity;
+  }
+  const initialDirect = (payload.sizeQuantities ?? []).find((s) => s.sizeId === null)?.quantity ?? 0;
 
   return (
     <>
@@ -139,7 +147,15 @@ export default async function PresupuestoStep2({
         <StepIndicator current={2} />
       </PageHero>
       <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
-        <Step2Form catalog={catalog} initialProductId={initialProductId} />
+        <Step2Form
+          catalog={catalog}
+          draftToken={token}
+          initialProductId={initialProductId}
+          initialQuantities={initialQuantities}
+          initialDirectQuantity={initialDirect}
+          initialFabricId={payload.fabricId ?? ""}
+          initialMethodIds={payload.techniqueIds ?? []}
+        />
       </div>
     </>
   );

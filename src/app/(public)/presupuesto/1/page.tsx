@@ -1,6 +1,7 @@
 import { Step1Form } from "./Step1Form";
 import { StepIndicator } from "../_components/StepIndicator";
 import { PageHero } from "@/components/public/PageHero";
+import { resolveWizardDraft } from "../_components/wizard-draft";
 import {
   WizardRateLimitNotice,
   wizardRateLimitReached,
@@ -13,18 +14,18 @@ export const metadata = { title: "Presupuesto · Paso 1 · AH Sports" };
  *
  * R4-LOW-5 — the old `?type=returning&email=<x>` prefill queried `contacts`
  * and returned name + phone for any address typed in the URL (a PII oracle).
- * The prefill is gone; the "returning" toggle stays purely cosmetic and the
- * step never reads customer data from the query string.
+ * The prefill stays server-side now: flow state lives on the configurator
+ * draft (`?d=`), never on the query string.
  */
 export default async function PresupuestoStep1({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; name?: string; phone?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
 
   const sp = await searchParams;
-  const initialType = sp.type === "returning" ? "returning" : "new";
+  const { token, payload } = await resolveWizardDraft(1, sp);
 
   return (
     <>
@@ -41,7 +42,17 @@ export default async function PresupuestoStep1({
         <StepIndicator current={1} />
       </PageHero>
       <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
-        <Step1Form initialType={initialType} />
+        <Step1Form
+          draftToken={token}
+          initialType={payload.type === "returning" ? "returning" : "new"}
+          initial={{
+            name: payload.name ?? "",
+            email: payload.email ?? "",
+            phone: payload.phone ?? "",
+            organizationName: payload.organizationName ?? "",
+            notes: payload.notes ?? "",
+          }}
+        />
       </div>
     </>
   );

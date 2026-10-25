@@ -67,7 +67,7 @@ describe("draftPayloadSchema", () => {
       customerType: "club",
       name: "Club Renacer",
       productId: "prod-1",
-      sizeQuantities: { S: 2, M: 3 },
+      sizeQuantities: [{ sizeId: "size-1", quantity: 2 }, { sizeId: "size-2", quantity: 3 }],
       step: 2,
       futureField: { anything: true },
     });

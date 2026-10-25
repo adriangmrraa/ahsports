@@ -62,7 +62,13 @@ export {
   type GarmentConfiguratorHandle,
   type GarmentConfiguratorProps,
 } from "./ui/GarmentConfigurator";
+export type { UploadedAsset } from "./ui/controls";
 
-export { mapProductZoneLabel, productCapabilities, type ProductCapabilities } from "./capabilities";
+export {
+  GARMENT_ZONE_LABELS,
+  mapProductZoneLabel,
+  productCapabilities,
+  type ProductCapabilities,
+} from "./capabilities";
 
 export { JERSEY_DIMENSIONS } from "./geometry/jersey-geometry";

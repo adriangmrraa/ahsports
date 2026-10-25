@@ -73,12 +73,21 @@ export type GarmentConfiguratorProps = {
   initialProductId?: string | null;
   initialConfig?: GarmentConfigInput | null;
   initialAssets?: readonly UploadedAsset[];
+  /** Locks the picker to this product — wizard step 4 designs the priced pick. */
+  lockProductId?: string | null;
   onStateChange?: (state: ConfiguratorState) => void;
   /**
    * Upload implementation. undefined → built-in public upload session
    * (home/wizard). null → attachments hidden. Admin passes its own.
    */
   uploader?: ConfiguratorUploader | null;
+  /**
+   * Called once the public upload session exists so the surface can bind it
+   * (wizard persists its id on the draft payload). Arg is a stable session id.
+   */
+  onUploadSession?: (sessionId: string) => void;
+  /** Session-storage namespace for upload creds — keeps them off the URL and off the DB. */
+  storageKey?: string;
   showAttachments?: boolean;
   showExport?: boolean;
   className?: string;
@@ -128,22 +137,64 @@ function nextPlacementId() {
 /**
  * Built-in public uploader: lazily opens one upload session per configurator
  * mount, then stages each file through the existing public-orders pipeline.
+ * Session creds persist in sessionStorage under `storageKey` so a page reload
+ * keeps pending uploads; they never enter the URL or the draft payload.
  */
-function usePublicUploader() {
+function usePublicUploader(storageKey: string | undefined, onSession: ((id: string) => void) | undefined) {
   const sessionRef = useRef<Promise<{ id: string; secret: string } | null> | null>(null);
+  const onSessionRef = useRef(onSession);
+  onSessionRef.current = onSession;
+
+  const openSession = useCallback(async () => {
+    if (storageKey && typeof window !== "undefined") {
+      try {
+        const raw = window.sessionStorage.getItem(storageKey);
+        if (raw) {
+          const saved = JSON.parse(raw) as { id?: unknown; secret?: unknown };
+          if (typeof saved.id === "string" && typeof saved.secret === "string") return { id: saved.id, secret: saved.secret };
+        }
+      } catch {
+        /* corrupted entry → fresh session below */
+      }
+    }
+    const res = await beginPublicUploadSession();
+    if (!res.ok) return null;
+    const session = { id: res.id, secret: res.secret };
+    if (storageKey && typeof window !== "undefined") {
+      try {
+        window.sessionStorage.setItem(storageKey, JSON.stringify(session));
+      } catch {
+        /* storage full/blocked — session still works in memory */
+      }
+    }
+    onSessionRef.current?.(session.id);
+    return session;
+  }, [storageKey]);
+
   return useCallback<ConfiguratorUploader>(
     async (file, kind) => {
-      sessionRef.current ??= beginPublicUploadSession().then((r) => (r.ok ? { id: r.id, secret: r.secret } : null));
-      const session = await sessionRef.current;
+      sessionRef.current ??= openSession();
+      let session = await sessionRef.current;
       if (!session) throw new Error("No se pudo preparar la carga de archivos");
       const form = new FormData();
       form.append("file", file);
       form.append("kind", kind);
-      const res = await uploadAttachmentFromPublic(form, session);
+      let res = await uploadAttachmentFromPublic(form, session);
+      if (!res.ok && /sesi[oó]n|venci/i.test(res.error)) {
+        // Stored creds may point at an expired session — reopen once.
+        if (storageKey && typeof window !== "undefined") window.sessionStorage.removeItem(storageKey);
+        sessionRef.current = openSession();
+        session = await sessionRef.current;
+        if (!session) throw new Error("No se pudo preparar la carga de archivos");
+        const retry = new FormData();
+        retry.append("file", file);
+        retry.append("kind", kind);
+        res = await uploadAttachmentFromPublic(retry, session);
+      }
       if (!res.ok) throw new Error(res.error);
       return { id: res.id, url: res.url, name: res.name, kind: res.kind };
     },
-    [],
+    [openSession, storageKey],
   );
 }
 
@@ -156,15 +207,18 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
       initialProductId,
       initialConfig,
       initialAssets,
+      lockProductId,
       onStateChange,
       uploader,
+      onUploadSession,
+      storageKey,
       showAttachments = true,
       showExport = true,
       className,
     },
     ref,
   ) {
-    const [productId, setProductId] = useState<string | null>(initialProductId ?? products[0]?.id ?? null);
+    const [productId, setProductId] = useState<string | null>(lockProductId ?? initialProductId ?? products[0]?.id ?? null);
     const [config, setConfig] = useState<GarmentConfig>(() => normalizeGarmentConfig(initialConfig));
     const [assets, setAssets] = useState<readonly UploadedAsset[]>(initialAssets ?? []);
     const [uploadBusy, setUploadBusy] = useState(false);
@@ -178,7 +232,7 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
       [product],
     );
     const attachmentsEnabled = showAttachments && uploader !== null;
-    const publicUploader = usePublicUploader();
+    const publicUploader = usePublicUploader(storageKey, onUploadSession);
     const upload = uploader ?? publicUploader;
 
     const emit = useCallback(
@@ -333,15 +387,21 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
         {/* Controls */}
         <div className="flex flex-col gap-5 rounded-lg border border-navy-line bg-navy-950/60 p-4">
           <ControlSection title="Producto">
-            <SelectField
-              label="Elegí la prenda"
-              value={productId ?? ""}
-              options={products.map((p) => ({ value: p.id, label: p.name }))}
-              onChange={(id) => {
-                setProductId(id);
-                update({}, undefined, id);
-              }}
-            />
+            {lockProductId ? (
+              <p className="rounded-md border border-navy-line bg-navy-900/60 px-3 py-2.5 text-sm font-semibold text-on-navy">
+                {product?.name ?? "Producto"}
+              </p>
+            ) : (
+              <SelectField
+                label="Elegí la prenda"
+                value={productId ?? ""}
+                options={products.map((p) => ({ value: p.id, label: p.name }))}
+                onChange={(id) => {
+                  setProductId(id);
+                  update({}, undefined, id);
+                }}
+              />
+            )}
           </ControlSection>
 
           <ControlSection title="Colores">
