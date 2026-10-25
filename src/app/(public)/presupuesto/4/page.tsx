@@ -32,6 +32,8 @@ export default async function PresupuestoStep4({
           sizeQuantities: sp.sizeQuantities,
           total: Number(sp.total || 0),
         }),
+        fabricId: sp.fabricId ?? null,
+        techniqueIds: sp.methodIds?.split(",").filter(Boolean) ?? null,
       })
     : null;
 

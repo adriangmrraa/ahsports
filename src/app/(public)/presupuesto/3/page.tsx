@@ -34,7 +34,7 @@ function parseSizes(raw: string | undefined): { label: string; qty: number }[] {
 export default async function PresupuestoStep3({
   searchParams,
 }: {
-  searchParams: Promise<{ productId?: string; sizeQuantities?: string; sq?: string; total?: string }>;
+  searchParams: Promise<{ productId?: string; sizeQuantities?: string; sq?: string; total?: string; fabricId?: string; methodIds?: string }>;
 }) {
   if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
 
@@ -53,7 +53,12 @@ export default async function PresupuestoStep3({
     sizeQuantities: sp.sizeQuantities,
     total,
   });
-  const estimate = await getPublicEstimate({ productId: sp.productId, sizeQuantities: quantities });
+  const estimate = await getPublicEstimate({
+    productId: sp.productId,
+    sizeQuantities: quantities,
+    fabricId: sp.fabricId ?? null,
+    techniqueIds: sp.methodIds?.split(",").filter(Boolean) ?? null,
+  });
 
   return (
     <>

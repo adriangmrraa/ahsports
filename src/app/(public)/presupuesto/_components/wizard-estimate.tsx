@@ -1,6 +1,11 @@
 import { formatARS } from "@/lib/public/format";
 import type { PublicEstimate } from "@/lib/public/estimate";
 
+/** "(+ $1.500,00)" / "(− $500,00)" — option sell delta, hidden at zero. */
+function optionDeltaLabel(delta: number): string {
+  return delta !== 0 ? ` (${delta > 0 ? "+" : "−"} ${formatARS(Math.abs(delta))})` : "";
+}
+
 /**
  * Compact running estimate shown under the step title (steps 3-4). Server
  * component — the estimate is computed by the page, this only renders it.
@@ -11,12 +16,22 @@ export function WizardEstimateChip({ estimate }: { estimate: PublicEstimate | nu
   return (
     <div className="mt-5 w-fit max-w-full animate-fade-up" style={{ animationDelay: "260ms" }}>
       {estimate ? (
-        <div className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-full bg-accent px-4 py-2 text-sm text-on-accent shadow-lg shadow-navy-950/40">
-          <span className="label-caps text-[10px]">Estimado</span>
-          <span className="font-display text-base font-extrabold tracking-tight">{formatARS(estimate.totalPrice)}</span>
-          <span className="text-xs opacity-80">
-            {formatARS(estimate.unitPrice)} c/u · a confirmar
-          </span>
+        <div className="flex flex-col gap-1.5">
+          <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-x-2.5 gap-y-1 rounded-full bg-accent px-4 py-2 text-sm text-on-accent shadow-lg shadow-navy-950/40">
+            <span className="label-caps text-[10px]">Estimado</span>
+            <span className="font-display text-base font-extrabold tracking-tight">{formatARS(estimate.totalPrice)}</span>
+            <span className="text-xs opacity-80">
+              {formatARS(estimate.unitPrice)} c/u · a confirmar
+            </span>
+          </div>
+          {estimate.options && (
+            <p className="max-w-md text-[11px] leading-4 text-on-navy-variant">
+              {estimate.options.fabricName}
+              {estimate.options.methods.length > 0 && ` + ${estimate.options.methods.map((m) => m.techniqueName).join(" + ")}`}
+              {estimate.options.volumeTier &&
+                ` · Descuento por cantidad: −${estimate.options.discountPercent}% desde ${estimate.options.volumeTier.minQty} unidades`}
+            </p>
+          )}
         </div>
       ) : (
         <div className="inline-flex items-center rounded-full border border-navy-line bg-navy-900/70 px-4 py-2 text-xs text-on-navy-variant">
@@ -53,6 +68,25 @@ export function WizardEstimateCard({
       <h2 className="label-caps text-accent">Tu presupuesto estimado</h2>
       {estimate ? (
         <>
+          {estimate.options && (
+            <ul className="mt-4 flex flex-wrap gap-1.5" aria-label="Opciones elegidas">
+              <li className="rounded-full bg-navy-800 px-3 py-1 text-xs font-medium text-on-navy">
+                {estimate.options.fabricName}
+                {optionDeltaLabel(estimate.options.fabricDelta)}
+              </li>
+              {estimate.options.methods.map((m) => (
+                <li key={m.techniqueId} className="rounded-full bg-navy-800 px-3 py-1 text-xs font-medium text-on-navy">
+                  {m.techniqueName}
+                  {optionDeltaLabel(m.delta)}
+                </li>
+              ))}
+              {estimate.options.volumeTier && (
+                <li className="rounded-full bg-accent/20 px-3 py-1 text-xs font-medium text-accent">
+                  Descuento por cantidad: −{estimate.options.discountPercent}% desde {estimate.options.volumeTier.minQty} unidades
+                </li>
+              )}
+            </ul>
+          )}
           <ul className="mt-5 flex flex-col gap-2 text-sm">
             {estimate.sizes.length > 0 ? (
               estimate.sizes.map((s, i) => (

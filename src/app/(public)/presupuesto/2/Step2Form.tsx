@@ -21,6 +21,16 @@ interface CatalogProduct {
   productKind: string;
   productSubcategory: string;
   sizes: { id: string; label: string }[];
+  fabrics: { id: string; name: string; sublimable: boolean; priceDelta: number }[];
+  methods: { id: string; name: string; requiresSublimableFabric: boolean; priceDelta: number }[];
+  volumeTiers: { minQty: number; discountPercent: number }[];
+}
+
+/** "+ $1.500,00 c/u" / "− $500,00 c/u" / "Incluido" — the option's sell delta. */
+function deltaLabel(delta: number): string {
+  if (delta > 0) return `+ ${formatARS(delta)} c/u`;
+  if (delta < 0) return `− ${formatARS(Math.abs(delta))} c/u`;
+  return "Incluido";
 }
 
 const SUBCATEGORY_ORDER = ["prendas", "conjuntos", "mochilas_infantiles", "bolsos", "insumos", "otros"];
@@ -41,6 +51,11 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
   const [qty, setQty] = useState<Record<string, number>>({});
   const [directQuantity, setDirectQuantity] = useState(0);
 
+  // Stackable option selection: one fabric + any mix of the methods the
+  // product offers (sublimado can stack with DTF/bordado on top of it).
+  const [fabricId, setFabricId] = useState("");
+  const [methodIds, setMethodIds] = useState<string[]>([]);
+
   const sizeQuantities = useMemo(() => {
     if (!product) return [];
     if (product.sizes.length > 0) {
@@ -55,13 +70,36 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
   const minOrder = product?.minOrder ?? 1;
   const belowMin = total > 0 && total < minOrder;
 
+  // Option availability mirrors admin: when the product has configured
+  // fabrics the pick is required to price options; method checkboxes only
+  // make sense once a fabric anchors compatibility.
+  const requiresFabric = (product?.fabrics.length ?? 0) > 0;
+  const selectedFabric = product?.fabrics.find((f) => f.id === fabricId) ?? null;
+  const methodPool = useMemo(
+    () => (!selectedFabric ? [] : (product?.methods ?? []).filter((m) => selectedFabric.sublimable || !m.requiresSublimableFabric)),
+    [product, selectedFabric],
+  );
+  const blockedMethodCount = (product?.methods.length ?? 0) - methodPool.length;
+  const requiresMethod = requiresFabric && (product?.methods.length ?? 0) > 0;
+  const optionsReady = !requiresFabric || (selectedFabric !== null && (!requiresMethod || methodIds.length > 0));
+
+  // Next volume tier above the current quantity — the visible nudge that
+  // quantity pricing is per-product.
+  const nextTier = useMemo(() => {
+    const upcoming = (product?.volumeTiers ?? []).filter((t) => total < t.minQty);
+    return upcoming[0] ?? null;
+  }, [product, total]);
+
   const [estimate, setEstimate] = useState<PublicEstimate | null>(null);
   const [estimating, setEstimating] = useState(false);
   const reqRef = useRef(0);
   const sqKey = JSON.stringify(sizeQuantities);
+  const optionsKey = `${fabricId}|${methodIds.join(",")}`;
 
   useEffect(() => {
-    if (!product || sizeQuantities.length === 0) {
+    // Wait for required option picks before quoting — a partial selection
+    // would fail server-side validation anyway.
+    if (!product || sizeQuantities.length === 0 || !optionsReady) {
       setEstimate(null);
       setEstimating(false);
       return;
@@ -69,14 +107,19 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
     const req = ++reqRef.current;
     setEstimating(true);
     const timer = setTimeout(async () => {
-      const res = await estimateWizardQuote({ productId: product.id, sizeQuantities });
+      const res = await estimateWizardQuote({
+        productId: product.id,
+        sizeQuantities,
+        fabricId: fabricId || undefined,
+        techniqueIds: methodIds,
+      });
       if (req !== reqRef.current) return;
       setEstimating(false);
       setEstimate(res.ok ? res.estimate : null);
     }, 350);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product?.id, sqKey]);
+  }, [product?.id, sqKey, optionsKey]);
 
   const optionGroups = useMemo(() => {
     const groups = new Map<string, CatalogProduct[]>();
@@ -97,11 +140,26 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
     setProductId(id);
     setQty({});
     setDirectQuantity(0);
+    setFabricId("");
+    setMethodIds([]);
+  }
+
+  function pickFabric(id: string) {
+    setFabricId(id);
+    const fabric = product?.fabrics.find((f) => f.id === id);
+    // Switching to a non-sublimable fabric drops picks that need sublimation.
+    if (fabric && !fabric.sublimable) {
+      setMethodIds((prev) => prev.filter((m) => !product?.methods.find((x) => x.id === m)?.requiresSublimableFabric));
+    }
+  }
+
+  function toggleMethod(id: string) {
+    setMethodIds((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
   }
 
   function goNext(e: React.FormEvent) {
     e.preventDefault();
-    if (!product || total < minOrder) return;
+    if (!product || total < minOrder || !optionsReady) return;
     const sizesParam = product.sizes
       .map((s) => `${s.label}:${qty[s.id] || 0}`)
       .filter((x) => !x.endsWith(":0"))
@@ -112,6 +170,10 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
     params.set("sizeQuantities", sizesParam);
     params.set("sq", sizeQuantities.map((x) => `${x.sizeId ?? ""}:${x.quantity}`).join(","));
     params.set("total", String(total));
+    if (fabricId) params.set("fabricId", fabricId);
+    else params.delete("fabricId");
+    if (methodIds.length > 0) params.set("methodIds", methodIds.join(","));
+    else params.delete("methodIds");
     router.push(`/presupuesto/3?${params.toString()}`);
   }
 
@@ -255,7 +317,20 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
                     <div>
                       <p className="label-caps text-[10px] text-accent">Estimado</p>
                       <p className="font-display text-2xl font-black leading-tight tracking-tight text-accent">{formatARS(estimate.totalPrice)}</p>
-                      <p className="text-xs text-on-navy-variant">{formatARS(estimate.unitPrice)} c/u · a confirmar</p>
+                      <p className="text-xs text-on-navy-variant">
+                        {formatARS(estimate.unitPrice)} c/u
+                        {estimate.options && estimate.options.discountPercent > 0 && (
+                          <span className="line-through opacity-70"> · antes {formatARS(estimate.options.listUnitPrice)}</span>
+                        )}
+                        {" · a confirmar"}
+                      </p>
+                      {estimate.options && (
+                        <p className="mt-0.5 text-[11px] text-on-navy-variant">
+                          {estimate.options.fabricName}
+                          {estimate.options.methods.length > 0 && ` + ${estimate.options.methods.map((m) => m.techniqueName).join(" + ")}`}
+                          {estimate.options.volumeTier && ` · −${estimate.options.discountPercent}% desde ${estimate.options.volumeTier.minQty} unidades`}
+                        </p>
+                      )}
                     </div>
                     {estimate.advanceAmount !== null && estimate.advancePercent !== null && (
                       <div className="text-right">
@@ -264,14 +339,145 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
                       </div>
                     )}
                   </>
+                ) : requiresFabric && !fabricId ? (
+                  <span className="text-xs text-on-navy-variant">Elegí la tela para calcular el estimado.</span>
                 ) : (
                   <span className="text-xs text-on-navy-variant">Precio a confirmar en tu presupuesto.</span>
                 )}
               </div>
             )}
+            {nextTier && total > 0 && (
+              <p className="mt-3 text-xs text-on-surface-variant">
+                <span className="font-semibold text-on-surface">{nextTier.minQty - total} prendas más</span> y el
+                precio baja a <span className="font-semibold text-primary">−{nextTier.discountPercent}%</span>{" "}
+                c/u (desde {nextTier.minQty} unidades).
+              </p>
+            )}
           </div>
 
-          <Button type="submit" size="lg" disabled={total < minOrder} className="border-accent bg-accent text-on-accent hover:border-accent-strong hover:bg-accent-strong hover:text-on-accent">
+          {/* Tela — solo cuando el producto tiene telas configurables */}
+          {requiresFabric && (
+            <div className="animate-rise rounded-3xl border border-outline-variant bg-surface-container p-5 sm:p-6" style={{ animationDelay: "180ms" }}>
+              <h3 className="label-caps text-on-surface-variant">Tela</h3>
+              <p className="mt-1.5 text-xs text-on-surface-variant">
+                La tela define qué métodos de aplicación se pueden usar — elegila primero.
+              </p>
+              <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+                {product.fabrics.map((f) => {
+                  const active = f.id === fabricId;
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => pickFabric(f.id)}
+                      aria-pressed={active}
+                      className={cn(
+                        "relative flex items-start justify-between gap-3 rounded-2xl border px-4 py-3.5 text-left transition-all duration-200 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2",
+                        active
+                          ? "border-primary bg-surface-container ring-2 ring-primary/25"
+                          : "border-outline-variant bg-surface-container hover:-translate-y-0.5 hover:border-primary/40",
+                      )}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-on-surface">{f.name}</span>
+                        <span className="mt-0.5 block text-[11px] leading-4 text-on-surface-variant">
+                          {f.sublimable
+                            ? "Permite sublimado 100% — también podés sumar DTF o bordado."
+                            : "No permite sublimado — se aplica con DTF o bordado."}
+                        </span>
+                        <span
+                          className={cn(
+                            "mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                            f.priceDelta !== 0 ? "bg-navy-100 text-navy-700" : "bg-surface-container-high text-on-surface-variant",
+                          )}
+                        >
+                          {deltaLabel(f.priceDelta)}
+                        </span>
+                      </span>
+                      <span
+                        className={cn(
+                          "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors",
+                          active ? "border-accent bg-accent text-on-accent" : "border-outline-variant text-transparent",
+                        )}
+                        aria-hidden
+                      >
+                        <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Métodos de aplicación — apilables, filtrados por la tela elegida */}
+          {requiresFabric && selectedFabric && (product.methods.length > 0) && (
+            <div className="animate-rise rounded-3xl border border-outline-variant bg-surface-container p-5 sm:p-6" style={{ animationDelay: "220ms" }}>
+              <h3 className="label-caps text-on-surface-variant">Métodos de aplicación</h3>
+              <p className="mt-1.5 text-xs text-on-surface-variant">
+                Podés combinar varios — por ejemplo sublimado 100% más DTF o bordado para logos y sponsors.
+              </p>
+              <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+                {product.methods.map((m) => {
+                  const blocked = m.requiresSublimableFabric && !selectedFabric.sublimable;
+                  const active = methodIds.includes(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => !blocked && toggleMethod(m.id)}
+                      disabled={blocked}
+                      aria-pressed={active}
+                      className={cn(
+                        "relative flex items-start justify-between gap-3 rounded-2xl border px-4 py-3.5 text-left transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2",
+                        blocked
+                          ? "cursor-not-allowed border-outline-variant bg-surface-container opacity-45"
+                          : active
+                            ? "border-primary bg-surface-container ring-2 ring-primary/25 active:scale-[0.98]"
+                            : "border-outline-variant bg-surface-container hover:-translate-y-0.5 hover:border-primary/40 active:scale-[0.98]",
+                      )}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-on-surface">{m.name}</span>
+                        {blocked && (
+                          <span className="mt-0.5 block text-[11px] leading-4 text-on-surface-variant">
+                            Requiere una tela sublimable.
+                          </span>
+                        )}
+                        <span
+                          className={cn(
+                            "mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                            m.priceDelta !== 0 ? "bg-navy-100 text-navy-700" : "bg-surface-container-high text-on-surface-variant",
+                          )}
+                        >
+                          {deltaLabel(m.priceDelta)}
+                        </span>
+                      </span>
+                      <span
+                        className={cn(
+                          "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors",
+                          active ? "border-accent bg-accent text-on-accent" : "border-outline-variant text-transparent",
+                        )}
+                        aria-hidden
+                      >
+                        <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {requiresMethod && methodIds.length === 0 && (
+                <p className="mt-3 text-xs font-medium text-status-warning">Elegí al menos un método de aplicación.</p>
+              )}
+              {blockedMethodCount > 0 && !selectedFabric.sublimable && (
+                <p className="mt-3 text-[11px] leading-4 text-on-surface-variant">
+                  Con una tela sublimable también podrías elegir sublimado 100%.
+                </p>
+              )}
+            </div>
+          )}
+
+          <Button type="submit" size="lg" disabled={total < minOrder || !optionsReady} className="border-accent bg-accent text-on-accent hover:border-accent-strong hover:bg-accent-strong hover:text-on-accent">
             Siguiente →
           </Button>
         </>
