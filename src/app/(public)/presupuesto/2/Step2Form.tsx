@@ -22,6 +22,8 @@ interface CatalogProduct {
   productSubcategory: string;
   sizes: { id: string; label: string }[];
   fabrics: { id: string; name: string; sublimable: boolean; priceDelta: number }[];
+  /** True when admin restricted fabrics via product_fabrics — pick required. */
+  fabricConfigured: boolean;
   methods: { id: string; name: string; requiresSublimableFabric: boolean; priceDelta: number }[];
   volumeTiers: { minQty: number; discountPercent: number }[];
 }
@@ -70,18 +72,21 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
   const minOrder = product?.minOrder ?? 1;
   const belowMin = total > 0 && total < minOrder;
 
-  // Option availability mirrors admin: when the product has configured
-  // fabrics the pick is required to price options; method checkboxes only
-  // make sense once a fabric anchors compatibility.
-  const requiresFabric = (product?.fabrics.length ?? 0) > 0;
+  // Option availability mirrors admin: a product with configured fabrics
+  // requires the pick; without rows the fallback catalog is optional.
+  // Method checkboxes only make sense once a fabric anchors compatibility.
+  const requiresFabric = product?.fabricConfigured ?? false;
+  const hasFabricChoices = (product?.fabrics.length ?? 0) > 0;
   const selectedFabric = product?.fabrics.find((f) => f.id === fabricId) ?? null;
   const methodPool = useMemo(
     () => (!selectedFabric ? [] : (product?.methods ?? []).filter((m) => selectedFabric.sublimable || !m.requiresSublimableFabric)),
     [product, selectedFabric],
   );
   const blockedMethodCount = (product?.methods.length ?? 0) - methodPool.length;
-  const requiresMethod = requiresFabric && (product?.methods.length ?? 0) > 0;
-  const optionsReady = !requiresFabric || (selectedFabric !== null && (!requiresMethod || methodIds.length > 0));
+  // Methods are mandatory only once a fabric is picked AND the product has
+  // configured methods (the engine rejects methods on unconfigured ones).
+  const requiresMethod = selectedFabric !== null && (product?.methods.length ?? 0) > 0;
+  const optionsReady = (selectedFabric !== null || !requiresFabric) && (!requiresMethod || methodIds.length > 0);
 
   // Next volume tier above the current quantity — the visible nudge that
   // quantity pricing is per-product.
@@ -145,10 +150,14 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
   }
 
   function pickFabric(id: string) {
-    setFabricId(id);
-    const fabric = product?.fabrics.find((f) => f.id === id);
-    // Switching to a non-sublimable fabric drops picks that need sublimation.
-    if (fabric && !fabric.sublimable) {
+    // Toggle: on optional (unconfigured) products the pick can be undone;
+    // on required ones deselecting just blocks "Siguiente" until repicked.
+    const next = fabricId === id ? "" : id;
+    setFabricId(next);
+    const fabric = product?.fabrics.find((f) => f.id === next);
+    // Switching to a non-sublimable fabric (or to none) drops picks that
+    // need sublimation.
+    if (!fabric?.sublimable) {
       setMethodIds((prev) => prev.filter((m) => !product?.methods.find((x) => x.id === m)?.requiresSublimableFabric));
     }
   }
@@ -355,12 +364,14 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
             )}
           </div>
 
-          {/* Tela — solo cuando el producto tiene telas configurables */}
-          {requiresFabric && (
+          {/* Tela — requerida si el admin la configuró; catálogo completo opcional si no */}
+          {hasFabricChoices && (
             <div className="animate-rise rounded-3xl border border-outline-variant bg-surface-container p-5 sm:p-6" style={{ animationDelay: "180ms" }}>
-              <h3 className="label-caps text-on-surface-variant">Tela</h3>
+              <h3 className="label-caps text-on-surface-variant">Tela{!requiresFabric && " (opcional)"}</h3>
               <p className="mt-1.5 text-xs text-on-surface-variant">
-                La tela define qué métodos de aplicación se pueden usar — elegila primero.
+                {requiresFabric
+                  ? "La tela define qué métodos de aplicación se pueden usar — elegila primero."
+                  : "Si el producto admite varias telas, elegila acá — si no, va la estándar."}
               </p>
               <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                 {product.fabrics.map((f) => {
@@ -411,7 +422,7 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
           )}
 
           {/* Métodos de aplicación — apilables, filtrados por la tela elegida */}
-          {requiresFabric && selectedFabric && (product.methods.length > 0) && (
+          {selectedFabric && (product.methods.length > 0) && (
             <div className="animate-rise rounded-3xl border border-outline-variant bg-surface-container p-5 sm:p-6" style={{ animationDelay: "220ms" }}>
               <h3 className="label-caps text-on-surface-variant">Métodos de aplicación</h3>
               <p className="mt-1.5 text-xs text-on-surface-variant">

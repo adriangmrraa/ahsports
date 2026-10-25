@@ -116,6 +116,9 @@ export default async function PresupuestoStep2({
     productSubcategory: p.productSubcategory || "otros",
     sizes: sizesByProduct.get(p.id) ?? [],
     fabrics: fabricsByProduct.get(p.id) ?? fallbackFabrics,
+    // Strict membership only exists once admin configured product_fabrics —
+    // without rows the fallback catalog is offered as an optional pick.
+    fabricConfigured: fabricsByProduct.has(p.id),
     methods: methodsByProduct.get(p.id) ?? [],
     volumeTiers: tiersByProduct.get(p.id) ?? [],
   }));
