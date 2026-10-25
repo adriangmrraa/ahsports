@@ -1,5 +1,5 @@
 import { db } from "@/db/client";
-import { products, sizes } from "@/db/schema";
+import { products, sizes, fabrics, techniques, productFabrics, productTechniques, productVolumeTiers } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { Step2Form } from "./Step2Form";
 import { StepIndicator } from "../_components/StepIndicator";
@@ -23,7 +23,7 @@ export default async function PresupuestoStep2({
   if (await wizardRateLimitReached()) return <WizardRateLimitNotice />;
 
   const sp = await searchParams;
-  const [productRows, sizeRows] = await Promise.all([
+  const [productRows, sizeRows, fabricRows, techniqueOptionRows, tierRows, allFabricRows] = await Promise.all([
     db
       .select({
         id: products.id,
@@ -42,6 +42,40 @@ export default async function PresupuestoStep2({
       .select({ id: sizes.id, productId: sizes.productId, label: sizes.label, order: sizes.order })
       .from(sizes)
       .orderBy(asc(sizes.order)),
+    // Per-product selectable options: only fabrics/methods the product
+    // configured in admin are offered — the engine re-validates anyway.
+    // Fabric delta = catalog modifier + per-product modifier, same formula
+    // as getProductFabricDelta / the pricing engine.
+    db
+      .select({
+        productId: productFabrics.productId,
+        id: fabrics.id,
+        name: fabrics.name,
+        sublimable: fabrics.sublimable,
+        catalogDelta: fabrics.priceModifier,
+        productDelta: productFabrics.priceModifier,
+      })
+      .from(productFabrics)
+      .innerJoin(fabrics, eq(productFabrics.fabricId, fabrics.id))
+      .where(eq(fabrics.active, true))
+      .orderBy(asc(fabrics.sortOrder), asc(fabrics.name)),
+    db
+      .select({ productId: productTechniques.productId, id: techniques.id, name: techniques.name, requiresSublimableFabric: techniques.requiresSublimableFabric, priceDelta: productTechniques.priceModifier })
+      .from(productTechniques)
+      .innerJoin(techniques, eq(productTechniques.techniqueId, techniques.id))
+      .where(eq(techniques.active, true))
+      .orderBy(asc(techniques.name)),
+    db
+      .select({ productId: productVolumeTiers.productId, minQty: productVolumeTiers.minQty, discountPercent: productVolumeTiers.discountPercent })
+      .from(productVolumeTiers)
+      .orderBy(asc(productVolumeTiers.minQty)),
+    // Fallback catalog: a product without configured fabrics offers every
+    // active fabric (catalog delta only — there is no per-product override).
+    db
+      .select({ id: fabrics.id, name: fabrics.name, sublimable: fabrics.sublimable, priceDelta: fabrics.priceModifier })
+      .from(fabrics)
+      .where(eq(fabrics.active, true))
+      .orderBy(asc(fabrics.sortOrder), asc(fabrics.name)),
   ]);
 
   const sizesByProduct = new Map<string, { id: string; label: string }[]>();
@@ -49,6 +83,26 @@ export default async function PresupuestoStep2({
     const list = sizesByProduct.get(s.productId) ?? [];
     list.push({ id: s.id, label: s.label });
     sizesByProduct.set(s.productId, list);
+  }
+
+  const fabricsByProduct = new Map<string, { id: string; name: string; sublimable: boolean; priceDelta: number }[]>();
+  for (const f of fabricRows) {
+    const list = fabricsByProduct.get(f.productId) ?? [];
+    list.push({ id: f.id, name: f.name, sublimable: f.sublimable, priceDelta: Number(f.catalogDelta) + Number(f.productDelta) });
+    fabricsByProduct.set(f.productId, list);
+  }
+  const fallbackFabrics = allFabricRows.map((f) => ({ id: f.id, name: f.name, sublimable: f.sublimable, priceDelta: Number(f.priceDelta) }));
+  const methodsByProduct = new Map<string, { id: string; name: string; requiresSublimableFabric: boolean; priceDelta: number }[]>();
+  for (const t of techniqueOptionRows) {
+    const list = methodsByProduct.get(t.productId) ?? [];
+    list.push({ id: t.id, name: t.name, requiresSublimableFabric: t.requiresSublimableFabric, priceDelta: Number(t.priceDelta) });
+    methodsByProduct.set(t.productId, list);
+  }
+  const tiersByProduct = new Map<string, { minQty: number; discountPercent: number }[]>();
+  for (const t of tierRows) {
+    const list = tiersByProduct.get(t.productId) ?? [];
+    list.push({ minQty: t.minQty, discountPercent: Number(t.discountPercent) });
+    tiersByProduct.set(t.productId, list);
   }
 
   const catalog = productRows.map((p) => ({
@@ -61,6 +115,12 @@ export default async function PresupuestoStep2({
     productKind: p.productKind,
     productSubcategory: p.productSubcategory || "otros",
     sizes: sizesByProduct.get(p.id) ?? [],
+    fabrics: fabricsByProduct.get(p.id) ?? fallbackFabrics,
+    // Strict membership only exists once admin configured product_fabrics —
+    // without rows the fallback catalog is offered as an optional pick.
+    fabricConfigured: fabricsByProduct.has(p.id),
+    methods: methodsByProduct.get(p.id) ?? [],
+    volumeTiers: tiersByProduct.get(p.id) ?? [],
   }));
   const initialProductId = catalog.some((p) => p.id === sp.productId) ? sp.productId : undefined;
 

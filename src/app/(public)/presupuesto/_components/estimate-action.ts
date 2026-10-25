@@ -11,6 +11,8 @@ const estimateInputSchema = z.object({
     sizeId: z.string().uuid().nullable(),
     quantity: z.number().int().min(1).max(1000),
   })).min(1).max(32),
+  fabricId: z.string().uuid().optional(),
+  techniqueIds: z.array(z.string().uuid()).max(20).optional(),
 }).strict();
 
 export type WizardEstimateResult =

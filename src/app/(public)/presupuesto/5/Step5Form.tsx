@@ -9,6 +9,11 @@ import { createPublicOrder } from "@/app/actions/public-orders";
 
 interface Props {
   productName: string;
+  /** Option picks from step 2 — forwarded to createPublicOrder. */
+  fabricId: string | null;
+  methodIds: string[];
+  /** Display names (fabric + methods) resolved server-side for the summary. */
+  optionNames: string[];
   items: { talle: string; name: string; number: string; sizeId: string | null }[];
   total: number;
   sizeQuantities: { sizeId: string | null; quantity: number }[];
@@ -27,7 +32,7 @@ interface Props {
  * F4-12 — Paso 5 form: confirma y dispara createPublicOrder. Muestra el resultado
  * con link a /seguimiento/[publicToken].
  */
-export function Step5Form({ productName, items, total, sizeQuantities, contactInfo, type, notes, fileIds, uploadSessionId, uploadSessionSecret, whatsappPhone, backHref }: Props) {
+export function Step5Form({ productName, fabricId, methodIds, optionNames, items, total, sizeQuantities, contactInfo, type, notes, fileIds, uploadSessionId, uploadSessionSecret, whatsappPhone, backHref }: Props) {
   const [result, setResult] = useState<{ publicToken: string; number: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -44,6 +49,8 @@ export function Step5Form({ productName, items, total, sizeQuantities, contactIn
         organizationName: contactInfo.org || undefined,
         notes,
         productId: new URLSearchParams(window.location.search).get("productId") ?? "",
+        fabricId,
+        techniqueIds: methodIds.length > 0 ? methodIds : undefined,
         sizeQuantities,
         items: items.map((item) => ({
           sizeId: item.sizeId,
@@ -98,6 +105,12 @@ export function Step5Form({ productName, items, total, sizeQuantities, contactIn
         </h3>
         <dl className="mt-4 space-y-2.5 text-sm">
           <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Producto</dt><dd className="break-words font-medium sm:text-right">{productName}</dd></div>
+          {optionNames.length > 0 && (
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+              <dt className="text-on-surface-variant">Tela y métodos</dt>
+              <dd className="break-words font-medium sm:text-right">{optionNames.join(" + ")}</dd>
+            </div>
+          )}
           <div className="flex justify-between"><dt className="text-on-surface-variant">Prendas</dt><dd className="font-medium">{total}</dd></div>
           <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Contacto</dt><dd className="break-words font-medium sm:text-right">{contactInfo.name} · {contactInfo.phone}</dd></div>
           {contactInfo.org && <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Organización</dt><dd className="break-words font-medium sm:text-right">{contactInfo.org}</dd></div>}

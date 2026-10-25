@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { products, sizes } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { products, sizes, fabrics, techniques } from "@/db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { getBusinessInfo } from "@/lib/business";
 import { getPublicEstimate } from "@/lib/public/estimate";
 import { Step5Form } from "./Step5Form";
@@ -56,10 +56,32 @@ export default async function PresupuestoStep5({
   }
   const sizeQuantities = Array.from(quantities, ([sizeId, quantity]) => ({ sizeId, quantity }));
 
+  // Option picks flow as URL state; the engine re-validates them anyway.
+  const fabricId = sp.fabricId ?? null;
+  const methodIds = sp.methodIds?.split(",").filter(Boolean) ?? [];
+
   // Only quote when every line resolved to a real size (or the product has
   // none): a stray label would otherwise hit the generic recipe and lie.
   const estimable = productSizes.length === 0 || serializedItems.every((i) => i.sizeId !== null);
-  const estimate = estimable ? await getPublicEstimate({ productId: product.id, sizeQuantities }) : null;
+  const estimate = estimable
+    ? await getPublicEstimate({ productId: product.id, sizeQuantities, fabricId, techniqueIds: methodIds })
+    : null;
+
+  // Names for the summary — resolved server-side so the summary stays right
+  // even when the engine cannot produce an estimate.
+  const optionNames: string[] = [];
+  if (fabricId) {
+    const [fabric] = await db.select({ name: fabrics.name }).from(fabrics).where(eq(fabrics.id, fabricId)).limit(1);
+    if (fabric) optionNames.push(fabric.name);
+  }
+  if (methodIds.length > 0) {
+    const methodRows = await db.select({ id: techniques.id, name: techniques.name }).from(techniques).where(inArray(techniques.id, methodIds));
+    const nameById = new Map(methodRows.map((m) => [m.id, m.name]));
+    for (const id of methodIds) {
+      const name = nameById.get(id);
+      if (name) optionNames.push(name);
+    }
+  }
 
   const contactInfo = {
     name: sp.name ?? "",
@@ -87,6 +109,9 @@ export default async function PresupuestoStep5({
         <WizardEstimateCard estimate={estimate} referencePrice={product.basePrice} />
         <Step5Form
         productName={product.name}
+        fabricId={fabricId}
+        methodIds={methodIds}
+        optionNames={optionNames}
         items={serializedItems}
         total={items.length}
         sizeQuantities={sizeQuantities}
