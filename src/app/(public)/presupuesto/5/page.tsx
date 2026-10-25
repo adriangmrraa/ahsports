@@ -6,6 +6,7 @@ import { getBusinessInfo } from "@/lib/business";
 import { getPublicEstimate } from "@/lib/public/estimate";
 import { Step5Form } from "./Step5Form";
 import { StepIndicator } from "../_components/StepIndicator";
+import { PageHero } from "@/components/public/PageHero";
 import { WizardEstimateCard } from "../_components/wizard-estimate";
 import {
   WizardRateLimitNotice,
@@ -69,11 +70,22 @@ export default async function PresupuestoStep5({
   const business = await getBusinessInfo();
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      <StepIndicator current={5} />
-      <h1 className="mb-6 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Confirmá tu solicitud</h1>
-      <WizardEstimateCard estimate={estimate} referencePrice={product.basePrice} />
-      <Step5Form
+    <>
+      <PageHero
+        crumb="Presupuesto"
+        eyebrow="Paso 5 de 5 · Confirmación"
+        title={
+          <>
+            Confirmá tu <span className="text-accent">solicitud.</span>
+          </>
+        }
+        lead="Revisá el resumen y el estimado. Al confirmar, tu pedido queda cargado y te llevás el link de seguimiento."
+      >
+        <StepIndicator current={5} />
+      </PageHero>
+      <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
+        <WizardEstimateCard estimate={estimate} referencePrice={product.basePrice} />
+        <Step5Form
         productName={product.name}
         items={serializedItems}
         total={items.length}
@@ -86,7 +98,8 @@ export default async function PresupuestoStep5({
         uploadSessionSecret={sp.uploadSessionSecret}
         whatsappPhone={business.whatsappPhone}
         backHref={`/presupuesto/4?${new URLSearchParams(sp as Record<string, string>).toString()}`}
-      />
-    </div>
+        />
+      </div>
+    </>
   );
 }

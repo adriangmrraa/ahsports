@@ -3,6 +3,7 @@ import { products, sizes } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { Step2Form } from "./Step2Form";
 import { StepIndicator } from "../_components/StepIndicator";
+import { PageHero } from "@/components/public/PageHero";
 import {
   WizardRateLimitNotice,
   wizardRateLimitReached,
@@ -64,10 +65,22 @@ export default async function PresupuestoStep2({
   const initialProductId = catalog.some((p) => p.id === sp.productId) ? sp.productId : undefined;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      <StepIndicator current={2} />
-      <h1 className="mb-6 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Elegí el producto y los talles</h1>
-      <Step2Form catalog={catalog} initialProductId={initialProductId} />
-    </div>
+    <>
+      <PageHero
+        crumb="Presupuesto"
+        eyebrow="Paso 2 de 5 · Producto"
+        title={
+          <>
+            Elegí el producto <span className="text-accent">y los talles.</span>
+          </>
+        }
+        lead="El catálogo completo con precios por unidad. Marcá cuántas prendas por talle y mirá el estimado en vivo."
+      >
+        <StepIndicator current={2} />
+      </PageHero>
+      <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
+        <Step2Form catalog={catalog} initialProductId={initialProductId} />
+      </div>
+    </>
   );
 }

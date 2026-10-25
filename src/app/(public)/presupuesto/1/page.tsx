@@ -1,5 +1,6 @@
 import { Step1Form } from "./Step1Form";
 import { StepIndicator } from "../_components/StepIndicator";
+import { PageHero } from "@/components/public/PageHero";
 import {
   WizardRateLimitNotice,
   wizardRateLimitReached,
@@ -26,10 +27,22 @@ export default async function PresupuestoStep1({
   const initialType = sp.type === "returning" ? "returning" : "new";
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      <StepIndicator current={1} />
-      <h1 className="mb-6 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Pedí tu presupuesto</h1>
-      <Step1Form initialType={initialType} />
-    </div>
+    <>
+      <PageHero
+        crumb="Presupuesto"
+        eyebrow="Paso 1 de 5 · Contacto"
+        title={
+          <>
+            Pedí tu <span className="text-accent">presupuesto.</span>
+          </>
+        }
+        lead="Contanos quién sos y para quién es el pedido. Después elegís producto, talles, diseño y archivos."
+      >
+        <StepIndicator current={1} />
+      </PageHero>
+      <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
+        <Step1Form initialType={initialType} />
+      </div>
+    </>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { ArrowLeft, ArrowRight, CheckCircle2, Package } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { WhatsAppCta } from "@/components/WhatsAppCta";
 import { createPublicOrder } from "@/app/actions/public-orders";
@@ -60,20 +61,28 @@ export function Step5Form({ productName, items, total, sizeQuantities, contactIn
 
   if (result) {
     return (
-      <div className="mx-auto flex max-w-lg flex-col items-center gap-4 rounded-2xl border border-primary/30 bg-surface-container p-8 text-center">
-        <span className="text-3xl">✅</span>
-        <h2 className="text-xl font-bold">Solicitud recibida</h2>
-        <p className="text-sm text-on-surface-variant">
-          Tu pedido <span className="font-semibold text-on-surface">#{result.number}</span> está en revisión. Te avisaremos
-          por mail/WhatsApp cuando esté aprobado.
-        </p>
-        <div className="flex flex-col items-center gap-3">
+      <div className="animate-rise mx-auto flex max-w-lg flex-col items-center gap-5 rounded-3xl border border-outline-variant bg-surface-container p-8 text-center shadow-xl shadow-navy-950/10 sm:p-10">
+        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent text-on-accent">
+          <CheckCircle2 className="h-8 w-8" aria-hidden />
+        </span>
+        <div>
+          <h2 className="font-display text-2xl font-black tracking-tight">Solicitud recibida</h2>
+          <p className="mt-3 text-sm leading-6 text-on-surface-variant">
+            Tu pedido <span className="font-display font-bold text-primary">#{result.number}</span> está en revisión.
+            Te avisaremos por mail/WhatsApp cuando esté aprobado.
+          </p>
+        </div>
+        <div className="flex w-full flex-col items-center gap-3">
           <WhatsAppCta
             phone={whatsappPhone}
             message={`Hola! Hice el pedido #${result.number} desde la web y quiero seguirlo por acá.`}
+            className="w-full"
           />
-          <Link href={`/seguimiento/${result.publicToken}`} className="text-sm font-medium text-primary hover:underline">
-            → Ver seguimiento de tu pedido
+          <Link
+            href={`/seguimiento/${result.publicToken}`}
+            className="label-caps inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-5 text-on-primary transition-colors hover:bg-navy-700"
+          >
+            Ver seguimiento de tu pedido <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
         </div>
       </div>
@@ -81,31 +90,38 @@ export function Step5Form({ productName, items, total, sizeQuantities, contactIn
   }
 
   return (
-    <form onSubmit={confirm} className="mx-auto flex w-full max-w-2xl flex-col gap-5">
-      <div className="rounded-2xl border border-outline-variant bg-surface-container p-4 sm:p-6">
-        <h3 className="mb-3 text-sm font-semibold">Resumen</h3>
-        <dl className="space-y-1 text-sm">
-          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Producto</dt><dd className="break-words sm:text-right">{productName}</dd></div>
-          <div className="flex justify-between"><dt className="text-on-surface-variant">Prendas</dt><dd>{total}</dd></div>
-          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Contacto</dt><dd className="break-words sm:text-right">{contactInfo.name} · {contactInfo.phone}</dd></div>
-          {contactInfo.org && <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Organización</dt><dd className="break-words sm:text-right">{contactInfo.org}</dd></div>}
+    <form onSubmit={confirm} className="flex w-full flex-col gap-6">
+      <div className="animate-rise rounded-3xl border border-outline-variant bg-surface-container p-5 sm:p-7" style={{ animationDelay: "80ms" }}>
+        <h3 className="label-caps flex items-center gap-2 text-on-surface-variant">
+          <Package className="h-4 w-4" aria-hidden />
+          Resumen
+        </h3>
+        <dl className="mt-4 space-y-2.5 text-sm">
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Producto</dt><dd className="break-words font-medium sm:text-right">{productName}</dd></div>
+          <div className="flex justify-between"><dt className="text-on-surface-variant">Prendas</dt><dd className="font-medium">{total}</dd></div>
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Contacto</dt><dd className="break-words font-medium sm:text-right">{contactInfo.name} · {contactInfo.phone}</dd></div>
+          {contactInfo.org && <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between"><dt className="text-on-surface-variant">Organización</dt><dd className="break-words font-medium sm:text-right">{contactInfo.org}</dd></div>}
         </dl>
-        <ul className="mt-4 flex max-h-40 flex-col gap-1 overflow-y-auto border-t border-outline-variant pt-3">
+        <ul className="scrollbar-thin mt-4 flex max-h-44 flex-col gap-1.5 overflow-y-auto border-t border-outline-variant pt-4 pr-1">
           {items.slice(0, 40).map((i, idx) => (
-            <li key={idx} className="flex flex-col gap-0.5 text-xs text-on-surface-variant sm:flex-row sm:justify-between">
-              <span>{i.talle}</span>
-              <span>{i.name || "—"} · {i.number || "—"}</span>
+            <li key={idx} className="flex items-center justify-between gap-3 text-xs">
+              <span className="inline-flex items-center rounded-full bg-navy-100 px-2.5 py-0.5 font-semibold text-navy-700">{i.talle}</span>
+              <span className="truncate text-on-surface-variant">{i.name || "—"} · {i.number || "—"}</span>
             </li>
           ))}
         </ul>
       </div>
 
-      {error && <p className="text-sm text-error">{error}</p>}
+      {error && (
+        <p className="rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">{error}</p>
+      )}
       <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Link href={backHref} className="flex min-h-11 items-center justify-center rounded-md px-3 text-sm text-on-surface-variant hover:text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:justify-start">
-          ← Volver
+        <Link href={backHref} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium text-on-surface-variant transition-colors hover:text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:justify-start">
+          <ArrowLeft className="h-4 w-4" aria-hidden /> Volver
         </Link>
-        <Button type="submit">Confirmar solicitud</Button>
+        <Button type="submit" size="lg" className="animate-pulse-cta border-accent bg-accent text-on-accent hover:border-accent-strong hover:bg-accent-strong hover:text-on-accent">
+          Confirmar solicitud
+        </Button>
       </div>
     </form>
   );

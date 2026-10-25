@@ -2,13 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Input, Select } from "@/components/ui/Input";
+import { Input } from "@/components/ui/Input";
 import { formatARS } from "@/lib/public/format";
 import { labelProductTaxonomy } from "@/lib/product-taxonomy";
 import { estimateWizardQuote } from "../_components/estimate-action";
 import type { PublicEstimate } from "@/lib/public/estimate";
+import { cn } from "@/lib/utils";
 
 interface CatalogProduct {
   id: string;
@@ -91,6 +92,13 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
     });
   }, [catalog]);
 
+  function pickProduct(id: string) {
+    if (id === productId) return;
+    setProductId(id);
+    setQty({});
+    setDirectQuantity(0);
+  }
+
   function goNext(e: React.FormEvent) {
     e.preventDefault();
     if (!product || total < minOrder) return;
@@ -108,56 +116,90 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
   }
 
   return (
-    <form onSubmit={goNext} className="mx-auto flex w-full max-w-2xl flex-col gap-5">
-      <label className="flex flex-col gap-1">
-        <span className="text-sm text-on-surface-variant">Producto</span>
-        <Select
-          value={productId}
-          onChange={(e) => {
-            setProductId(e.target.value);
-            setQty({});
-            setDirectQuantity(0);
-          }}
-          aria-label="Producto"
-        >
-          {optionGroups.map(([subcategory, items]) => (
-            <optgroup key={subcategory} label={labelProductTaxonomy(subcategory)}>
-              {items.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {Number(p.basePrice) > 0 ? `${p.name} — ${formatARS(p.basePrice)}` : p.name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </Select>
-      </label>
+    <form onSubmit={goNext} className="flex w-full flex-col gap-7">
+      {/* Producto — cards seleccionables agrupadas por rubro */}
+      <div role="group" aria-label="Producto" className="flex flex-col gap-6">
+        {optionGroups.map(([subcategory, items], gi) => (
+          <div key={subcategory} className="animate-rise" style={{ animationDelay: `${gi * 70}ms` }}>
+            <p className="label-caps mb-3 flex items-center gap-2 text-on-surface-variant">
+              <span className="h-3.5 w-1 rounded-full bg-accent" aria-hidden />
+              {labelProductTaxonomy(subcategory)}
+            </p>
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              {items.map((p) => {
+                const active = p.id === productId;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => pickProduct(p.id)}
+                    aria-pressed={active}
+                    className={cn(
+                      "relative flex items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 text-left transition-all duration-200 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2",
+                      active
+                        ? "border-primary bg-surface-container ring-2 ring-primary/25"
+                        : "border-outline-variant bg-surface-container hover:-translate-y-0.5 hover:border-primary/40",
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-on-surface">{p.name}</span>
+                      <span className="mt-0.5 block font-display text-base font-extrabold tracking-tight text-primary">
+                        {formatARS(p.basePrice)}
+                        <span className="ml-1 font-body text-[11px] font-normal text-on-surface-variant">c/u</span>
+                      </span>
+                    </span>
+                    <span
+                      className={cn(
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors",
+                        active ? "border-accent bg-accent text-on-accent" : "border-outline-variant text-transparent",
+                      )}
+                      aria-hidden
+                    >
+                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
 
       {product && (
         <>
-          {product.imageUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={product.imageUrl} alt={product.name} className="h-40 w-full rounded-xl border border-outline-variant object-cover" />
-          )}
-          {product.description && <p className="text-sm text-on-surface-variant">{product.description}</p>}
-          <div className="flex flex-wrap items-center gap-2">
-            {Number(product.basePrice) > 0 && (
-              <span className="inline-flex items-baseline gap-1.5 rounded-full border border-outline-variant bg-surface-container px-3 py-1.5 text-sm">
-                <span className="text-xs text-on-surface-variant">Desde</span>
-                <span className="font-semibold">{formatARS(product.basePrice)}</span>
-                <span className="text-xs text-on-surface-variant">c/u</span>
-              </span>
+          {/* Spotlight del producto seleccionado */}
+          <div className="texture-stripes animate-rise overflow-hidden rounded-3xl border border-navy-line bg-navy-900 text-on-navy" style={{ animationDelay: "80ms" }}>
+            {product.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={product.imageUrl} alt={product.name} className="h-44 w-full border-b border-navy-line object-cover" />
             )}
-            {product.minOrder > 1 && (
-              <span className="inline-flex items-center rounded-full border border-status-warning/40 bg-status-warning/10 px-3 py-1.5 text-xs font-medium text-status-warning">
-                Pedido mínimo: {product.minOrder} unidades
-              </span>
-            )}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-3 p-5 sm:p-6">
+              <div className="min-w-0 flex-1">
+                <h2 className="font-display text-xl font-extrabold tracking-tight">{product.name}</h2>
+                {product.description && (
+                  <p className="mt-1.5 text-sm leading-6 text-on-navy-variant">{product.description}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-baseline gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-on-accent">
+                  <span className="label-caps text-[10px]">Desde</span>
+                  <span className="font-display text-sm font-extrabold">{formatARS(product.basePrice)}</span>
+                  <span className="text-[11px]">c/u</span>
+                </span>
+                {product.minOrder > 1 && (
+                  <span className="inline-flex items-center rounded-full border border-accent/50 bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent">
+                    Pedido mínimo: {product.minOrder} unidades
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-outline-variant bg-surface-container p-4 sm:p-5">
-            <h3 className="mb-3 text-sm font-semibold">Cantidad por talle</h3>
+          {/* Cantidades por talle */}
+          <div className="animate-rise rounded-3xl border border-outline-variant bg-surface-container p-5 sm:p-6" style={{ animationDelay: "140ms" }}>
+            <h3 className="label-caps text-on-surface-variant">Cantidad por talle</h3>
             {product.sizes.length === 0 ? (
-              <label className="flex max-w-xs items-center justify-between gap-3 text-sm text-on-surface-variant">
+              <label className="mt-4 flex max-w-xs items-center justify-between gap-3 text-sm text-on-surface-variant">
                 <span>Cantidad</span>
                 <Input
                   type="number"
@@ -170,10 +212,18 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
                 />
               </label>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {product.sizes.map((s) => (
-                  <label key={s.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-container-high p-2">
-                    <span className="text-sm">{s.label}</span>
+                  <label
+                    key={s.id}
+                    className={cn(
+                      "flex items-center justify-between gap-2 rounded-xl border p-3 transition-colors",
+                      (qty[s.id] ?? 0) > 0
+                        ? "border-primary/50 bg-surface-container-high"
+                        : "border-transparent bg-surface-container-high",
+                    )}
+                  >
+                    <span className="font-display text-sm font-bold">{s.label}</span>
                     <Input
                       type="number"
                       min={0}
@@ -187,41 +237,41 @@ export function Step2Form({ catalog, initialProductId }: { catalog: CatalogProdu
                 ))}
               </div>
             )}
-            <div className="mt-4 flex items-center justify-between border-t border-outline-variant pt-3">
+            <div className="mt-5 flex items-center justify-between border-t border-outline-variant pt-4">
               <span className="text-sm text-on-surface-variant">Total unidades</span>
-              <span className="text-lg font-bold">{total}</span>
+              <span className="font-display text-2xl font-extrabold tracking-tight text-primary">{total}</span>
             </div>
             {belowMin && (
-              <p className="mt-1 text-xs text-status-warning">Sumá {minOrder - total} más para llegar al mínimo de {minOrder}.</p>
+              <p className="mt-1.5 text-xs font-medium text-status-warning">Sumá {minOrder - total} más para llegar al mínimo de {minOrder}.</p>
             )}
             {total > 0 && (
-              <div className="mt-3 flex min-h-14 items-center justify-between gap-3 rounded-xl bg-surface-container-high px-4 py-3" aria-live="polite">
+              <div className="texture-stripes mt-4 flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-navy-line bg-navy-900 px-5 py-4 text-on-navy" aria-live="polite">
                 {estimating ? (
-                  <span className="inline-flex items-center gap-2 text-sm text-on-surface-variant">
+                  <span className="inline-flex items-center gap-2 text-sm text-on-navy-variant">
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Calculando estimado…
                   </span>
                 ) : estimate ? (
                   <>
                     <div>
-                      <p className="label-caps text-on-surface-variant">Estimado</p>
-                      <p className="text-lg font-semibold leading-tight">{formatARS(estimate.totalPrice)}</p>
-                      <p className="text-xs text-on-surface-variant">{formatARS(estimate.unitPrice)} c/u · a confirmar</p>
+                      <p className="label-caps text-[10px] text-accent">Estimado</p>
+                      <p className="font-display text-2xl font-black leading-tight tracking-tight text-accent">{formatARS(estimate.totalPrice)}</p>
+                      <p className="text-xs text-on-navy-variant">{formatARS(estimate.unitPrice)} c/u · a confirmar</p>
                     </div>
                     {estimate.advanceAmount !== null && estimate.advancePercent !== null && (
                       <div className="text-right">
-                        <p className="label-caps text-on-surface-variant">Seña est.</p>
-                        <p className="font-semibold">{formatARS(estimate.advanceAmount)}</p>
+                        <p className="label-caps text-[10px] text-on-navy-variant">Seña est.</p>
+                        <p className="font-display text-lg font-extrabold">{formatARS(estimate.advanceAmount)}</p>
                       </div>
                     )}
                   </>
                 ) : (
-                  <span className="text-xs text-on-surface-variant">Precio a confirmar en tu presupuesto.</span>
+                  <span className="text-xs text-on-navy-variant">Precio a confirmar en tu presupuesto.</span>
                 )}
               </div>
             )}
           </div>
 
-          <Button type="submit" disabled={total < minOrder}>
+          <Button type="submit" size="lg" disabled={total < minOrder} className="border-accent bg-accent text-on-accent hover:border-accent-strong hover:bg-accent-strong hover:text-on-accent">
             Siguiente →
           </Button>
         </>
