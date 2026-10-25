@@ -177,8 +177,65 @@ export const techniques = pgTable("techniques", {
   costPerSquareMeter: numeric("cost_per_square_meter", { precision: 12, scale: 2 }).notNull().default("0"),
   setupCost: numeric("setup_cost", { precision: 12, scale: 2 }).notNull().default("0"),
   description: text("description"),
+  requiresSublimableFabric: boolean("requires_sublimable_fabric").notNull().default(false),
   active: boolean("active").notNull().default(true),
 });
+
+/**
+ * Customer-facing fabric catalog (telas). Deliberately separate from
+ * `materials`: materials tracks purchasing/consumption for BOM cost, while a
+ * fabric is an option the customer picks — it carries a sell-price modifier
+ * and whether it accepts sublimation.
+ */
+export const fabrics = pgTable("fabrics", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  sublimable: boolean("sublimable").notNull().default(true),
+  /** Catalog-level sell-price delta; product_fabrics adds a per-product one. */
+  priceModifier: numeric("price_modifier", { precision: 12, scale: 2 }).notNull().default("0"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  normalizedNameUnique: uniqueIndex("fabrics_name_unique_idx")
+    .on(sql`lower(btrim(${t.name}))`)
+    .where(sql`btrim(${t.name}) <> ''`),
+}));
+
+/** Which fabrics a product offers + per-product sell-price delta. */
+export const productFabrics = pgTable("product_fabrics", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "cascade" }),
+  fabricId: varchar("fabric_id", { length: 36 }).notNull().references(() => fabrics.id),
+  priceModifier: numeric("price_modifier", { precision: 12, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  productFabricUnique: uniqueIndex("product_fabrics_unique_idx").on(t.productId, t.fabricId),
+  fabricIdx: index("product_fabrics_fabric_idx").on(t.fabricId),
+}));
+
+/** Which decoration methods a product offers + per-product sell-price delta. */
+export const productTechniques = pgTable("product_techniques", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "cascade" }),
+  techniqueId: varchar("technique_id", { length: 36 }).notNull().references(() => techniques.id),
+  priceModifier: numeric("price_modifier", { precision: 12, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  productTechniqueUnique: uniqueIndex("product_techniques_unique_idx").on(t.productId, t.techniqueId),
+  techniqueIdx: index("product_techniques_technique_idx").on(t.techniqueId),
+}));
+
+/** Per-product quantity ladder: highest minQty <= quantity wins. */
+export const productVolumeTiers = pgTable("product_volume_tiers", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "cascade" }),
+  minQty: integer("min_qty").notNull(),
+  discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  productMinQtyUnique: uniqueIndex("product_volume_tiers_unique_idx").on(t.productId, t.minQty),
+}));
 
 export type GarmentMeasurementSchema = { required: string[]; optional: string[] };
 
@@ -349,6 +406,21 @@ export type MaterialConsumptionSnapshot = {
   wastePercent: number;
 };
 
+/** What the customer picked per line — stored on the snapshot for traceability. */
+export type LineOptionsSnapshot = {
+  fabricId: string;
+  fabricName: string;
+  fabricDelta: number;
+  techniqueId: string | null;
+  techniqueName: string | null;
+  methodDelta: number;
+  techniqueCostPerUnit: number;
+  basePrice: number;
+  listUnitPrice: number;
+  volumeTier: { minQty: number; discountPercent: number } | null;
+  discountPercent: number;
+};
+
 export type PricingSnapshot = {
   rule: { id: string; name: string; marginPercent: number; urgentSurcharge: number; minAdvancePercent: number; rounding: number };
   lines: Array<{
@@ -361,6 +433,7 @@ export type PricingSnapshot = {
     subtotal: number;
     materials: Array<{ materialId?: string; name: string; totalQuantity: number; unit: string }>;
     bundleComponents?: Array<{ productId: string; productName: string; quantity: number }>;
+    options?: LineOptionsSnapshot;
     techniques?: Array<{
       id: string;
       name: string;
@@ -398,6 +471,7 @@ export const orderLines = pgTable(
     orderId: varchar("order_id", { length: 36 }).notNull().references(() => orders.id, { onDelete: "cascade" }),
     productId: varchar("product_id", { length: 36 }).notNull().references(() => products.id),
     techniqueId: varchar("technique_id", { length: 36 }).references(() => techniques.id),
+    fabricId: varchar("fabric_id", { length: 36 }).references(() => fabrics.id),
     recipeId: varchar("recipe_id", { length: 36 }).references(() => bomRecipes.id),
     quantity: integer("quantity").notNull().default(1),
     unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -595,6 +669,7 @@ export const orderLinesRelations = relations(orderLines, ({ one, many }) => ({
   order: one(orders, { fields: [orderLines.orderId], references: [orders.id] }),
   product: one(products, { fields: [orderLines.productId], references: [products.id] }),
   technique: one(techniques, { fields: [orderLines.techniqueId], references: [techniques.id] }),
+  fabric: one(fabrics, { fields: [orderLines.fabricId], references: [fabrics.id] }),
   items: many(orderItems),
 }));
 
@@ -605,6 +680,27 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   lines: many(orderLines),
   bundle: one(productBundles, { fields: [products.id], references: [productBundles.productId] }),
   bundleItems: many(productBundleItems),
+  fabricOptions: many(productFabrics),
+  techniqueOptions: many(productTechniques),
+  volumeTiers: many(productVolumeTiers),
+}));
+
+export const fabricsRelations = relations(fabrics, ({ many }) => ({
+  productLinks: many(productFabrics),
+}));
+
+export const productFabricsRelations = relations(productFabrics, ({ one }) => ({
+  product: one(products, { fields: [productFabrics.productId], references: [products.id] }),
+  fabric: one(fabrics, { fields: [productFabrics.fabricId], references: [fabrics.id] }),
+}));
+
+export const productTechniquesRelations = relations(productTechniques, ({ one }) => ({
+  product: one(products, { fields: [productTechniques.productId], references: [products.id] }),
+  technique: one(techniques, { fields: [productTechniques.techniqueId], references: [techniques.id] }),
+}));
+
+export const productVolumeTiersRelations = relations(productVolumeTiers, ({ one }) => ({
+  product: one(products, { fields: [productVolumeTiers.productId], references: [products.id] }),
 }));
 
 export const productBundlesRelations = relations(productBundles, ({ one, many }) => ({

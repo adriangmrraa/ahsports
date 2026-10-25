@@ -8,6 +8,7 @@ import type { SnapshotHistoryEntry } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { generatePublicToken } from "@/lib/utils";
 import { loadOrderLineSizeQuantities, quoteOrder } from "@/lib/pricing";
+import { assertLineOptionsAllowed } from "@/lib/product-options-store";
 import { confirmQuoteSchema, createOrderLineSchema, orderSchema, reQuoteOrderSchema } from "@/lib/validators";
 import { eq } from "drizzle-orm";
 
@@ -65,6 +66,13 @@ export async function createOrderLine(input: unknown) {
     const [tech] = await db.select({ id: techniques.id }).from(techniques).where(eq(techniques.id, d.techniqueId)).limit(1);
     if (!tech) return { ok: false as const, error: "Técnica no encontrada" };
   }
+  const optionsError = await assertLineOptionsAllowed({
+    productId: product.id,
+    productName: product.name,
+    fabricId: d.fabricId ?? null,
+    techniqueId: d.techniqueId ?? null,
+  });
+  if (optionsError) return { ok: false as const, error: optionsError };
   const productSizes = await db.select().from(sizes).where(eq(sizes.productId, d.productId));
   const sizeIds = new Set(productSizes.map((s) => s.id));
   const entries = Object.entries(d.sizeQuantities ?? {}).filter(([, q]) => q > 0);
@@ -85,6 +93,7 @@ export async function createOrderLine(input: unknown) {
       orderId: d.orderId,
       productId: d.productId,
       techniqueId: d.techniqueId ?? null,
+      fabricId: d.fabricId ?? null,
       quantity: totalQty,
       unitPrice: String(product.basePrice),
       unitCost: "0",
@@ -124,6 +133,7 @@ async function loadQuotableLines(orderId: string) {
       productId: line.productId,
       quantity: line.quantity,
       techniqueId: line.techniqueId,
+      fabricId: line.fabricId,
       sizeQuantities: sizeQuantities.get(line.id),
     },
   }));

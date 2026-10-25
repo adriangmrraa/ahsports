@@ -39,6 +39,43 @@ export const techniqueSchema = z.object({
   costPerSquareMeter: z.number().min(0).default(0),
   setupCost: z.number().min(0).default(0),
   description: z.string().optional().nullable(),
+  requiresSublimableFabric: z.boolean().default(false),
+});
+
+export const fabricSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  sublimable: z.boolean().default(true),
+  priceModifier: z.number().finite().min(-999999999).max(999999999).default(0),
+  sortOrder: z.number().int().min(0).default(0),
+});
+
+/** Product options matrix: which fabrics/methods the product offers + volume tiers. */
+export const productOptionsSchema = z.object({
+  fabrics: z.array(z.object({
+    fabricId: z.string().min(1).max(36),
+    priceModifier: z.number().finite().min(-999999999).max(999999999).default(0),
+  }).strict()).max(200).default([]),
+  techniques: z.array(z.object({
+    techniqueId: z.string().min(1).max(36),
+    priceModifier: z.number().finite().min(-999999999).max(999999999).default(0),
+  }).strict()).max(100).default([]),
+  volumeTiers: z.array(z.object({
+    minQty: z.number().int().min(1).max(1000000),
+    discountPercent: z.number().min(0).max(100),
+  }).strict()).max(50).default([]),
+}).strict().superRefine((value, ctx) => {
+  const fabricIds = value.fabrics.map((f) => f.fabricId);
+  if (new Set(fabricIds).size !== fabricIds.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["fabrics"], message: "Una tela no puede repetirse" });
+  }
+  const techniqueIds = value.techniques.map((t) => t.techniqueId);
+  if (new Set(techniqueIds).size !== techniqueIds.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["techniques"], message: "Un método no puede repetirse" });
+  }
+  const minQtys = value.volumeTiers.map((t) => t.minQty);
+  if (new Set(minQtys).size !== minQtys.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["volumeTiers"], message: "No puede haber dos tramos con la misma cantidad mínima" });
+  }
 });
 
 export const pricingRuleSchema = z.object({
@@ -240,6 +277,7 @@ export const orderLineSchema = z.object({
   orderId: z.string().min(1).max(36),
   productId: z.string().min(1).max(36),
   techniqueId: z.string().max(36).optional().nullable(),
+  fabricId: z.string().max(36).optional().nullable(),
   recipeId: z.string().max(36).optional().nullable(),
   quantity: z.number().int().min(1),
   unitPrice: z.number().min(0).default(0),
@@ -251,6 +289,7 @@ export const createOrderLineSchema = z.object({
   orderId: z.string().min(1).max(36),
   productId: z.string().min(1).max(36),
   techniqueId: z.string().max(36).optional().nullable(),
+  fabricId: z.string().max(36).optional().nullable(),
   notes: z.string().optional().nullable(),
   sizeQuantities: z.record(z.string(), z.number().int().min(0).max(1000)).default({}),
   quantity: z.number().int().min(1).max(10000).optional().nullable(),
@@ -376,6 +415,8 @@ export const createPublicOrderSchema = z.object({
   organizationName: z.string().trim().min(1).max(255).optional(),
   notes: z.string().trim().max(4000).optional(),
   productId: z.string().uuid(),
+  fabricId: z.string().uuid().optional().nullable(),
+  techniqueId: z.string().uuid().optional().nullable(),
   sizeQuantities: z.array(z.object({
     sizeId: z.string().uuid().nullable(),
     quantity: z.number().int().min(1).max(1000),

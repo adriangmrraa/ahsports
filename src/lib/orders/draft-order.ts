@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { and, eq, inArray, or } from "drizzle-orm";
 import type { DbTransaction } from "@/lib/db-transaction";
 import { contacts, orderItems, orderLines, orders, organizations, products, sizes } from "@/db/schema";
+import { assertLineOptionsAllowed } from "@/lib/product-options-store";
 
 /**
  * Transactional core for creating an order in `borrador`.
@@ -35,6 +36,9 @@ export type DraftOrderTxInput = {
   organizationNotes?: string;
   notes?: string;
   productId: string;
+  /** Customer-picked options; must belong to the product's configured sets. */
+  fabricId?: string | null;
+  techniqueId?: string | null;
   sizeQuantities: DraftSizeQuantity[];
   items: DraftOrderItem[];
 };
@@ -54,6 +58,13 @@ export async function createOrderDraftTx(
   const [product] = await tx.select({ id: products.id, minOrder: products.minOrder })
     .from(products).where(and(eq(products.id, data.productId), eq(products.active, true))).limit(1);
   if (!product) throw new OrderDraftDomainError("El producto seleccionado ya no está disponible");
+
+  const optionsError = await assertLineOptionsAllowed({
+    productId: product.id,
+    fabricId: data.fabricId ?? null,
+    techniqueId: data.techniqueId ?? null,
+  });
+  if (optionsError) throw new OrderDraftDomainError(optionsError);
 
   const requestedSizeIds = data.sizeQuantities.flatMap((entry) => entry.sizeId ? [entry.sizeId] : []);
   const productSizes = requestedSizeIds.length > 0
@@ -115,7 +126,8 @@ export async function createOrderDraftTx(
   }).returning({ id: orders.id, number: orders.number });
   if (!order) throw new OrderDraftDomainError("No se pudo crear el pedido");
   const [line] = await tx.insert(orderLines).values({
-    orderId: order.id, productId: product.id, quantity: expectedItems, unitPrice: "0", unitCost: "0",
+    orderId: order.id, productId: product.id, techniqueId: data.techniqueId ?? null, fabricId: data.fabricId ?? null,
+    quantity: expectedItems, unitPrice: "0", unitCost: "0",
   }).returning({ id: orderLines.id });
   if (!line) throw new OrderDraftDomainError("No se pudo crear la línea del pedido");
 

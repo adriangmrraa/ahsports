@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
-import { garmentMolds, productBundleItems, productBundles, products, sizes, bomRecipes, techniques } from "@/db/schema";
+import { fabrics, garmentMolds, productBundleItems, productBundles, productFabrics, products, productTechniques, productVolumeTiers, sizes, bomRecipes, techniques } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { PageHeader, Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { ProductoForm } from "../nuevo/ProductoForm";
 import { ProductImageCard } from "./ProductImageCard";
+import { ProductOptionsEditor } from "./ProductOptionsEditor";
 import { asc } from "drizzle-orm";
 import { labelGarmentFamily, labelGarmentType } from "@/lib/garments";
 import { labelProductTaxonomy } from "@/lib/product-taxonomy";
@@ -25,6 +26,10 @@ export default async function ProductoDetallePage({ params }: { params: Promise<
   const taxonomy = await getProductTaxonomy();
   const [bundle] = await db.select({ id: productBundles.id }).from(productBundles).where(eq(productBundles.productId, id)).limit(1);
   const bundleItems = bundle ? await db.select().from(productBundleItems).where(eq(productBundleItems.bundleId, bundle.id)) : [];
+  const allFabrics = await db.select().from(fabrics).where(eq(fabrics.active, true)).orderBy(asc(fabrics.sortOrder), asc(fabrics.name));
+  const optionFabrics = await db.select().from(productFabrics).where(eq(productFabrics.productId, id));
+  const optionTechniques = await db.select().from(productTechniques).where(eq(productTechniques.productId, id));
+  const optionTiers = await db.select().from(productVolumeTiers).where(eq(productVolumeTiers.productId, id)).orderBy(asc(productVolumeTiers.minQty));
 
   return (
     <>
@@ -87,6 +92,19 @@ export default async function ProductoDetallePage({ params }: { params: Promise<
             </tbody>
           </Table>
         )}
+      </Card>
+
+      <Card title="Opciones del producto" className="mb-6">
+        <ProductOptionsEditor
+          productId={id}
+          fabrics={allFabrics.map((f) => ({ id: f.id, name: f.name, sublimable: f.sublimable, priceModifier: f.priceModifier }))}
+          techniques={techs.filter((t) => t.active).map((t) => ({ id: t.id, name: t.name, requiresSublimableFabric: t.requiresSublimableFabric }))}
+          initial={{
+            fabrics: optionFabrics.map((f) => ({ fabricId: f.fabricId, priceModifier: f.priceModifier })),
+            techniques: optionTechniques.map((t) => ({ techniqueId: t.techniqueId, priceModifier: t.priceModifier })),
+            volumeTiers: optionTiers.map((t) => ({ minQty: t.minQty, discountPercent: t.discountPercent })),
+          }}
+        />
       </Card>
 
       <Card title="Recetas técnicas (BOM)" action={<LinkButton href={`/admin/productos/${id}/recetas`} variant="ghost" size="sm">Configurar →</LinkButton>}>

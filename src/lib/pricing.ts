@@ -1,8 +1,9 @@
 import { db } from "@/db/client";
-import type { MaterialConsumptionSnapshot, PricingSnapshot } from "@/db/schema";
+import type { LineOptionsSnapshot, MaterialConsumptionSnapshot, PricingSnapshot } from "@/db/schema";
 import {
   applications,
   bomItems,
+  fabrics,
   productBundleItems,
   productBundles,
   bomRecipes,
@@ -10,12 +11,16 @@ import {
   orderItems,
   orderLines,
   pricingRules,
+  productFabrics,
+  productTechniques,
+  productVolumeTiers,
   products,
   sizes,
   techniques,
 } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { calculateBomConsumption, consumptionUnit } from "@/lib/consumption";
+import { computeOptionUnitPrice, selectVolumeTier, techniqueAllowedForFabric } from "@/lib/product-options";
 
 export type SizeQuantity = { sizeId: string | null; quantity: number };
 
@@ -28,6 +33,8 @@ export type QuoteLineInput = {
   /** Kept for one-size/internal callers. */
   sizeId?: string | null;
   techniqueId?: string | null;
+  /** When set the line prices via the options model: basePrice + deltas - tier. */
+  fabricId?: string | null;
   overrideUnitPrice?: number | null;
 };
 
@@ -65,6 +72,8 @@ export type QuoteResult = {
     techniques: TechniqueSummary[];
     sizeBreakdown: SizeQuote[];
     bundleComponents?: Array<{ productId: string; productName: string; quantity: number }>;
+    /** Present only when the line priced through the options model (fabricId set). */
+    options?: LineOptionsSnapshot;
   }>;
   totals: { cost: number; price: number; margin: number; marginPercent: number };
   rule: { id: string; name: string; marginPercent: number; urgentSurcharge: number; minAdvancePercent: number; rounding: number };
@@ -130,8 +139,51 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
       : null;
     if (line.techniqueId && !lineTechnique) throw new Error("La técnica seleccionada no existe.");
 
+    // Options model (fabricId present): the line prices as
+    // basePrice + fabricDelta + methodDelta + technique cost − volume tier,
+    // instead of cost × margin. Membership in product_fabrics /
+    // product_techniques is strict — quoting an option the product does not
+    // allow is a hard error, never a silent fallback.
+    let optionsContext: {
+      fabric: typeof fabrics.$inferSelect;
+      fabricDelta: number;
+      methodDelta: number;
+      volumeTier: { minQty: number; discountPercent: number } | null;
+    } | null = null;
+    if (line.fabricId) {
+      const [fabric] = await db.select().from(fabrics).where(eq(fabrics.id, line.fabricId)).limit(1);
+      if (!fabric || !fabric.active) throw new Error("La tela seleccionada no existe o está inactiva.");
+      const fabricRows = await db.select().from(productFabrics).where(eq(productFabrics.productId, line.productId));
+      const fabricRow = fabricRows.find((row) => row.fabricId === fabric.id);
+      if (!fabricRow) throw new Error(`La tela "${fabric.name}" no está habilitada para "${product.name}".`);
+      const techniqueRows = await db.select().from(productTechniques).where(eq(productTechniques.productId, line.productId));
+      let methodDelta = 0;
+      if (lineTechnique && !lineTechnique.active) throw new Error(`El método "${lineTechnique.name}" está inactivo.`);
+      if (techniqueRows.length > 0) {
+        if (!lineTechnique) throw new Error(`El producto "${product.name}" requiere elegir un método de aplicación.`);
+        const techniqueRow = techniqueRows.find((row) => row.techniqueId === lineTechnique.id);
+        if (!techniqueRow) throw new Error(`El método "${lineTechnique.name}" no está habilitado para "${product.name}".`);
+        methodDelta = Number(techniqueRow.priceModifier);
+      } else if (line.techniqueId) {
+        throw new Error(`El producto "${product.name}" no tiene métodos configurables.`);
+      }
+      if (lineTechnique && !techniqueAllowedForFabric(fabric, lineTechnique)) {
+        throw new Error(`La tela "${fabric.name}" no admite "${lineTechnique.name}".`);
+      }
+      const tierRows = await db.select().from(productVolumeTiers).where(eq(productVolumeTiers.productId, line.productId));
+      optionsContext = {
+        fabric,
+        fabricDelta: Number(fabric.priceModifier) + Number(fabricRow.priceModifier),
+        methodDelta,
+        volumeTier: selectVolumeTier(
+          tierRows.map((row) => ({ minQty: row.minQty, discountPercent: Number(row.discountPercent) })),
+          line.quantity,
+        ),
+      };
+    }
+
     const recipes = await db.select().from(bomRecipes).where(eq(bomRecipes.productId, line.productId)).limit(200);
-    if (recipes.length === 0) {
+    if (recipes.length === 0 && !optionsContext) {
       throw new Error(`El producto ${product.sku} ("${product.name}") no tiene receta cargada. Creá el BOM en /admin/recetas antes de cotizar.`);
     }
 
@@ -177,9 +229,9 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
 
     for (const requested of requestedSizes) {
       const recipe = chooseRecipe(requested.sizeId);
-      if (!recipe) throw new Error(`No hay receta aplicable para el talle solicitado de "${product.name}".`);
-      const items = await db.select().from(bomItems).where(eq(bomItems.recipeId, recipe.id));
-      if (items.length === 0) throw new Error(`La receta de "${product.name}" no tiene insumos. Completá sus items antes de cotizar.`);
+      if (!recipe && !optionsContext) throw new Error(`No hay receta aplicable para el talle solicitado de "${product.name}".`);
+      const items = recipe ? await db.select().from(bomItems).where(eq(bomItems.recipeId, recipe.id)) : [];
+      if (items.length === 0 && !optionsContext) throw new Error(`La receta de "${product.name}" no tiene insumos. Completá sus items antes de cotizar.`);
 
       const aggregated = new Map<string, MaterialSummary>();
       const consumption: MaterialConsumptionSnapshot[] = [];
@@ -221,7 +273,7 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
         });
       }
 
-      const technique = await getTechnique(line.techniqueId ?? recipe.techniqueId);
+      const technique = await getTechnique(line.techniqueId ?? recipe?.techniqueId ?? null);
       if (technique) {
         if (technique.costPerUnit) materialCost += Number(technique.costPerUnit);
         if (!sharedTechniqueIds.has(technique.id)) {
@@ -278,12 +330,26 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
 
     const sharedPerUnit = sharedTechniqueCost / line.quantity;
     const surcharge = input.urgent ? rule.urgentSurcharge / 100 : 0;
+    // The options unit price is group-invariant (deltas + shared + tier), so it
+    // is computed once and applied to every size group.
+    const optionPrice = optionsContext
+      ? computeOptionUnitPrice({
+          basePrice: Number(product.basePrice),
+          fabricDelta: optionsContext.fabricDelta,
+          methodDelta: optionsContext.methodDelta,
+          techniqueCostPerUnit: lineTechnique ? Number(lineTechnique.costPerUnit) : 0,
+          sharedCostPerUnit: sharedPerUnit,
+          discountPercent: optionsContext.volumeTier?.discountPercent ?? 0,
+          urgentSurchargePercent: input.urgent ? rule.urgentSurcharge : 0,
+          rounding: rule.rounding,
+        })
+      : null;
     let lineCost = 0;
     let linePrice = 0;
     const lineMaterials = new Map<string, MaterialSummary>();
     for (const group of groups) {
       group.unitCost += sharedPerUnit;
-      const computed = roundToStep(group.unitCost * (1 + rule.marginPercent / 100) * (1 + surcharge), rule.rounding);
+      const computed = optionPrice?.unitPrice ?? roundToStep(group.unitCost * (1 + rule.marginPercent / 100) * (1 + surcharge), rule.rounding);
       group.unitPrice = line.overrideUnitPrice ?? computed;
       group.subtotal = group.unitPrice * group.quantity;
       lineCost += group.unitCost * group.quantity;
@@ -316,6 +382,21 @@ export async function quoteOrder(input: { lines: QuoteLineInput[]; urgent?: bool
         materials: group.materials,
         consumption: group.consumption,
       })),
+      options: optionsContext && optionPrice
+        ? {
+            fabricId: optionsContext.fabric.id,
+            fabricName: optionsContext.fabric.name,
+            fabricDelta: round2(optionsContext.fabricDelta),
+            techniqueId: lineTechnique?.id ?? null,
+            techniqueName: lineTechnique?.name ?? null,
+            methodDelta: round2(optionsContext.methodDelta),
+            techniqueCostPerUnit: lineTechnique ? Number(lineTechnique.costPerUnit) : 0,
+            basePrice: Number(product.basePrice),
+            listUnitPrice: optionPrice.listUnitPrice,
+            volumeTier: optionsContext.volumeTier,
+            discountPercent: optionPrice.discountPercent,
+          }
+        : undefined,
     });
   }
 
@@ -474,6 +555,7 @@ function round4(value: number) { return Math.round(value * 10000) / 10000; }
 
 export async function listSizesForProduct(productId: string) { return db.select().from(sizes).where(eq(sizes.productId, productId)); }
 export async function listTechniques() { return db.select().from(techniques).where(eq(techniques.active, true)); }
+export async function listFabrics() { return db.select().from(fabrics).where(eq(fabrics.active, true)).orderBy(asc(fabrics.sortOrder), asc(fabrics.name)); }
 export async function listMaterials() { return db.select().from(materials).where(eq(materials.active, true)); }
 export async function listProducts() { return db.select().from(products).where(eq(products.active, true)); }
 export async function getOrderLine(id: string) { return db.select().from(orderLines).where(eq(orderLines.id, id)).limit(1); }
