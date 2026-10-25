@@ -49,24 +49,32 @@ export function CatalogFilters({
     push(q, next);
   }
 
+  const pill = (active: boolean) =>
+    cn(
+      "label-caps inline-flex min-h-9 items-center gap-1.5 rounded-full border px-4 transition-all duration-200 active:scale-[0.96] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus",
+      active
+        ? "border-primary bg-primary text-on-primary shadow-md shadow-navy-950/15"
+        : "border-outline-variant bg-surface-container text-on-surface-variant hover:border-primary/50 hover:text-primary",
+    );
+
   return (
-    <div className="mb-8 flex flex-col gap-4 animate-rise" style={{ animationDelay: "80ms" }}>
+    <div className="mb-10 flex flex-col gap-5 animate-rise" style={{ animationDelay: "80ms" }}>
       <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" aria-hidden />
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" aria-hidden />
         <input
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar por nombre o descripción…"
           aria-label="Buscar en el catálogo"
-          className="min-h-11 w-full rounded-full border border-outline-variant bg-surface-container pl-10 pr-10 text-sm text-on-surface placeholder:text-on-surface-variant/60 transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-focus/30"
+          className="min-h-12 w-full rounded-full border border-outline-variant bg-surface-container pl-11 pr-11 text-sm text-on-surface shadow-sm transition placeholder:text-on-surface-variant/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-focus/30"
         />
         {q && (
           <button
             type="button"
             onClick={() => { setQ(""); push("", cat); }}
             aria-label="Limpiar búsqueda"
-            className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface"
+            className="absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface"
           >
             <X className="h-4 w-4" />
           </button>
@@ -79,28 +87,20 @@ export function CatalogFilters({
             type="button"
             onClick={() => pickCategory("")}
             aria-pressed={cat === ""}
-            className={cn(
-              "min-h-9 rounded-full border px-4 text-xs font-semibold transition active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus",
-              cat === ""
-                ? "border-primary bg-primary text-on-primary"
-                : "border-outline-variant bg-surface-container text-on-surface-variant hover:border-outline hover:text-on-surface",
-            )}
+            className={pill(cat === "")}
           >
             Todo
           </button>
-          {categories.map((c) => (
+          {categories.map((c, i) => (
             <button
               key={c.value}
               type="button"
               onClick={() => pickCategory(c.value)}
               aria-pressed={cat === c.value}
-              className={cn(
-                "min-h-9 rounded-full border px-4 text-xs font-semibold transition active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus",
-                cat === c.value
-                  ? "border-primary bg-primary text-on-primary"
-                  : "border-outline-variant bg-surface-container text-on-surface-variant hover:border-outline hover:text-on-surface",
-              )}
+              className={cn(pill(cat === c.value), "animate-rise")}
+              style={{ animationDelay: `${100 + i * 45}ms` }}
             >
+              {cat === c.value && <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />}
               {c.label}
             </button>
           ))}

@@ -4,6 +4,7 @@ import { products } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Step3Form } from "./Step3Form";
 import { StepIndicator } from "../_components/StepIndicator";
+import { PageHero } from "@/components/public/PageHero";
 import { WizardEstimateChip } from "../_components/wizard-estimate";
 import { getPublicEstimate, resolveWizardSizeQuantities } from "@/lib/public/estimate";
 import {
@@ -55,14 +56,23 @@ export default async function PresupuestoStep3({
   const estimate = await getPublicEstimate({ productId: sp.productId, sizeQuantities: quantities });
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      <StepIndicator current={3} />
-      <h1 className="mb-2 mt-6 text-balance text-center text-xl font-bold tracking-tight sm:text-2xl">Personalización</h1>
-      <p className="mb-4 text-center text-sm text-on-surface-variant">
-        {product.name} · {total} prendas
-      </p>
-      <WizardEstimateChip estimate={estimate} />
-      <Step3Form productName={product.name} sizes={sizes} total={total} noSize={sizes.length === 0} />
-    </div>
+    <>
+      <PageHero
+        crumb="Presupuesto"
+        eyebrow="Paso 3 de 5 · Personalización"
+        title={
+          <>
+            Nombre y número <span className="text-accent">por prenda.</span>
+          </>
+        }
+        lead={`${product.name} · ${total} ${total === 1 ? "prenda" : "prendas"} — completá solo lo que necesites, todo es opcional.`}
+      >
+        <StepIndicator current={3} />
+        <WizardEstimateChip estimate={estimate} />
+      </PageHero>
+      <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
+        <Step3Form productName={product.name} sizes={sizes} total={total} noSize={sizes.length === 0} />
+      </div>
+    </>
   );
 }

@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
-import { BadgeCheck, Check, ClipboardCheck, PackageCheck, Scissors, Send } from "lucide-react";
+import { BadgeCheck, Check, ClipboardCheck, PackageCheck, Scissors, Send, TimerOff } from "lucide-react";
 import { getBusinessInfo } from "@/lib/business";
 import { checkPublicGetRateLimit } from "@/lib/infra/public-rate-limit";
 import { formatARS } from "@/lib/public/format";
 import { loadPublicTracking, type PublicTrackingLine } from "@/lib/public/tracking";
 import { WhatsAppCta } from "@/components/WhatsAppCta";
+import { PageHero } from "@/components/public/PageHero";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Seguimiento · AH Sports" };
 
@@ -42,7 +44,7 @@ function SizeChips({ line }: { line: PublicTrackingLine }) {
   return (
     <span className="flex flex-wrap gap-1.5">
       {[...bySize.entries()].map(([label, count]) => (
-        <span key={label} className="rounded-full bg-surface-container-high px-2.5 py-0.5 text-xs text-on-surface-variant">
+        <span key={label} className="rounded-full bg-navy-100 px-2.5 py-0.5 text-xs font-semibold text-navy-700">
           {label} ×{count}
         </span>
       ))}
@@ -55,7 +57,7 @@ function PersonalizedItems({ line }: { line: PublicTrackingLine }) {
   const personalized = line.items.filter((i) => i.individualName || i.individualNumber);
   if (personalized.length === 0) return null;
   return (
-    <ul className="mt-1 flex flex-col gap-0.5">
+    <ul className="mt-1.5 flex flex-col gap-0.5">
       {personalized.slice(0, 30).map((item) => (
         <li key={item.id} className="text-xs text-on-surface-variant">
           {[item.sizeLabel, item.individualName, item.individualNumber && `#${item.individualNumber}`]
@@ -83,9 +85,12 @@ export default async function SeguimientoPage({ params }: { params: Promise<{ to
   });
   if (!rate.success) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-4 py-16 text-center">
-        <h1 className="text-xl font-semibold">Demasiadas solicitudes</h1>
-        <p className="mt-2 text-sm text-on-surface-variant">Probá de nuevo en un minuto.</p>
+      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-4 px-4 py-24 text-center">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-navy-100 text-navy-700">
+          <TimerOff className="h-5 w-5" strokeWidth={1.8} aria-hidden />
+        </span>
+        <h1 className="font-display text-2xl font-extrabold tracking-tight">Demasiadas solicitudes</h1>
+        <p className="text-sm text-on-surface-variant">Probá de nuevo en un minuto.</p>
       </div>
     );
   }
@@ -103,6 +108,7 @@ export default async function SeguimientoPage({ params }: { params: Promise<{ to
   else if (order.status === "entregado") stage = 4;
 
   const cancelled = order.status === "cancelado";
+  const delivered = order.status === "entregado";
   const business = await getBusinessInfo();
 
   // Precios: el snapshot de la cotización es la fuente autorizada; si aún no
@@ -118,170 +124,194 @@ export default async function SeguimientoPage({ params }: { params: Promise<{ to
       : null;
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
-      <h1 className="mb-2 text-balance text-xl font-bold tracking-tight sm:text-2xl">Seguimiento de pedido</h1>
-      <p className="mb-6 text-sm text-on-surface-variant">Pedido #{order.number}</p>
+    <>
+      <PageHero
+        crumb="Seguimiento"
+        eyebrow="Seguimiento online"
+        title={
+          <>
+            Pedido <span className="text-accent">#{order.number}</span>
+          </>
+        }
+        lead={`Solicitado el ${new Date(order.createdAt).toLocaleDateString("es-AR")} — acá ves cada etapa de tu pedido en tiempo real.`}
+      >
+        <div className="mt-6 flex flex-wrap items-center gap-3 animate-fade-up" style={{ animationDelay: "140ms" }}>
+          <span
+            className={cn(
+              "label-caps inline-flex items-center gap-2 rounded-full border px-4 py-2",
+              cancelled
+                ? "border-status-danger/50 bg-status-danger/15 text-status-danger"
+                : delivered
+                  ? "border-status-success/50 bg-status-success/15 text-status-success"
+                  : "border-accent/50 bg-accent/15 text-accent",
+            )}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+            {STATUS_LABEL[order.status] ?? order.status}
+          </span>
+          {order.status === "bloqueado_pago" && (
+            <span className="inline-flex items-center rounded-full border border-status-warning/50 bg-status-warning/15 px-4 py-2 text-xs font-medium text-status-warning">
+              Falta el pago de la seña para iniciar la producción
+            </span>
+          )}
+        </div>
 
-      {/* Estado actual */}
-      <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container p-4 sm:p-5 animate-rise">
-        <span
-          className={`inline-block rounded-full px-3 py-1 text-sm font-semibold ${
-            cancelled
-              ? "bg-status-danger/15 text-status-danger"
-              : order.status === "entregado"
-                ? "bg-status-success/15 text-status-success"
-                : "bg-primary/20 px-3 py-1 text-primary"
-          }`}
-        >
-          {STATUS_LABEL[order.status] ?? order.status}
-        </span>
-        <p className="mt-2 text-sm text-on-surface-variant">
-          Solicitado el {new Date(order.createdAt).toLocaleDateString("es-AR")}
-        </p>
-        {order.status === "bloqueado_pago" && (
-          <p className="mt-3 rounded-lg bg-status-warning/15 px-3 py-2 text-sm text-status-warning">⚠️ Falta el pago de la seña para iniciar la producción.</p>
-        )}
-      </div>
-
-      {/* Timeline */}
-      {!cancelled && (
-        <div className="relative mb-6">
-          <div aria-hidden className="absolute inset-x-[10%] top-[17px] h-0.5 overflow-hidden rounded-full bg-surface-container-highest">
-            <div
-              className="h-full bg-primary transition-all duration-700"
-              style={{ width: `${(stage / (TIMELINE.length - 1)) * 100}%` }}
-            />
+        {/* Timeline de etapas — sobre navy, fill ámbar */}
+        {!cancelled && (
+          <div className="relative mt-8 animate-fade-up" style={{ animationDelay: "220ms" }}>
+            <div aria-hidden className="absolute inset-x-[10%] top-[18px] h-0.5 rounded-full bg-navy-line">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-700 ease-out"
+                style={{ width: `${(stage / (TIMELINE.length - 1)) * 100}%` }}
+              />
+            </div>
+            <ol className="relative grid grid-cols-5 gap-1">
+              {TIMELINE.map((step, i) => {
+                const Icon = step.icon;
+                const done = i < stage;
+                const active = i === stage;
+                return (
+                  <li key={step.label} className="flex min-w-0 flex-col items-center gap-2">
+                    <span
+                      className={cn(
+                        "flex h-9 w-9 items-center justify-center rounded-full border transition-all duration-300",
+                        done && "border-accent bg-accent text-on-accent",
+                        active && "scale-110 border-accent bg-navy-900 text-accent ring-4 ring-accent/20",
+                        !done && !active && "border-navy-line bg-navy-900/80 text-on-navy-variant",
+                      )}
+                      aria-current={active ? "step" : undefined}
+                    >
+                      {done ? <Check className="h-4 w-4" aria-hidden /> : <Icon className="h-4 w-4" aria-hidden />}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-center text-[10px] leading-tight sm:text-[11px]",
+                        active ? "font-semibold text-accent" : i <= stage ? "text-on-navy-variant" : "text-on-navy-variant/60",
+                      )}
+                    >
+                      {step.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
-          <ol className="relative grid grid-cols-5 gap-1">
-            {TIMELINE.map((step, i) => {
-              const Icon = step.icon;
-              const done = i < stage;
-              const active = i === stage;
+        )}
+      </PageHero>
+
+      <div className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-6 sm:py-12">
+        {/* Detalle del pedido + precios */}
+        <section className="animate-rise rounded-3xl border border-outline-variant bg-surface-container p-5 sm:p-7" aria-label="Detalle del pedido">
+          <h2 className="label-caps flex items-center gap-2 text-on-surface-variant">
+            <span className="h-3.5 w-1 rounded-full bg-accent" aria-hidden />
+            Tu pedido
+          </h2>
+          <ul className="mt-4 flex flex-col gap-4">
+            {(hasSnapshot ? snapshotLines : lines).map((line) => {
+              if (hasSnapshot) {
+                const l = line as NonNullable<typeof snapshot>["lines"][number];
+                return (
+                  <li key={l.orderLineId ?? l.productId} className="border-b border-outline-variant/60 pb-4 last:border-0 last:pb-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="text-sm font-semibold">
+                        {l.productName} <span className="text-on-surface-variant">×{l.quantity}</span>
+                      </p>
+                      <p className="font-display text-base font-bold text-primary">{formatARS(l.subtotal)}</p>
+                    </div>
+                    {l.sizeBreakdown && l.sizeBreakdown.length > 0 && (
+                      <ul className="mt-1.5 flex flex-col gap-1">
+                        {l.sizeBreakdown.map((s, i) => (
+                          <li key={s.sizeId ?? i} className="flex items-baseline justify-between gap-3 text-xs text-on-surface-variant">
+                            <span>{s.sizeLabel ?? "Único"} · {s.quantity} × {formatARS(s.unitPrice)}</span>
+                            <span>{formatARS(s.subtotal)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {!l.sizeBreakdown?.length && (
+                      <p className="mt-1.5 text-xs text-on-surface-variant">{formatARS(l.unitPrice)} c/u</p>
+                    )}
+                  </li>
+                );
+              }
+              const l = line as PublicTrackingLine;
               return (
-                <li key={step.label} className="flex min-w-0 flex-col items-center gap-1.5 text-center animate-rise" style={{ animationDelay: `${i * 60}ms` }}>
-                  <span
-                    className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full border transition-all duration-300 ${
-                      done
-                        ? "border-primary bg-primary text-on-primary"
-                        : active
-                          ? "border-primary bg-surface-container text-primary ring-4 ring-primary/15 scale-110"
-                          : "border-outline-variant bg-surface-container text-on-surface-variant"
-                    }`}
-                    aria-current={active ? "step" : undefined}
-                  >
-                    {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
-                  </span>
-                  <span className={`text-[10px] leading-tight ${i <= stage ? "font-medium text-primary" : "text-on-surface-variant"}`}>{step.label}</span>
+                <li key={l.id} className="border-b border-outline-variant/60 pb-4 last:border-0 last:pb-0">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-sm font-semibold">
+                      {l.productName ?? "Producto"} <span className="text-on-surface-variant">×{l.quantity}</span>
+                    </p>
+                    {linesPriced && <p className="font-display text-base font-bold text-primary">{formatARS(l.subtotal)}</p>}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <SizeChips line={l} />
+                    {linesPriced && <span className="text-xs text-on-surface-variant">{formatARS(l.unitPrice)} c/u</span>}
+                  </div>
+                  <PersonalizedItems line={l} />
                 </li>
               );
             })}
-          </ol>
-        </div>
-      )}
+          </ul>
 
-      {/* Detalle del pedido + precios */}
-      <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container p-4 sm:p-5 animate-rise" style={{ animationDelay: "120ms" }}>
-        <h2 className="label-caps mb-3 text-on-surface-variant">Tu pedido</h2>
-        <ul className="flex flex-col gap-3">
-          {(hasSnapshot ? snapshotLines : lines).map((line) => {
-            if (hasSnapshot) {
-              const l = line as NonNullable<typeof snapshot>["lines"][number];
-              return (
-                <li key={l.orderLineId ?? l.productId} className="border-b border-outline-variant/60 pb-3 last:border-0 last:pb-0">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-sm font-medium">
-                      {l.productName} <span className="text-on-surface-variant">×{l.quantity}</span>
-                    </p>
-                    <p className="text-sm font-semibold">{formatARS(l.subtotal)}</p>
-                  </div>
-                  {l.sizeBreakdown && l.sizeBreakdown.length > 0 && (
-                    <ul className="mt-1 flex flex-col gap-0.5">
-                      {l.sizeBreakdown.map((s, i) => (
-                        <li key={s.sizeId ?? i} className="flex items-baseline justify-between gap-3 text-xs text-on-surface-variant">
-                          <span>{s.sizeLabel ?? "Único"} · {s.quantity} × {formatARS(s.unitPrice)}</span>
-                          <span>{formatARS(s.subtotal)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {!l.sizeBreakdown?.length && (
-                    <p className="mt-1 text-xs text-on-surface-variant">{formatARS(l.unitPrice)} c/u</p>
-                  )}
-                </li>
-              );
-            }
-            const l = line as PublicTrackingLine;
-            return (
-              <li key={l.id} className="border-b border-outline-variant/60 pb-3 last:border-0 last:pb-0">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="text-sm font-medium">
-                    {l.productName ?? "Producto"} <span className="text-on-surface-variant">×{l.quantity}</span>
-                  </p>
-                  {linesPriced && <p className="text-sm font-semibold">{formatARS(l.subtotal)}</p>}
+          {hasSnapshot && snapshot ? (
+            <>
+              <div className="mt-4 flex items-baseline justify-between border-t border-outline-variant pt-4">
+                <span className="label-caps text-on-surface-variant">Total</span>
+                <span className="font-display text-2xl font-black tracking-tight text-primary">{formatARS(snapshot.totals.price)}</span>
+              </div>
+              {snapshotAdvance !== null && snapshot.rule.minAdvancePercent > 0 && (
+                <div className="mt-1.5 flex items-baseline justify-between text-sm">
+                  <span className="text-on-surface-variant">Seña ({snapshot.rule.minAdvancePercent}%)</span>
+                  <span className="font-semibold">{formatARS(snapshotAdvance)}</span>
                 </div>
-                <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <SizeChips line={l} />
-                  {linesPriced && <span className="text-xs text-on-surface-variant">{formatARS(l.unitPrice)} c/u</span>}
-                </div>
-                <PersonalizedItems line={l} />
-              </li>
-            );
-          })}
-        </ul>
-
-        {hasSnapshot && snapshot ? (
-          <>
-            <div className="mt-3 flex items-baseline justify-between border-t border-outline-variant pt-3">
-              <span className="text-sm font-semibold">Total</span>
-              <span className="text-xl font-bold">{formatARS(snapshot.totals.price)}</span>
+              )}
+            </>
+          ) : linesPriced ? (
+            <div className="mt-4 flex items-baseline justify-between border-t border-outline-variant pt-4">
+              <span className="label-caps text-on-surface-variant">Total</span>
+              <span className="font-display text-2xl font-black tracking-tight text-primary">{formatARS(order.totalQuoted)}</span>
             </div>
-            {snapshotAdvance !== null && snapshot.rule.minAdvancePercent > 0 && (
-              <div className="mt-1 flex items-baseline justify-between text-sm">
-                <span className="text-on-surface-variant">Seña ({snapshot.rule.minAdvancePercent}%)</span>
-                <span className="font-medium">{formatARS(snapshotAdvance)}</span>
-              </div>
-            )}
-          </>
-        ) : linesPriced ? (
-          <div className="mt-3 flex items-baseline justify-between border-t border-outline-variant pt-3">
-            <span className="text-sm font-semibold">Total</span>
-            <span className="text-xl font-bold">{formatARS(order.totalQuoted)}</span>
+          ) : (
+            <div className="mt-4 rounded-2xl border border-status-warning/40 bg-status-warning/10 px-4 py-3.5">
+              <p className="text-sm font-medium text-status-warning">
+                Precio a confirmar — te enviamos el presupuesto por mail o WhatsApp.
+              </p>
+            </div>
+          )}
+        </section>
+
+        {/* Archivos aprobados */}
+        {approvedAttachments.length > 0 && (
+          <div className="mt-8 animate-rise" style={{ animationDelay: "120ms" }}>
+            <h2 className="label-caps mb-4 flex items-center gap-2 text-on-surface-variant">
+              <span className="h-3.5 w-1 rounded-full bg-accent" aria-hidden />
+              Archivos aprobados
+            </h2>
+            <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3">
+              {approvedAttachments.map((a) => (
+                <div key={a.id} className="hover-lift rounded-2xl border border-outline-variant bg-surface-container p-2.5">
+                  {a.mimeType?.startsWith("image/") ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={a.url} alt={a.name} className="h-24 w-full rounded-lg bg-white object-contain" />
+                  ) : (
+                    <div className="flex h-24 items-center justify-center rounded-lg bg-surface-container-high text-xs text-on-surface-variant">{a.name}</div>
+                  )}
+                  <p className="mt-1.5 truncate text-center text-xs">{a.name}</p>
+                </div>
+              ))}
+            </div>
           </div>
-        ) : (
-          <p className="mt-3 border-t border-outline-variant pt-3 text-sm text-on-surface-variant">
-            Precio a confirmar — te enviamos el presupuesto por mail o WhatsApp.
-          </p>
         )}
-      </div>
 
-      {/* Archivos aprobados */}
-      {approvedAttachments.length > 0 && (
-        <div className="mb-6 animate-rise" style={{ animationDelay: "160ms" }}>
-          <h2 className="mb-2 text-sm font-semibold">Archivos aprobados</h2>
-          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3">
-            {approvedAttachments.map((a) => (
-              <div key={a.id} className="rounded-xl border border-outline-variant bg-surface-container p-2">
-                {a.mimeType?.startsWith("image/") ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={a.url} alt={a.name} className="h-24 w-full rounded bg-white object-contain" />
-                ) : (
-                  <div className="flex h-24 items-center justify-center text-xs text-on-surface-variant">{a.name}</div>
-                )}
-                <p className="mt-1 truncate text-center text-xs">{a.name}</p>
-              </div>
-            ))}
-          </div>
+        {/* C-07 — WhatsApp handoff CTA (hidden when no public phone configured) */}
+        <div className="mt-8 animate-rise" style={{ animationDelay: "180ms" }}>
+          <WhatsAppCta
+            phone={business.whatsappPhone}
+            message={`Hola! Quiero consultar por mi pedido #${order.number}.`}
+            className="w-full"
+          />
         </div>
-      )}
-
-      {/* C-07 — WhatsApp handoff CTA (hidden when no public phone configured) */}
-      <div className="animate-rise" style={{ animationDelay: "200ms" }}>
-        <WhatsAppCta
-          phone={business.whatsappPhone}
-          message={`Hola! Quiero consultar por mi pedido #${order.number}.`}
-          className="w-full"
-        />
       </div>
-    </div>
+    </>
   );
 }
