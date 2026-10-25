@@ -12,18 +12,39 @@ type State = { crashed: boolean; retryNonce: number; detail: string | null };
  * degrades to this static fallback instead of white-paging the whole route.
  */
 export class ViewerErrorBoundary extends Component<Props, State> {
+  private autoRetries = 0;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+
   state: State = { crashed: false, retryNonce: 0, detail: null };
 
-  static getDerivedStateFromError(error: unknown): State {
+  static getDerivedStateFromError(error: unknown): Partial<State> {
     const detail =
       error instanceof Error
         ? `${error.name}: ${error.message}`
         : String(error ?? "unknown");
-    return { crashed: true, retryNonce: 0, detail };
+    return { crashed: true, detail };
   }
 
   componentDidCatch(error: unknown) {
     console.error("[garment-viewer] render crash", error);
+    // iOS Safari hands out WebGL contexts that are already lost under GPU
+    // pressure (crash inside three's WebGLCapabilities). The loss is often
+    // transient — other apps' contexts get evicted — so retry silently a
+    // couple of times before showing the fallback panel.
+    if (this.autoRetries < 2) {
+      this.autoRetries += 1;
+      this.retryTimer = setTimeout(() => {
+        this.setState((state) => ({
+          crashed: false,
+          retryNonce: state.retryNonce + 1,
+          detail: null,
+        }));
+      }, 700 * this.autoRetries);
+    }
+  }
+
+  componentWillUnmount() {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
   }
 
   render() {
@@ -39,7 +60,10 @@ export class ViewerErrorBoundary extends Component<Props, State> {
           </p>
           <button
             type="button"
-            onClick={() => this.setState((state) => ({ crashed: false, retryNonce: state.retryNonce + 1 }))}
+            onClick={() => {
+              this.autoRetries = 0;
+              this.setState((state) => ({ crashed: false, retryNonce: state.retryNonce + 1 }));
+            }}
             className="mt-1 inline-flex min-h-10 items-center justify-center rounded-md border border-accent/50 bg-accent px-4 text-xs font-bold text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
           >
             Reintentar vista 3D

@@ -5262,5 +5262,13 @@
   "src_configurator_glb_models": "src/configurator/glb-models.ts — Real-garment GLB pipeline.",
   "src_configurator_glb_models_family_envelopes": "FAMILY_ENVELOPES — constant declared in src/configurator/glb-models.ts: Target envelope per family, measured from the procedural geometry so a normalized GLB lands where zone aims and the camera already expect it.",
   "src_configurator_glb_models_test": "src/configurator/glb-models.test.ts — GLB garment pipeline: candidate resolution per product shape, envelope normalization into garment units, material-slot classification, and the backface cull tha.",
-  "src_configurator_glb_models_test_cfg": "cfg — constant declared in src/configurator/glb-models.test.ts (line 29)."
+  "src_configurator_glb_models_test_cfg": "cfg — constant declared in src/configurator/glb-models.test.ts (line 29).",
+  "src_configurator_viewer_viewererrorboundary_viewererrorboundary_componentwillunmount": ".componentWillUnmount() — symbol declared in src/configurator/viewer/ViewerErrorBoundary.tsx (line 46).",
+  "public_models_garments_attribution": "Markdown document public/models/garments/ATTRIBUTION.md: \"ATTRIBUTION — GLB candidates\".",
+  "public_models_garments_attribution_attribution_glb_candidates": "Section \"ATTRIBUTION — GLB candidates\" in public/models/garments/ATTRIBUTION.md.",
+  "public_models_garments_attribution_flagged_for_manual_download_sketchfab_all_verified_downloadable_cc_by_api_sketchfab_com_v3_models_uid_download_401_anonymous": "Section \"Flagged for MANUAL download (Sketchfab, all verified downloadable + CC-BY; `api.sketchfab.com/v3/models/<uid>/download` → 401 anonymous)\" in public/models/garments/ATTRIBUTION.md.",
+  "public_models_garments_attribution_new_this_round_makehuman_community_asset_packs": "Section \"New this round — MakeHuman Community asset packs\" in public/models/garments/ATTRIBUTION.md.",
+  "public_models_garments_attribution_new_this_round_poly_pizza_additions": "Section \"New this round — Poly.pizza additions\" in public/models/garments/ATTRIBUTION.md.",
+  "public_models_garments_attribution_new_this_round_sena_kit_folder_repack": "Section \"New this round — SENA kit (folder + repack)\" in public/models/garments/ATTRIBUTION.md.",
+  "public_models_garments_attribution_prior_round_files_attribution_recovered": "Section \"Prior round files — attribution recovered\" in public/models/garments/ATTRIBUTION.md."
 }

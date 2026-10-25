@@ -54,11 +54,17 @@ function detectWebGLSupport(): boolean {
     // devices on the honest fallback panel instead of a crash.
     const context = window.WebGLRenderingContext && canvas.getContext("webgl2");
     if (!context) return false;
+    // iOS Safari may hand out a context that is already lost (GPU budget
+    // pressure). A lost context makes getShaderPrecisionFormat return null,
+    // which is exactly where three's WebGLCapabilities crashed in the field.
+    const usable =
+      !context.isContextLost() &&
+      context.getShaderPrecisionFormat(context.VERTEX_SHADER, context.HIGH_FLOAT) !== null;
     // Safari/iOS enforces a much tighter WebGL-context budget than desktop
     // browsers. The capability probe must release its throw-away context or
     // it can starve the real viewer that mounts immediately afterwards.
     context.getExtension("WEBGL_lose_context")?.loseContext();
-    return true;
+    return usable;
   } catch {
     return false;
   }
@@ -81,7 +87,12 @@ export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>
     const activeView = view ?? internalView;
     const captureRef = useRef<CaptureImageFn | null>(null);
 
+    const [lowPower, setLowPower] = useState(false);
+
     useEffect(() => {
+      // Coarse-pointer devices share the GPU budget across apps and shed
+      // contexts aggressively; the renderer asks for a cheaper config there.
+      setLowPower(window.matchMedia?.("(pointer: coarse)").matches ?? false);
       setSupport(detectWebGLSupport() ? "supported" : "unsupported");
     }, []);
 
@@ -128,8 +139,8 @@ export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>
           <Canvas
             key={viewerNonce}
             frameloop="demand"
-            dpr={[1, 1.5]}
-            shadows="basic"
+            dpr={lowPower ? [1, 1.25] : [1, 1.5]}
+            shadows={lowPower ? false : "basic"}
             fallback={
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
                 <Shirt className="h-10 w-10 text-on-navy-variant" aria-hidden />
@@ -142,10 +153,13 @@ export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>
               </div>
             }
             gl={{
-              antialias: true,
+              // Antialias on a high-DPR phone doubles the framebuffer cost and
+              // is a documented trigger for iOS shedding fresh contexts.
+              antialias: !lowPower,
               preserveDrawingBuffer: false,
-              powerPreference: "default",
+              powerPreference: lowPower ? "low-power" : "default",
               alpha: false,
+              failIfMajorPerformanceCaveat: false,
             }}
             camera={{ fov: 32, near: 0.1, far: 20, position: initialPose }}
           >
