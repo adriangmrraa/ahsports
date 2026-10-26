@@ -1,7 +1,7 @@
 # Graph Report - App de gestion  (2026-10-25)
 
 ## Corpus Check
-- 545 files · ~444,365 words
+- 545 files · ~444,629 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `10c72de8`
+- Built from commit: `b8dc0d4a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -22,13 +22,13 @@
 - GarmentConfigurator.tsx
 - db/schema.ts
 - /graphify
-- requireUser
+- client.ts
 - utils.ts
 - $graphify
 - compilerOptions
 - tools-clients.ts
 - zernio.ts
-- client.ts
+- validators.ts
 - channels/errors.ts
 - GlbAssetBoundary
 - pricing.ts
@@ -64,7 +64,7 @@
 - graphify-sync.mjs
 - 3. Parity matrix (capability by capability)
 - runner.ts
-- lib/auth.ts
+- login/route.ts
 - ✅ AH Sports OS — BUILD_PROGRESS (Checklist de Construcción)
 - ⏳ F5 — Caja + Pagos + Configuración + Render deploy + Cierre
 - 00-README.md
@@ -96,7 +96,7 @@
 - eslint.config.mjs
 - opencode.json
 - package.json
-- orders.ts
+- orders
 - next.config.ts
 - site.ts
 - NEON-MIGRATION-BASELINE.md
@@ -112,10 +112,10 @@
 - login/page.tsx
 - tools-cash.ts
 - human-handoff.ts
-- [token]/page.tsx
+- (public)/catalogo/page.tsx
 - AH Sports — AI Agent Readiness Inventory
 - sql
-- business.ts
+- [token]/page.tsx
 - configurator/registry.ts
 - import.ts
 - inbound-pipeline.ts
@@ -131,7 +131,7 @@
 - REVIEW R5 — Domain pack (W9): cart · cash · broadcast · promos · public feeds
 - reconcile.ts
 - configuracion/page.tsx
-- sizes/route.ts
+- tools-memory.ts
 - jersey-geometry.ts
 - tools-products.ts
 - storage.ts
@@ -169,7 +169,7 @@
 - zernio-connect.ts
 - tools-materials.ts
 - FakeDb
-- 5/page.tsx
+- products
 - Button.tsx
 - downloader.ts
 - 0022_cash_sessions.sql
@@ -242,7 +242,7 @@ Nodes (29): cancelPayment(), notifyStatusQuietly(), registerPayment(), cancel(),
 
 ### Community 1 - "tools-recipes.ts"
 Cohesion: 0.06
-Nodes (48): resolveMaterial(), resolveSize(), addItemPreview(), addRecipeItemInner, addRecipeItemInput, addRecipeItemTool, bomItemInput, currentRecipeCost() (+40 more)
+Nodes (47): resolveSize(), addItemPreview(), addRecipeItemInner, addRecipeItemInput, addRecipeItemTool, bomItemInput, currentRecipeCost(), deleteBomRecipeInner (+39 more)
 
 ### Community 2 - "whatsapp/webhook/[token]/route.ts"
 Cohesion: 0.11
@@ -258,15 +258,15 @@ Nodes (20): GarmentColors, GarmentComponentOverride, AttachmentPanel(), ControlS
 
 ### Community 5 - "db/schema.ts"
 Cohesion: 0.03
-Nodes (75): PATCH(), POST(), agentConfigRelations, AgentEnabledTools, agentInboundJobsRelations, agentKind, agentMemoryScope, AgentRawPayload (+67 more)
+Nodes (73): agentConfigRelations, AgentEnabledTools, agentInboundJobsRelations, agentKind, agentMemoryScope, AgentRawPayload, agentSessionEventsRelations, agentSessionStatesRelations (+65 more)
 
 ### Community 6 - "/graphify"
 Cohesion: 0.06
 Nodes (34): Configured Project Profiles, For --cluster-only, For git commit hook, For /graphify add, For /graphify explain, For /graphify path, For /graphify query, For native CLAUDE.md integration (+26 more)
 
-### Community 7 - "requireUser"
-Cohesion: 0.04
-Nodes (79): listOrgLibrary(), ContactosPage(), EditarPromoPage(), NuevaPromoPage(), DELETE(), GET(), POST(), DELETE() (+71 more)
+### Community 7 - "client.ts"
+Cohesion: 0.05
+Nodes (69): createOrder(), ContactosPage(), submit(), EditarPromoPage(), NuevaPromoPage(), DELETE(), DELETE(), GET() (+61 more)
 
 ### Community 8 - "utils.ts"
 Cohesion: 0.09
@@ -288,17 +288,17 @@ Nodes (22): buildReconcileTools(), buildReportCandidateTool(), CANDIDATE_KEY_PRE
 Cohesion: 0.16
 Nodes (20): API_SENT_VIA, asString(), ATTACHMENT_TYPE_MAP, buildCreateBody(), classifyEvent(), commentSender(), createTemplateParams(), echoOrigin() (+12 more)
 
-### Community 13 - "client.ts"
-Cohesion: 0.12
-Nodes (25): Fail, metadata, PedidoDisenoPage(), revisionSourceLabel, stageLabel, POST(), PRODUCTIVE, STAGE_TO_EVENT (+17 more)
+### Community 13 - "validators.ts"
+Cohesion: 0.06
+Nodes (34): POST(), PRODUCTIVE, STAGE_TO_EVENT, emptyMeasurementSchema, POST(), POST(), productionEvents, defaultMeasurementSchema() (+26 more)
 
 ### Community 14 - "channels/errors.ts"
 Cohesion: 0.27
 Nodes (11): classifyError(), ErrorClass, errorCode(), ErrorLike, errorMessage(), isRetryableDbError(), readError(), RETRYABLE_CODES (+3 more)
 
 ### Community 16 - "pricing.ts"
-Cohesion: 0.09
-Nodes (29): LineOptionsSnapshot, MaterialConsumptionSnapshot, consumptionUnitCost(), MaterialSummary, quoteBundleLine(), QuoteLineInput, quoteOrder(), round2() (+21 more)
+Cohesion: 0.07
+Nodes (34): confirmQuote(), loadQuotableLines(), reQuoteOrder(), submit(), submit(), LineOptionsSnapshot, MaterialConsumptionSnapshot, consumptionUnitCost() (+26 more)
 
 ### Community 17 - "dependencies"
 Cohesion: 0.09
@@ -366,7 +366,7 @@ Nodes (16): 07 · DEPLOYMENT — Render + Neon, 10. Troubleshooting, 11. CI/CD, 
 
 ### Community 33 - "tools-orders.ts"
 Cohesion: 0.04
-Nodes (52): getOrderFinancials(), sumActivePaymentsCents(), toCents(), paymentsSummary(), pendingBalances(), AnyOrderStatus, applyOrderStatus(), cancelOrderInner (+44 more)
+Nodes (45): AnyOrderStatus, applyOrderStatus(), cancelOrderInner, cancelOrderInput, cancelOrderTool, cancelPaymentInner, cancelPaymentInput, cancelPaymentTool (+37 more)
 
 ### Community 34 - "Selected skills and compact rules"
 Cohesion: 0.02
@@ -428,9 +428,9 @@ Nodes (29): 10. Appendix — parity scorecard, 1. Method & evidence, 2. Systems 
 Cohesion: 0.05
 Nodes (51): dynamic, MODE_DEFAULTS, POST(), ReconcileMode, resolveLimit(), runtime, neutralizeUntrustedSentinel(), AnySchema (+43 more)
 
-### Community 49 - "lib/auth.ts"
-Cohesion: 0.13
-Nodes (16): POST(), POST(), sessions, createSession(), destroySession(), sign(), checkLoginThrottle(), createMemoryThrottle() (+8 more)
+### Community 49 - "login/route.ts"
+Cohesion: 0.17
+Nodes (13): POST(), createSession(), sign(), checkLoginThrottle(), createMemoryThrottle(), checkWindow(), evictExpired(), DUMMY_PASSWORD_HASH (+5 more)
 
 ### Community 50 - "✅ AH Sports OS — BUILD_PROGRESS (Checklist de Construcción)"
 Cohesion: 0.22
@@ -529,8 +529,8 @@ Cohesion: 0.21
 Nodes (14): answers, describe(), detectKind(), docAbove(), fileCache, firstSentence(), graph, headerDoc() (+6 more)
 
 ### Community 74 - "confirmations.ts"
-Cohesion: 0.06
-Nodes (38): withPreviewConfirmation(), cancelPendingActionTool, cancelPendingInput, CONFIRMABLE_TOOLS, confirmActionInput, confirmActionTool, ConfirmationRequest, Describer (+30 more)
+Cohesion: 0.08
+Nodes (29): auditEvents, AuditPayload, auditOperatorAction(), auditSafeArgs(), extractEntityRef(), OperatorAuditInput, SAFE_ARG_KEYS, withPreviewConfirmation() (+21 more)
 
 ### Community 75 - "renderers.tsx"
 Cohesion: 0.09
@@ -556,9 +556,9 @@ Nodes (3): plugin, $schema, .opencode/plugins/graphify.js
 Cohesion: 0.50
 Nodes (3): name, private, version
 
-### Community 81 - "orders.ts"
-Cohesion: 0.10
-Nodes (31): confirmQuote(), createOrder(), createOrderLine(), LINE_EDITABLE_STATUS, loadQuotableLines(), QuoteActionError, REQUOTE_BLOCKED_STATUS, reQuoteOrder() (+23 more)
+### Community 81 - "orders"
+Cohesion: 0.08
+Nodes (38): Fail, listOrgLibrary(), createOrderLine(), LINE_EDITABLE_STATUS, QuoteActionError, REQUOTE_BLOCKED_STATUS, stageLabel, GET() (+30 more)
 
 ### Community 83 - "site.ts"
 Cohesion: 0.14
@@ -586,15 +586,15 @@ Nodes (4): LoginForm(), LoginPage(), navigation, PublicShell()
 
 ### Community 103 - "tools-cash.ts"
 Cohesion: 0.05
-Nodes (50): auditEvents, AuditPayload, cashMovements, cashSessions, addMovement(), CashSession, CashSnapshot, CloseResult (+42 more)
+Nodes (50): cashMovements, cashSessions, addMovement(), CashSession, CashSnapshot, CloseResult, closeSession(), ensureOpenSession() (+42 more)
 
 ### Community 104 - "human-handoff.ts"
 Cohesion: 0.10
 Nodes (18): idempotencyKeys, ClaimOutcome, DrizzleHandoffEffectRepository, HANDOFF_EFFECTS, HandoffClaimInput, handoffClaimKey(), HandoffClaimResult, HandoffEffectClaimant (+10 more)
 
-### Community 105 - "[token]/page.tsx"
-Cohesion: 0.09
-Nodes (23): CatalogoPage(), dynamic, metadata, normalizeSearch(), SUBCATEGORY_ORDER, deltaLabel(), Step2Form(), goNext() (+15 more)
+### Community 105 - "(public)/catalogo/page.tsx"
+Cohesion: 0.12
+Nodes (17): CatalogoPage(), dynamic, metadata, normalizeSearch(), SUBCATEGORY_ORDER, deltaLabel(), Step2Form(), goNext() (+9 more)
 
 ### Community 106 - "AH Sports — AI Agent Readiness Inventory"
 Cohesion: 0.07
@@ -604,9 +604,9 @@ Nodes (27): 0. Executive summary, 10. Test / build state, 11. Security requireme
 Cohesion: 0.18
 Nodes (15): AnalyticsPage(), percent(), sql, leads, CampaignPerformance, ChannelBreakdown, DailyLeads, FunnelStats (+7 more)
 
-### Community 108 - "business.ts"
-Cohesion: 0.21
-Nodes (11): GET(), asString(), BUSINESS_SETTING_KEYS, BusinessInfo, FALLBACK, getBusinessInfo(), DaySlot, formatBusinessHours() (+3 more)
+### Community 108 - "[token]/page.tsx"
+Cohesion: 0.12
+Nodes (17): GET(), metadata, SeguimientoPage(), STATUS_LABEL, TIMELINE, asString(), BUSINESS_SETTING_KEYS, BusinessInfo (+9 more)
 
 ### Community 109 - "configurator/registry.ts"
 Cohesion: 0.09
@@ -668,9 +668,9 @@ Nodes (24): AuditInput, AuditRecorder, AuditWriter, createAuditRecorder(), delet
 Cohesion: 0.16
 Nodes (14): BUSINESS_SETTING_KEYS, updateSetting(), updateSettingSchema, WORKSHOP_SETTING_KEYS, BusinessSettingsForm(), submit(), DEFAULT_SLOT, FIELDS (+6 more)
 
-### Community 124 - "sizes/route.ts"
-Cohesion: 0.47
-Nodes (5): emptyMeasurementSchema, POST(), defaultMeasurementSchema(), validateGarmentMeasurementKeys(), sizesBatchSchema
+### Community 124 - "tools-memory.ts"
+Cohesion: 0.12
+Nodes (16): withAuditLog(), CANDIDATE_STATUSES, forgetInput, forgetThisTool, getCandidatesInput, getReconcileCandidatesTool, idLike, memoryTools (+8 more)
 
 ### Community 125 - "jersey-geometry.ts"
 Cohesion: 0.13
@@ -754,7 +754,7 @@ Nodes (8): Comparación de variables de entorno, Comparación funcional (canales
 
 ### Community 144 - "tools-product-options.ts"
 Cohesion: 0.05
-Nodes (61): listProductOptions(), candidateNames(), FabricRow, idLike, NamedRow, nameOrId, PreviewOutcome, ProductRow (+53 more)
+Nodes (62): listProductOptions(), candidateNames(), FabricRow, idLike, NamedRow, nameOrId, PreviewOutcome, ProductRow (+54 more)
 
 ### Community 145 - "link-preview/route.ts"
 Cohesion: 0.31
@@ -819,9 +819,9 @@ Nodes (5): fake, {
   importOperatorOutbound,
 }, FakeDb, installFakeDb(), installModuleIntercepts()
 
-### Community 169 - "5/page.tsx"
-Cohesion: 0.12
-Nodes (30): PUT(), metadata, PresupuestoStep1(), metadata, PresupuestoStep2(), metadata, PresupuestoStep3(), metadata (+22 more)
+### Community 169 - "products"
+Cohesion: 0.13
+Nodes (30): metadata, PedidoDisenoPage(), revisionSourceLabel, metadata, PresupuestoStep1(), metadata, PresupuestoStep2(), metadata (+22 more)
 
 ### Community 170 - "Button.tsx"
 Cohesion: 0.04
@@ -943,8 +943,8 @@ Cohesion: 0.13
 Nodes (26): beginPublicUploadSession(), createPublicOrder(), createPublicOrderFromDraft(), PublicOrderDomainError, PublicOrderFailure, uploadAttachmentFromPublic(), WIZARD_RATE_LIMITED, wizardRateLimited() (+18 more)
 
 ### Community 223 - "tools-catalog.test.ts"
-Cohesion: 0.08
-Nodes (27): FichaTecnicaPage(), PATCH(), POST(), DELETE(), parseItem(), PATCH(), bomItems, bomRecipes (+19 more)
+Cohesion: 0.09
+Nodes (26): FichaTecnicaPage(), PATCH(), POST(), DELETE(), parseItem(), PATCH(), bomItems, bomRecipes (+18 more)
 
 ## Knowledge Gaps
 - **1776 isolated node(s):** `$schema`, `.opencode/plugins/graphify.js`, `HERE`, `REPO_ROOT`, `graph` (+1771 more)
@@ -954,17 +954,17 @@ Nodes (27): FichaTecnicaPage(), PATCH(), POST(), DELETE(), parseItem(), PATCH(),
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `db` connect `client.ts` to `attachments/route.ts`, `tools-recipes.ts`, `drafts.ts`, `db/schema.ts`, `inbound.ts`, `requireUser`, `utils.ts`, `channels/channel-events.ts`, `inbound-queue.ts`, `tools-clients.ts`, `tools-broadcast.ts`, `pricing.ts`, `tools-product-options.ts`, `order-context.ts`, `telegram.ts`, `agent-config-scope.ts`, `intake.ts`, `channel-accounts.ts`, `api/leads/route.ts`, `telegram/tools.ts`, `(public)/layout.tsx`, `tools-orders.ts`, `session-store.ts`, `zernio-connect.ts`, `productos/[id]/page.tsx`, `(admin)/layout.tsx`, `5/page.tsx`, `Button.tsx`, `tools-materials.ts`, `runner.ts`, `lib/auth.ts`, `ApplicationsManager.tsx`, `ingress.ts`, `messaging/accounts.ts`, `channels/accounts.ts`, `sales-tools.ts`, `requireAgentAdmin`, `confirmations.ts`, `sales-agent.ts`, `orders.ts`, `authorizeAgentApi`, `public-orders.ts`, `tools-catalog.test.ts`, `checkRateLimit`, `tools-cash.ts`, `human-handoff.ts`, `sql`, `business.ts`, `inbound-pipeline.ts`, `agent-config.ts`, `[conversationId]/route.ts`, `Card.tsx`, `reconcile.ts`, `configuracion/page.tsx`, `sizes/route.ts`, `tools-products.ts`?**
+- **Why does `db` connect `client.ts` to `attachments/route.ts`, `tools-recipes.ts`, `drafts.ts`, `db/schema.ts`, `inbound.ts`, `channels/channel-events.ts`, `utils.ts`, `inbound-queue.ts`, `tools-clients.ts`, `tools-broadcast.ts`, `validators.ts`, `pricing.ts`, `tools-product-options.ts`, `order-context.ts`, `telegram.ts`, `agent-config-scope.ts`, `intake.ts`, `channel-accounts.ts`, `api/leads/route.ts`, `telegram/tools.ts`, `(public)/layout.tsx`, `tools-orders.ts`, `session-store.ts`, `zernio-connect.ts`, `productos/[id]/page.tsx`, `(admin)/layout.tsx`, `products`, `Button.tsx`, `tools-materials.ts`, `runner.ts`, `login/route.ts`, `ApplicationsManager.tsx`, `ingress.ts`, `messaging/accounts.ts`, `channels/accounts.ts`, `sales-tools.ts`, `requireAgentAdmin`, `confirmations.ts`, `sales-agent.ts`, `orders`, `authorizeAgentApi`, `public-orders.ts`, `tools-catalog.test.ts`, `checkRateLimit`, `tools-cash.ts`, `human-handoff.ts`, `sql`, `[token]/page.tsx`, `inbound-pipeline.ts`, `agent-config.ts`, `[conversationId]/route.ts`, `Card.tsx`, `reconcile.ts`, `configuracion/page.tsx`, `tools-memory.ts`, `tools-products.ts`?**
   _High betweenness centrality (0.102) - this node is a cross-community bridge._
 - **Why does `FakeDb` connect `FakeDb` to `inbound-pipeline.test.ts`, `sales-tools.test.ts`, `fake-db.ts`, `anti-loop.test.ts`, `ingress.ts`, `tools-catalog.test.ts`?**
   _High betweenness centrality (0.010) - this node is a cross-community bridge._
-- **Why does `requireUser()` connect `requireUser` to `lib/payments.ts`, `attachments/route.ts`, `drafts.ts`, `db/schema.ts`, `utils.ts`, `client.ts`, `agent-config-scope.ts`, `(admin)/layout.tsx`, `5/page.tsx`, `Button.tsx`, `lib/auth.ts`, `ApplicationsManager.tsx`, `requireAgentAdmin`, `orders.ts`, `checkRateLimit`, `tools-catalog.test.ts`, `agent-config.ts`, `Card.tsx`, `sizes/route.ts`?**
+- **Why does `requireUser()` connect `client.ts` to `lib/payments.ts`, `attachments/route.ts`, `drafts.ts`, `requireAgentAdmin`, `(admin)/layout.tsx`, `utils.ts`, `Button.tsx`, `validators.ts`, `pricing.ts`, `orders`, `agent-config.ts`, `Card.tsx`, `agent-config-scope.ts`, `ApplicationsManager.tsx`, `checkRateLimit`, `tools-catalog.test.ts`?**
   _High betweenness centrality (0.010) - this node is a cross-community bridge._
 - **What connects `$schema`, `.opencode/plugins/graphify.js`, `HERE` to the rest of the system?**
   _1776 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `lib/payments.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.11586452762923351 - nodes in this community are weakly interconnected._
 - **Should `tools-recipes.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.06462585034013606 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06382978723404255 - nodes in this community are weakly interconnected._
 - **Should `whatsapp/webhook/[token]/route.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.10510510510510511 - nodes in this community are weakly interconnected._

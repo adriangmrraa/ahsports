@@ -197,20 +197,24 @@ function usePublicUploader(storageKey: string | undefined, onSession: ((id: stri
       sessionRef.current ??= openSession();
       let session = await sessionRef.current;
       if (!session) throw new Error("No se pudo preparar la carga de archivos");
+      // The server action validates uploadSessionId/Secret strictly — the
+      // in-memory session keeps short key names, so translate at the seam.
+      let creds = { uploadSessionId: session.id, uploadSessionSecret: session.secret };
       const form = new FormData();
       form.append("file", file);
       form.append("kind", kind);
-      let res = await uploadAttachmentFromPublic(form, session);
+      let res = await uploadAttachmentFromPublic(form, creds);
       if (!res.ok && /sesi[oó]n|venci/i.test(res.error)) {
         // Stored creds may point at an expired session — reopen once.
         if (storageKey && typeof window !== "undefined") window.sessionStorage.removeItem(storageKey);
         sessionRef.current = openSession();
         session = await sessionRef.current;
         if (!session) throw new Error("No se pudo preparar la carga de archivos");
+        creds = { uploadSessionId: session.id, uploadSessionSecret: session.secret };
         const retry = new FormData();
         retry.append("file", file);
         retry.append("kind", kind);
-        res = await uploadAttachmentFromPublic(retry, session);
+        res = await uploadAttachmentFromPublic(retry, creds);
       }
       if (!res.ok) throw new Error(res.error);
       return { id: res.id, url: res.url, name: res.name, kind: res.kind };
