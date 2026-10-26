@@ -36,6 +36,7 @@ export async function loadBundleComponentDescriptors(
   const componentRows = await db
     .select({
       id: products.id,
+      name: products.name,
       garmentFamily: products.garmentFamily,
       garmentType: products.garmentType,
       productType: products.productType,
@@ -47,6 +48,8 @@ export async function loadBundleComponentDescriptors(
     componentRows.map((p) => [
       p.id,
       {
+        id: p.id,
+        name: p.name,
         garmentFamily: p.garmentFamily,
         garmentType: p.garmentType,
         productType: p.productType,

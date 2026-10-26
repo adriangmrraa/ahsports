@@ -46,6 +46,27 @@ describe("garmentConfigSchema", () => {
       false,
     );
   });
+
+  it("accepts component overrides and rejects malformed ones", () => {
+    const ok = garmentConfigSchema.safeParse({
+      ...DEFAULT_GARMENT_CONFIG,
+      componentOverrides: {
+        "prod-short": {
+          colors: { primary: "#112233" },
+          sublimation: { assetRef: "att-sub", repeat: 4 },
+          sleeves: "short",
+        },
+      },
+    });
+    assert.equal(ok.success, true);
+    assert.equal(
+      garmentConfigSchema.safeParse({
+        ...DEFAULT_GARMENT_CONFIG,
+        componentOverrides: { "prod-short": { collar: "mandarina" } },
+      }).success,
+      false,
+    );
+  });
 });
 
 describe("visualAssetPlacementSchema", () => {
@@ -59,6 +80,33 @@ describe("visualAssetPlacementSchema", () => {
       rotationDeg: -10,
     });
     assert.equal(ok.success, true);
+  });
+
+  it("accepts component pins and rejects oversized component ids", () => {
+    assert.equal(
+      visualAssetPlacementSchema.safeParse({
+        id: "logo-1",
+        zone: "leg-left",
+        assetRef: "att-123",
+        componentId: "prod-short",
+        anchor: { u: 0.5, v: 0.5 },
+        scale: 1,
+        rotationDeg: 0,
+      }).success,
+      true,
+    );
+    assert.equal(
+      visualAssetPlacementSchema.safeParse({
+        id: "logo-1",
+        zone: "leg-left",
+        assetRef: "att-123",
+        componentId: "",
+        anchor: { u: 0.5, v: 0.5 },
+        scale: 1,
+        rotationDeg: 0,
+      }).success,
+      false,
+    );
   });
 });
 

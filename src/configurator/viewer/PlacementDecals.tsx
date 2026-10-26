@@ -18,7 +18,7 @@ import {
   type Group,
   type Intersection,
 } from "three";
-import type { GarmentZone, VisualAssetPlacement } from "../model";
+import { ZONE_SCOPE, type GarmentZone, type VisualAssetPlacement } from "../model";
 
 /**
  * Real on-mesh placement rendering. For every configured placement with a
@@ -63,38 +63,43 @@ const ZONE_SURFACES: Record<GarmentZone, { aim: [number, number, number]; out: [
 };
 
 /**
- * Which surface class each zone lives on. Legs only exist on lower garments;
- * everything else is upper-body. In bundles the raycast only targets the
- * scope groups that can host the zone — a chest logo can never land on the
- * pants, a leg logo never on the jersey.
- */
-const ZONE_SCOPE: Record<GarmentZone, "upper" | "lower"> = {
-  "front-center": "upper",
-  "chest-left": "upper",
-  "chest-right": "upper",
-  "back-upper": "upper",
-  "back-lower": "upper",
-  "sleeve-left": "upper",
-  "sleeve-right": "upper",
-  "leg-left": "lower",
-  "leg-right": "lower",
-};
-
-/**
  * Raycast scopes inside the garment tree. ProductGarment/BundleGarment tag
- * each garment's root group with `userData.scope`; when the tree carries no
- * tags at all (tests, legacy callers) the root itself serves every scope.
+ * each garment's root group with `userData.scope` and, in bundles,
+ * `userData.componentId`. A placement pinned to a component only raycasts
+ * that component's group; unpinned placements fall back to scope matching.
+ * When the tree carries no tags at all (tests, legacy callers) the root
+ * itself serves every scope.
  */
-function resolveScopes(root: Object3D, scope: "upper" | "lower"): Object3D[] {
-  const tagged: Object3D[] = [];
+function resolveScopes(
+  root: Object3D,
+  scope: "upper" | "lower",
+  componentId?: string,
+): Object3D[] {
+  const scopeMatched: Object3D[] = [];
+  const componentMatched: Object3D[] = [];
   let anyTagged = false;
+  let anyComponentTagged = false;
   root.traverse((node) => {
+    if (typeof node.userData?.componentId === "string") anyComponentTagged = true;
     if (typeof node.userData?.scope === "string") {
       anyTagged = true;
-      if (node.userData.scope === scope) tagged.push(node);
+      if (node.userData.scope === scope) {
+        scopeMatched.push(node);
+        if (componentId && node.userData.componentId === componentId) {
+          componentMatched.push(node);
+        }
+      }
     }
   });
-  return anyTagged ? tagged : [root];
+  // Pin honored only when the tree can discriminate components — a bundle
+  // whose groups carry componentIds narrows to that garment (empty = the
+  // component vanished, nothing can host the decal). Trees without any
+  // component tags can't discriminate → behave like an unpinned placement.
+  if (componentId && anyComponentTagged) return componentMatched;
+  // Scope-tagged trees return their (possibly empty) scope match — an upper
+  // zone on a bottoms-only tree must NOT fall through to the whole root or
+  // a chest decal would land on the pants.
+  return anyTagged ? scopeMatched : [root];
 }
 
 const RAY_DISTANCE = 2.6;
@@ -150,7 +155,7 @@ export function projectDecalGeometry(
   let hit: Intersection | null = null;
   let bestDistance = Infinity;
   let bestThickness = Infinity;
-  for (const scope of resolveScopes(target, ZONE_SCOPE[placement.zone])) {
+  for (const scope of resolveScopes(target, ZONE_SCOPE[placement.zone], placement.componentId)) {
     scope.updateWorldMatrix(true, true);
     const local = zoneRay(placement.zone, placement);
     const origin = local.origin.clone().applyMatrix4(scope.matrixWorld);

@@ -57,10 +57,29 @@ export type VisualAssetPlacement = {
   id: string;
   zone: GarmentZone;
   assetRef: string | null;
+  /**
+   * Bundle component product id hosting this decal. Absent → the decal
+   * targets whichever scope-matching garment the raycast hits first
+   * (single products and legacy configs behave exactly like before).
+   */
+  componentId?: string;
   /** Normalized 0..1 anchor for the future UV/decal mapping. */
   anchor: { u: number; v: number };
   scale: number;
   rotationDeg: number;
+};
+
+/** Which surface class each zone lives on — legs only exist on bottoms. */
+export const ZONE_SCOPE: Record<GarmentZone, "upper" | "lower"> = {
+  "front-center": "upper",
+  "chest-left": "upper",
+  "chest-right": "upper",
+  "back-upper": "upper",
+  "back-lower": "upper",
+  "sleeve-left": "upper",
+  "sleeve-right": "upper",
+  "leg-left": "lower",
+  "leg-right": "lower",
 };
 
 /**
@@ -74,6 +93,20 @@ export type SublimationPattern = {
   repeat: number;
 };
 
+/**
+ * Per-component appearance inside a bundle (conjunto). Only the fields the
+ * user can meaningfully vary per garment — placements stay in the shared
+ * top-level array and pin their host via `componentId`.
+ */
+export type GarmentComponentOverride = {
+  colors?: Partial<GarmentColors>;
+  fabric?: FabricPresetId;
+  fabricId?: string | null;
+  collar?: CollarVariant;
+  sleeves?: SleeveVariant;
+  sublimation?: SublimationPattern | null;
+};
+
 export type GarmentConfig = {
   colors: GarmentColors;
   /** Renderer fabric preset — drives PBR response. */
@@ -85,6 +118,8 @@ export type GarmentConfig = {
   view: ViewPreset;
   sublimation: SublimationPattern | null;
   placements: readonly VisualAssetPlacement[];
+  /** Bundle component overrides keyed by component product id. */
+  componentOverrides?: Record<string, GarmentComponentOverride>;
 };
 
 /**
@@ -94,6 +129,10 @@ export type GarmentConfig = {
  * structurally so unknown/new catalog values degrade gracefully.
  */
 export type ProductGarmentDescriptor = {
+  /** Component product id — present on bundle components and catalog picks. */
+  id?: string;
+  /** Display name — bundle components carry the real product name for tabs. */
+  name?: string | null;
   garmentFamily?: string | null;
   garmentType?: string | null;
   productType?: string | null;
@@ -122,6 +161,7 @@ export type GarmentConfigInput = {
   view?: unknown;
   sublimation?: unknown;
   placements?: unknown;
+  componentOverrides?: unknown;
 };
 
 export const DEFAULT_GARMENT_CONFIG: GarmentConfig = {
@@ -170,6 +210,10 @@ function normalizePlacement(value: unknown): VisualAssetPlacement | null {
     id: raw.id,
     zone: raw.zone,
     assetRef: typeof raw.assetRef === "string" ? raw.assetRef : null,
+    componentId:
+      typeof raw.componentId === "string" && raw.componentId.length > 0
+        ? raw.componentId
+        : undefined,
     anchor: {
       u: clamp01(typeof anchor.u === "number" ? anchor.u : 0.5),
       v: clamp01(typeof anchor.v === "number" ? anchor.v : 0.5),
@@ -195,6 +239,50 @@ function normalizeSublimation(value: unknown): SublimationPattern | null {
  * back to defaults, invalid colors are dropped, malformed placements are
  * filtered out — the renderer never has to defend itself.
  */
+function normalizeComponentOverrides(
+  value: unknown,
+): Record<string, GarmentComponentOverride> | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const out: Record<string, GarmentComponentOverride> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry !== "object" || entry === null || key.length === 0) continue;
+    const raw = entry as Record<string, unknown>;
+    const colors: Partial<GarmentColors> = {};
+    if (typeof raw.colors === "object" && raw.colors !== null) {
+      const rc = raw.colors as Record<string, unknown>;
+      for (const role of ["primary", "secondary", "accent"] as const) {
+        if (isHexColor(rc[role])) colors[role] = rc[role] as HexColor;
+      }
+    }
+    const override: GarmentComponentOverride = {};
+    if (Object.keys(colors).length > 0) override.colors = colors;
+    if ((FABRIC_PRESET_IDS as readonly string[]).includes(raw.fabric as string)) {
+      override.fabric = raw.fabric as FabricPresetId;
+    }
+    if (raw.fabricId === null || (typeof raw.fabricId === "string" && raw.fabricId.length > 0)) {
+      override.fabricId = raw.fabricId as string | null;
+    }
+    if ((COLLAR_VARIANTS as readonly string[]).includes(raw.collar as string)) {
+      override.collar = raw.collar as CollarVariant;
+    }
+    if ((SLEEVE_VARIANTS as readonly string[]).includes(raw.sleeves as string)) {
+      override.sleeves = raw.sleeves as SleeveVariant;
+    }
+    if (raw.sublimation === null) override.sublimation = null;
+    else {
+      const sub = normalizeSublimation(raw.sublimation);
+      if (sub) override.sublimation = sub;
+    }
+    if (Object.keys(override).length > 0) out[key] = override;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Merge arbitrary input into a valid GarmentConfig. Unknown enum values fall
+ * back to defaults, invalid colors are dropped, malformed placements are
+ * filtered out — the renderer never has to defend itself.
+ */
 export function normalizeGarmentConfig(input?: GarmentConfigInput | null): GarmentConfig {
   const base = DEFAULT_GARMENT_CONFIG;
   if (!input) return { ...base, colors: { ...base.colors }, placements: [...base.placements] };
@@ -202,6 +290,7 @@ export function normalizeGarmentConfig(input?: GarmentConfigInput | null): Garme
   const placements = Array.isArray(input.placements)
     ? input.placements.map(normalizePlacement).filter((p): p is VisualAssetPlacement => p !== null)
     : [];
+  const componentOverrides = normalizeComponentOverrides(input.componentOverrides);
   return {
     colors: {
       primary: pickColor(colors.primary, base.colors.primary),
@@ -215,6 +304,29 @@ export function normalizeGarmentConfig(input?: GarmentConfigInput | null): Garme
     view: pickVariant(VIEW_PRESETS, input.view, base.view),
     sublimation: normalizeSublimation(input.sublimation),
     placements,
+    ...(componentOverrides ? { componentOverrides } : {}),
+  };
+}
+
+/**
+ * Effective config for one bundle component: base config plus the
+ * component's own overrides. Single products pass through untouched.
+ */
+export function resolveComponentConfig(
+  config: GarmentConfig,
+  componentId?: string | null,
+): GarmentConfig {
+  const override = componentId ? config.componentOverrides?.[componentId] : undefined;
+  if (!override) return config;
+  return {
+    ...config,
+    colors: { ...config.colors, ...(override.colors ?? {}) },
+    fabric: override.fabric ?? config.fabric,
+    fabricId: override.fabricId !== undefined ? override.fabricId : config.fabricId,
+    collar: override.collar ?? config.collar,
+    sleeves: override.sleeves ?? config.sleeves,
+    sublimation:
+      override.sublimation !== undefined ? override.sublimation : config.sublimation,
   };
 }
 
@@ -224,5 +336,8 @@ export function garmentAssetRefs(config: GarmentConfig): string[] {
     .map((placement) => placement.assetRef)
     .filter((ref): ref is string => Boolean(ref));
   if (config.sublimation?.assetRef) refs.push(config.sublimation.assetRef);
+  for (const override of Object.values(config.componentOverrides ?? {})) {
+    if (override.sublimation?.assetRef) refs.push(override.sublimation.assetRef);
+  }
   return [...new Set(refs)];
 }

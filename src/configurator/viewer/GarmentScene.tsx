@@ -9,6 +9,8 @@ import {
   VIEW_CAMERA_PRESETS,
   VIEW_TARGET,
 } from "../camera";
+import { computeBundleLayout } from "../bundle-layout";
+import { resolveGarmentRenderer } from "../registry";
 import { SCENE_TOKENS } from "../render-tokens";
 import { ProductGarment } from "../renderers";
 import { PlacementDecals } from "./PlacementDecals";
@@ -41,31 +43,44 @@ function CaptureBridge({ onBridge }: { onBridge: (fn: CaptureImageFn | null) => 
 /**
  * Minimal orbit rig: pointer drag orbits, wheel dollies, presets tween in.
  * Hand-rolled to keep the dependency surface at exactly three + fiber.
+ * `fitSpan` (world units to frame horizontally, e.g. a bundle outfit width)
+ * boosts the preset distance so wide outfits survive portrait viewports.
  */
-function GarmentOrbit({ view }: { view: ViewPreset }) {
+function GarmentOrbit({ view, fitSpan = 0 }: { view: ViewPreset; fitSpan?: number }) {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
   const invalidate = useThree((s) => s.invalidate);
+  const aspect = useThree((s) => s.size.width / Math.max(1, s.size.height));
 
   const target = useMemo(() => new Vector3(...VIEW_TARGET), []);
   const current = useRef(new Spherical());
   const desired = useRef(new Spherical());
 
+  // Distance multiplier that keeps fitSpan inside the horizontal FOV.
+  // hfov = 2·atan(tan(vfov/2)·aspect); camera fov is 32°.
+  const boost = useMemo(() => {
+    if (fitSpan <= 0) return 1;
+    const halfHfov = Math.atan(Math.tan((32 / 2) * (Math.PI / 180)) * aspect);
+    const needed = fitSpan / 2 + 0.3;
+    const pose = VIEW_CAMERA_PRESETS[view];
+    return Math.min(Math.max(needed / (Math.tan(halfHfov) * pose.distance), 1), 2.4);
+  }, [fitSpan, aspect, view]);
+
   // Seed both poses from the initial preset so the first frame is stable.
   useEffect(() => {
     const pose = VIEW_CAMERA_PRESETS[view];
-    current.current.set(pose.distance, pose.polar, pose.azimuth);
+    current.current.set(pose.distance * boost, pose.polar, pose.azimuth);
     desired.current.copy(current.current);
-    camera.position.set(...cameraPoseToPosition(pose));
+    camera.position.set(...cameraPoseToPosition({ ...pose, distance: pose.distance * boost }));
     camera.lookAt(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only seed
   }, []);
 
   useEffect(() => {
     const pose = VIEW_CAMERA_PRESETS[view];
-    desired.current.set(pose.distance, pose.polar, pose.azimuth);
+    desired.current.set(pose.distance * boost, pose.polar, pose.azimuth);
     invalidate();
-  }, [view, invalidate]);
+  }, [view, boost, invalidate]);
 
   useEffect(() => {
     const el = gl.domElement;
@@ -97,10 +112,12 @@ function GarmentOrbit({ view }: { view: ViewPreset }) {
     };
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
+      // The boosted base distance exceeds the single-garment limits — the
+      // zoom ceiling scales with it or the camera snaps closer on first wheel.
       desired.current.radius = clamp(
         desired.current.radius + event.deltaY * 0.0018,
         ORBIT_LIMITS.minDistance,
-        ORBIT_LIMITS.maxDistance,
+        ORBIT_LIMITS.maxDistance * boost,
       );
       invalidate();
     };
@@ -115,7 +132,7 @@ function GarmentOrbit({ view }: { view: ViewPreset }) {
       window.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("wheel", onWheel);
     };
-  }, [gl, invalidate]);
+  }, [gl, invalidate, boost]);
 
   useFrame((_, delta) => {
     const c = current.current;
@@ -217,6 +234,8 @@ export type GarmentSceneProps = {
   /** attachment id → public URL — feeds the on-mesh decal layer. */
   assetUrls?: Record<string, string>;
   onContextLost?: () => void;
+  /** Bundle only: render just this component instead of the whole outfit. */
+  focusComponentId?: string | null;
 };
 
 function ContextLifecycle({ onLost }: { onLost?: () => void }) {
@@ -252,13 +271,37 @@ function shapeKeyFor(
     config.sleeves,
   ].join(":");
   const parts = (descriptor?.components ?? [])
-    .map((c) => `${c.garmentFamily ?? "x"}.${c.garmentType ?? "x"}.${c.productType ?? "x"}`)
+    .map((c) => {
+      const override = c.id ? config.componentOverrides?.[c.id] : undefined;
+      const variant = override ? `${override.collar ?? "-"}.${override.sleeves ?? "-"}` : "-";
+      return `${c.garmentFamily ?? "x"}.${c.garmentType ?? "x"}.${c.productType ?? "x"}#${variant}`;
+    })
     .join("+");
   return parts ? `${head}|${parts}` : head;
 }
 
-export function GarmentScene({ config, descriptor, view, onCaptureBridge, assetUrls, onContextLost }: GarmentSceneProps) {
+/** World-space width the outfit needs framed — bundle row or single garment. */
+function fitSpanFor(
+  descriptor: ProductGarmentDescriptor | null | undefined,
+  focusComponentId?: string | null,
+): number {
+  const components = focusComponentId
+    ? (descriptor?.components ?? []).filter((c) => c.id === focusComponentId)
+    : (descriptor?.components ?? []);
+  if (components.length === 0) return 0;
+  const layout = computeBundleLayout(
+    components.map((c) => resolveGarmentRenderer(c).key),
+  );
+  // layout.span × bundle group scale × the outer 1.08 garment group scale.
+  return layout.span * layout.scale * 1.08;
+}
+
+export function GarmentScene({ config, descriptor, view, onCaptureBridge, assetUrls, onContextLost, focusComponentId }: GarmentSceneProps) {
   const garmentRef = useRef<Group>(null);
+  const fitSpan = useMemo(
+    () => fitSpanFor(descriptor, focusComponentId),
+    [descriptor, focusComponentId],
+  );
   return (
     <>
       <color attach="background" args={[SCENE_TOKENS.backdrop]} />
@@ -266,18 +309,23 @@ export function GarmentScene({ config, descriptor, view, onCaptureBridge, assetU
       <StudioEnvironment />
       <StudioLights />
       <StageFloor />
-      <GarmentOrbit view={view} />
+      <GarmentOrbit view={view} fitSpan={fitSpan} />
       <CaptureBridge onBridge={onCaptureBridge} />
       <ContextLifecycle onLost={onContextLost} />
       <Suspense fallback={null}>
         <group ref={garmentRef} position-y={0.1} scale={1.08}>
-          <ProductGarment descriptor={descriptor} config={config} assetUrls={assetUrls} />
+          <ProductGarment
+            descriptor={descriptor}
+            config={config}
+            assetUrls={assetUrls}
+            focusComponentId={focusComponentId}
+          />
         </group>
         <PlacementDecals
           target={garmentRef}
           placements={config.placements}
           assetUrls={assetUrls ?? {}}
-          shapeKey={shapeKeyFor(descriptor, config)}
+          shapeKey={`${shapeKeyFor(descriptor, config)}@${focusComponentId ?? "all"}`}
         />
       </Suspense>
     </>

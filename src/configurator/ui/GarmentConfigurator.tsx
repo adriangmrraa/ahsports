@@ -9,13 +9,16 @@ import {
   useRef,
   useState,
 } from "react";
-import { Download, Info } from "lucide-react";
+import { Download, Info, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { beginPublicUploadSession, uploadAttachmentFromPublic } from "@/app/actions/public-orders";
 import {
   normalizeGarmentConfig,
+  resolveComponentConfig,
+  ZONE_SCOPE,
   type CollarVariant,
   type GarmentColors,
+  type GarmentComponentOverride,
   type GarmentConfig,
   type GarmentConfigInput,
   type GarmentZone,
@@ -26,6 +29,7 @@ import {
   type VisualAssetPlacement,
 } from "../model";
 import { productCapabilities, type ProductCapabilities } from "../capabilities";
+import { RENDERER_SCOPE, resolveGarmentRenderer } from "../registry";
 import { GarmentViewer, type GarmentViewerHandle } from "../viewer/GarmentViewer";
 import { ViewerErrorBoundary } from "../viewer/ViewerErrorBoundary";
 import {
@@ -242,12 +246,67 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
     const [uploadBusy, setUploadBusy] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [exporting, setExporting] = useState(false);
+    const [activeComponentId, setActiveComponentId] = useState<string | null>(null);
+    const [focusOnly, setFocusOnly] = useState(false);
     const viewerRef = useRef<GarmentViewerHandle>(null);
 
     const product = useMemo(() => products.find((p) => p.id === productId) ?? null, [products, productId]);
     const caps: ProductCapabilities = useMemo(
       () => productCapabilities(product, product?.zones),
       [product],
+    );
+
+    // Bundle (conjunto): each real component gets its own editable design.
+    // Tabs only appear when every component carries a product id — ids are
+    // the keys the overrides and pinned placements hang from.
+    const components = useMemo(() => product?.components ?? [], [product]);
+    const componentTabs = components.length > 1 && components.every((c) => c.id);
+    const activeComponent = useMemo(
+      () =>
+        componentTabs
+          ? components.find((c) => c.id === activeComponentId) ?? components[0]
+          : null,
+      [componentTabs, components, activeComponentId],
+    );
+    const activeId = activeComponent?.id ?? null;
+    const activeCaps: ProductCapabilities = useMemo(
+      () => (activeComponent ? productCapabilities(activeComponent, null) : caps),
+      [activeComponent, caps],
+    );
+    const activeScope = activeComponent
+      ? RENDERER_SCOPE[resolveGarmentRenderer(activeComponent).key]
+      : null;
+    /** Effective config of the edited garment — component override merged over base. */
+    const activeConfig = useMemo(
+      () => resolveComponentConfig(config, activeId),
+      [config, activeId],
+    );
+    // Placements shown in the active tab: pinned to this component, plus
+    // legacy unpinned ones whose zone scope matches this garment's side.
+    const activePlacements = useMemo(
+      () =>
+        activeId
+          ? config.placements.filter(
+              (p) =>
+                p.componentId === activeId ||
+                (!p.componentId && ZONE_SCOPE[p.zone] === activeScope),
+            )
+          : config.placements,
+      [activeId, activeScope, config.placements],
+    );
+    // Assets usable as sublimation are excluded from the "apply to this
+    // garment" list — a file can't be a base pattern and a logo at once.
+    const sublimationRefs = useMemo(() => {
+      const refs = new Set<string>();
+      if (config.sublimation?.assetRef) refs.add(config.sublimation.assetRef);
+      for (const override of Object.values(config.componentOverrides ?? {})) {
+        if (override.sublimation?.assetRef) refs.add(override.sublimation.assetRef);
+      }
+      return refs;
+    }, [config]);
+    const placedAssetIds = useMemo(
+      () => new Set(activePlacements.map((p) => p.assetRef)),
+      [activePlacements],
     );
     // attachment id → URL for the decal layer. Whether an asset actually draws
     // is decided by placements referencing it; non-image URLs fail texture
@@ -257,12 +316,23 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
       [assets],
     );
     const sublimationAsset = useMemo(
-      () => assets.find((asset) => asset.id === config.sublimation?.assetRef) ?? null,
-      [assets, config.sublimation?.assetRef],
+      () => assets.find((asset) => asset.id === activeConfig.sublimation?.assetRef) ?? null,
+      [assets, activeConfig.sublimation?.assetRef],
     );
     const attachmentAssets = useMemo(
-      () => assets.filter((asset) => asset.id !== config.sublimation?.assetRef),
-      [assets, config.sublimation?.assetRef],
+      () => assets.filter((asset) => !sublimationRefs.has(asset.id)),
+      [assets, sublimationRefs],
+    );
+    // Image assets uploaded for the outfit that are not yet placed on the
+    // active garment — one click pins them onto this component's free zone.
+    const reusableAssets = useMemo(
+      () =>
+        activeId
+          ? attachmentAssets.filter(
+              (a) => IMAGE_ASSET_KINDS.has(a.kind) && !placedAssetIds.has(a.id),
+            )
+          : [],
+      [activeId, attachmentAssets, placedAssetIds],
     );
     const attachmentsEnabled = showAttachments && uploader !== null;
     const publicUploader = usePublicUploader(storageKey, onUploadSession);
@@ -290,6 +360,52 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
       [config, assets, productId, emit],
     );
 
+    /**
+     * Write through the active component override when the product is a
+     * bundle — plain `update` otherwise. Same code paths serve both modes.
+     */
+    const updateActive = useCallback(
+      (patch: GarmentComponentOverride, nextAssets?: readonly UploadedAsset[]) => {
+        if (!activeId) {
+          update(patch as Partial<GarmentConfig>, nextAssets);
+          return;
+        }
+        const overrides = { ...(config.componentOverrides ?? {}) };
+        const current = overrides[activeId] ?? {};
+        const merged: GarmentComponentOverride = { ...current, ...patch };
+        if (merged.colors) {
+          merged.colors = { ...activeConfig.colors, ...patch.colors };
+        }
+        update({ componentOverrides: { ...overrides, [activeId]: merged } }, nextAssets);
+      },
+      [activeId, activeConfig.colors, config.componentOverrides, update],
+    );
+
+    /** Pin an already-uploaded image asset onto the active garment's free zone. */
+    const addAssetToActive = useCallback(
+      (assetId: string) => {
+        if (!activeId || !activeCaps.supportsPlacements) return;
+        const usedZones = new Set(
+          config.placements
+            .filter((p) => p.componentId === activeId || (!p.componentId && ZONE_SCOPE[p.zone] === activeScope))
+            .map((p) => p.zone),
+        );
+        const zone = activeCaps.zones.find((z) => !usedZones.has(z)) ?? activeCaps.zones[0];
+        if (!zone) return;
+        const placement: VisualAssetPlacement = {
+          id: nextPlacementId(),
+          zone,
+          assetRef: assetId,
+          componentId: activeId,
+          anchor: { u: 0.5, v: 0.5 },
+          scale: 1,
+          rotationDeg: 0,
+        };
+        update({ placements: [...config.placements, placement] });
+      },
+      [activeId, activeCaps, activeScope, config.placements, update],
+    );
+
     // Keep collar/sleeves in range when the product (and its capabilities)
     // change — e.g. switching to a campera hides the collar control.
     useEffect(() => {
@@ -315,28 +431,31 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
         setUploadError(null);
         try {
           const asset = await upload(file, kind);
+          const currentSubRef = activeConfig.sublimation?.assetRef;
           const nextAssets = purpose === "sublimation"
-            ? [...assets.filter((current) => current.id !== config.sublimation?.assetRef), asset]
+            ? [...assets.filter((current) => current.id !== currentSubRef), asset]
             : [...assets, asset];
           setAssets(nextAssets);
           if (purpose === "sublimation") {
-            update({
+            updateActive({
               sublimation: {
                 assetRef: asset.id,
-                repeat: config.sublimation?.repeat ?? 2,
+                repeat: currentSubRef && activeConfig.sublimation ? activeConfig.sublimation.repeat : 2,
               },
             }, nextAssets);
             return;
           }
-          // Logo/sponsor uploads auto-create a placement on the first free zone.
-          if (IMAGE_ASSET_KINDS.has(kind) && caps.supportsPlacements) {
-            const usedZones = new Set(config.placements.map((p) => p.zone));
-            const freeZone = caps.zones.find((z) => !usedZones.has(z));
+          // Logo/sponsor uploads auto-create a placement on the first free
+          // zone of the ACTIVE garment (its own zones + its component pin).
+          if (IMAGE_ASSET_KINDS.has(kind) && activeCaps.supportsPlacements) {
+            const usedZones = new Set(activePlacements.map((p) => p.zone));
+            const freeZone = activeCaps.zones.find((z) => !usedZones.has(z));
             if (freeZone) {
               const placement: VisualAssetPlacement = {
                 id: nextPlacementId(),
                 zone: freeZone,
                 assetRef: asset.id,
+                componentId: activeId ?? undefined,
                 anchor: { u: 0.5, v: 0.5 },
                 scale: 1,
                 rotationDeg: 0,
@@ -352,34 +471,58 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
           setUploadBusy(false);
         }
       },
-      [assets, caps, config.placements, config.sublimation, update, upload],
+      [assets, activeCaps, activeId, activeConfig.sublimation, activePlacements, config.placements, update, updateActive, upload],
     );
 
     const removeAsset = useCallback(
       (id: string) => {
         const nextAssets = assets.filter((a) => a.id !== id);
         setAssets(nextAssets);
+        // Strip the asset from every layer that can reference it: base
+        // sublimation, per-component sublimation overrides and placements.
+        const overrides = { ...(config.componentOverrides ?? {}) };
+        for (const [key, override] of Object.entries(overrides)) {
+          if (override.sublimation?.assetRef === id) {
+            overrides[key] = { ...override, sublimation: null };
+          }
+        }
         update({
           placements: config.placements.filter((p) => p.assetRef !== id),
           sublimation: config.sublimation?.assetRef === id ? null : config.sublimation,
+          componentOverrides: overrides,
         }, nextAssets);
       },
-      [assets, config.placements, config.sublimation, update],
+      [assets, config.placements, config.sublimation, config.componentOverrides, update],
     );
 
     const removeSublimation = useCallback(() => {
-      const assetRef = config.sublimation?.assetRef;
-      const nextAssets = assetRef ? assets.filter((asset) => asset.id !== assetRef) : assets;
-      update({ sublimation: null }, nextAssets);
-    }, [assets, config.sublimation?.assetRef, update]);
+      const assetRef = activeConfig.sublimation?.assetRef;
+      // The uploaded file survives while any other layer still uses it:
+      // base pattern, another component's pattern or a logo placement.
+      const stillUsed =
+        config.placements.some((p) => p.assetRef === assetRef) ||
+        (activeId != null &&
+          (config.sublimation?.assetRef === assetRef ||
+            Object.entries(config.componentOverrides ?? {}).some(
+              ([key, o]) => key !== activeId && o.sublimation?.assetRef === assetRef,
+            )));
+      const nextAssets = assetRef && !stillUsed
+        ? assets.filter((asset) => asset.id !== assetRef)
+        : assets;
+      updateActive({ sublimation: null }, nextAssets);
+    }, [assets, activeId, activeConfig.sublimation?.assetRef, config, updateActive]);
 
     const setPlacementZone = useCallback(
       (placementId: string, zone: GarmentZone) => {
         update({
-          placements: config.placements.map((p) => (p.id === placementId ? { ...p, zone } : p)),
+          placements: config.placements.map((p) =>
+            p.id === placementId
+              ? { ...p, zone, ...(activeId ? { componentId: activeId } : {}) }
+              : p,
+          ),
         });
       },
-      [config.placements, update],
+      [activeId, config.placements, update],
     );
 
     const exportImage = useCallback(async () => {
@@ -420,8 +563,19 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
               view={config.view}
               onViewChange={(view: ViewPreset) => update({ view })}
               assetUrls={assetUrls}
+              focusComponentId={focusOnly ? activeId : null}
             />
           </ViewerErrorBoundary>
+          {componentTabs && (
+            <button
+              type="button"
+              onClick={() => setFocusOnly((v) => !v)}
+              aria-pressed={focusOnly}
+              className="absolute left-3 top-3 inline-flex min-h-9 items-center gap-1.5 rounded-md border border-navy-line bg-navy-950/80 px-3 text-xs font-semibold text-on-navy backdrop-blur-sm transition-colors hover:border-accent/60 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
+            >
+              {focusOnly ? "Ver conjunto" : "Ver solo esta prenda"}
+            </button>
+          )}
           {fallbackNotice && (
             <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-4 text-on-navy-variant">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -455,81 +609,99 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
                 options={products.map((p) => ({ value: p.id, label: p.name }))}
                 onChange={(id) => {
                   setProductId(id);
+                  setActiveComponentId(null);
                   update({}, undefined, id);
                 }}
               />
             )}
           </ControlSection>
 
+          {componentTabs && activeComponent && (
+            <div className="flex flex-col gap-1">
+              <p className="label-caps px-1 text-[10px] font-semibold tracking-wider text-on-navy-variant">
+                Configurando
+              </p>
+              <SegmentedControl
+                ariaLabel="Prenda del conjunto"
+                value={activeComponent.id ?? ""}
+                onChange={setActiveComponentId}
+                options={components.map((c, i) => ({
+                  value: c.id ?? `component-${i}`,
+                  label: c.name?.trim() || `Prenda ${i + 1}`,
+                }))}
+              />
+            </div>
+          )}
+
           <ControlSection
             title="Colores"
             summary={
               <span className="inline-flex items-center justify-end gap-1.5" aria-label="Colores elegidos">
-                {caps.colorRoles.map((role) => (
-                  <span key={role} className="h-4 w-4 rounded-full border border-white/20" style={{ backgroundColor: config.colors[role] }} />
+                {activeCaps.colorRoles.map((role) => (
+                  <span key={role} className="h-4 w-4 rounded-full border border-white/20" style={{ backgroundColor: activeConfig.colors[role] }} />
                 ))}
               </span>
             }
           >
-            {caps.colorRoles.map((role) => (
+            {activeCaps.colorRoles.map((role) => (
               <SwatchField
                 key={role}
                 label={COLOR_ROLE_LABELS[role]}
-                value={config.colors[role]}
-                onChange={(v: HexColor) => update({ colors: { ...config.colors, [role]: v } })}
+                value={activeConfig.colors[role]}
+                onChange={(v: HexColor) => updateActive({ colors: { ...activeConfig.colors, [role]: v } })}
               />
             ))}
           </ControlSection>
 
-          {caps.supportsFabrics && fabrics.length > 0 && (
-            <ControlSection title="Tela" summary={fabrics.find((fabric) => fabric.id === config.fabricId)?.name ?? "Estándar"}>
+          {activeCaps.supportsFabrics && fabrics.length > 0 && (
+            <ControlSection title="Tela" summary={fabrics.find((fabric) => fabric.id === activeConfig.fabricId)?.name ?? "Estándar"}>
               <SelectField
                 label="Material"
-                value={config.fabricId ?? ""}
+                value={activeConfig.fabricId ?? ""}
                 options={[
                   { value: "", label: "Estándar" },
                   ...fabrics.map((f) => ({ value: f.id, label: f.name })),
                 ]}
                 onChange={(fabricId) => {
                   const fabric = fabrics.find((f) => f.id === fabricId);
-                  update(fabric ? { fabricId: fabric.id, fabric: fabric.visualPreset as GarmentConfig["fabric"] } : { fabricId: null });
+                  updateActive(fabric ? { fabricId: fabric.id, fabric: fabric.visualPreset as GarmentConfig["fabric"] } : { fabricId: null });
                 }}
               />
             </ControlSection>
           )}
 
-          {caps.collarVariants.length > 0 && (
-            <ControlSection title="Cuello" summary={COLLAR_LABELS[config.collar]}>
+          {activeCaps.collarVariants.length > 0 && (
+            <ControlSection title="Cuello" summary={COLLAR_LABELS[activeConfig.collar]}>
               <SegmentedControl
                 ariaLabel="Tipo de cuello"
-                value={config.collar}
-                onChange={(collar) => update({ collar })}
-                options={caps.collarVariants.map((v) => ({ value: v, label: COLLAR_LABELS[v] }))}
+                value={activeConfig.collar}
+                onChange={(collar) => updateActive({ collar })}
+                options={activeCaps.collarVariants.map((v) => ({ value: v, label: COLLAR_LABELS[v] }))}
               />
             </ControlSection>
           )}
 
-          {caps.sleeveVariants.length > 0 && (
-            <ControlSection title="Mangas" summary={SLEEVE_LABELS[config.sleeves]}>
+          {activeCaps.sleeveVariants.length > 0 && (
+            <ControlSection title="Mangas" summary={SLEEVE_LABELS[activeConfig.sleeves]}>
               <SegmentedControl
                 ariaLabel="Tipo de mangas"
-                value={config.sleeves}
-                onChange={(sleeves) => update({ sleeves })}
-                options={caps.sleeveVariants.map((v) => ({ value: v, label: SLEEVE_LABELS[v] }))}
+                value={activeConfig.sleeves}
+                onChange={(sleeves) => updateActive({ sleeves })}
+                options={activeCaps.sleeveVariants.map((v) => ({ value: v, label: SLEEVE_LABELS[v] }))}
               />
             </ControlSection>
           )}
 
-          {attachmentsEnabled && caps.supportsFabrics && (
+          {attachmentsEnabled && activeCaps.supportsFabrics && (
             <ControlSection
               title="Sublimación base"
               summary={sublimationAsset?.name ?? "patrón frente y espalda"}
             >
               <SublimationPanel
                 asset={sublimationAsset}
-                repeat={config.sublimation?.repeat ?? 2}
+                repeat={activeConfig.sublimation?.repeat ?? 2}
                 onRepeatChange={(repeat) => {
-                  if (config.sublimation) update({ sublimation: { ...config.sublimation, repeat } });
+                  if (activeConfig.sublimation) updateActive({ sublimation: { ...activeConfig.sublimation, repeat } });
                 }}
                 onUpload={(file) => void onUpload(file, "diseno_pedido", "sublimation")}
                 onRemove={removeSublimation}
@@ -539,20 +711,38 @@ export const GarmentConfigurator = forwardRef<GarmentConfiguratorHandle, Garment
             </ControlSection>
           )}
 
-          {caps.supportsPlacements && config.placements.length > 0 && (
-            <ControlSection title="Ubicación de logos" summary={`${config.placements.length} ${config.placements.length === 1 ? "ubicación" : "ubicaciones"}`}>
-              {config.placements.map((p) => {
+          {activeCaps.supportsPlacements && (activePlacements.length > 0 || reusableAssets.length > 0) && (
+            <ControlSection title="Ubicación de logos" summary={`${activePlacements.length} ${activePlacements.length === 1 ? "ubicación" : "ubicaciones"}`}>
+              {activePlacements.map((p) => {
                 const asset = assets.find((a) => a.id === p.assetRef);
                 return (
                   <SelectField
                     key={p.id}
                     label={asset?.name ?? "Archivo"}
                     value={p.zone}
-                    options={caps.zones.map((z) => ({ value: z, label: ZONE_LABELS[z] }))}
+                    options={activeCaps.zones.map((z) => ({ value: z, label: ZONE_LABELS[z] }))}
                     onChange={(zone) => setPlacementZone(p.id, zone)}
                   />
                 );
               })}
+              {componentTabs && reusableAssets.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-on-navy-variant">
+                    Aplicar archivos ya subidos
+                  </p>
+                  {reusableAssets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      type="button"
+                      onClick={() => addAssetToActive(asset.id)}
+                      className="inline-flex min-h-9 items-center gap-2 rounded-md border border-navy-line bg-navy-900/60 px-3 text-left text-xs text-on-navy transition-colors hover:border-accent/60 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
+                    >
+                      <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span className="min-w-0 flex-1 truncate">{asset.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </ControlSection>
           )}
 

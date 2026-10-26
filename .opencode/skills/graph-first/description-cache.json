@@ -5270,5 +5270,19 @@
   "public_models_garments_attribution_new_this_round_makehuman_community_asset_packs": "Section \"New this round — MakeHuman Community asset packs\" in public/models/garments/ATTRIBUTION.md.",
   "public_models_garments_attribution_new_this_round_poly_pizza_additions": "Section \"New this round — Poly.pizza additions\" in public/models/garments/ATTRIBUTION.md.",
   "public_models_garments_attribution_new_this_round_sena_kit_folder_repack": "Section \"New this round — SENA kit (folder + repack)\" in public/models/garments/ATTRIBUTION.md.",
-  "public_models_garments_attribution_prior_round_files_attribution_recovered": "Section \"Prior round files — attribution recovered\" in public/models/garments/ATTRIBUTION.md."
+  "public_models_garments_attribution_prior_round_files_attribution_recovered": "Section \"Prior round files — attribution recovered\" in public/models/garments/ATTRIBUTION.md.",
+  "src_configurator_model_garmentcomponentoverride": "GarmentComponentOverride — type alias exported from src/configurator/model.ts: Per-component appearance inside a bundle (conjunto).",
+  "src_configurator_bundle_layout_bundlelayout": "BundleLayout — type alias exported from src/configurator/bundle-layout.ts (line 26).",
+  "src_configurator_model_normalizecomponentoverrides": "normalizeComponentOverrides() — symbol declared in src/configurator/model.ts: Merge arbitrary input into a valid GarmentConfig.",
+  "src_configurator_bundle_layout_computebundlelayout": "computeBundleLayout() — function exported from src/configurator/bundle-layout.ts: Garments sit side by side, centered on the origin, separated by LAYOUT_GAP.",
+  "src_configurator_bundle_layout_test_edges": "edges() — constant declared in src/configurator/bundle-layout.test.ts (line 12).",
+  "src_configurator_viewer_garmentscene_fitspanfor": "fitSpanFor() — symbol declared in src/configurator/viewer/GarmentScene.tsx: World-space width the outfit needs framed — bundle row or single garment.",
+  "src_configurator_model_resolvecomponentconfig": "resolveComponentConfig() — symbol exported from src/configurator/model.ts: Effective config for one bundle component: base config plus the component's own overrides.",
+  "src_configurator_schemas_garmentcomponentoverrideschema": "garmentComponentOverrideSchema — constant exported from src/configurator/schemas.ts: Per-component appearance overrides inside a bundle.",
+  "src_configurator_model_zone_scope": "ZONE_SCOPE — constant exported from src/configurator/model.ts: Which surface class each zone lives on — legs only exist on bottoms.",
+  "src_configurator_bundle_layout": "src/configurator/bundle-layout.ts — Pure bundle layout math — no three.js, no React.",
+  "src_configurator_bundle_layout_family_half_width": "FAMILY_HALF_WIDTH — constant exported from src/configurator/bundle-layout.ts: Pure bundle layout math — no three.js, no React.",
+  "src_configurator_bundle_layout_layout_gap": "LAYOUT_GAP — constant exported from src/configurator/bundle-layout.ts: Breathing room between neighbouring garments, in garment units.",
+  "src_configurator_bundle_layout_stage_max_span": "STAGE_MAX_SPAN — constant exported from src/configurator/bundle-layout.ts: Max outfit span the stage comfortably frames at scale ~1.",
+  "src_configurator_bundle_layout_test": "src/configurator/bundle-layout.test.ts — Bundle outfit layout contracts: - components never overlap: consecutive centre gaps ≥ adjacent half-widths, - the row is centered on the origin, - oversized out."
 }

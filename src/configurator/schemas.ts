@@ -29,6 +29,8 @@ export const visualAssetPlacementSchema = z.object({
   zone: z.enum(GARMENT_ZONES),
   /** Staged attachment id (upload_sessions pipeline) once the file exists. */
   assetRef: z.string().min(1).max(64).nullable(),
+  /** Bundle component product id hosting the decal; absent → scope auto. */
+  componentId: z.string().min(1).max(64).nullish(),
   anchor: z.object({
     u: z.number().min(0).max(1),
     v: z.number().min(0).max(1),
@@ -42,6 +44,19 @@ export const sublimationPatternSchema = z.object({
   repeat: z.number().min(1).max(12),
 });
 
+/**
+ * Per-component appearance overrides inside a bundle. All fields optional —
+ * a component inherits whatever the override leaves unset.
+ */
+export const garmentComponentOverrideSchema = z.object({
+  colors: garmentColorsSchema.partial().optional(),
+  fabric: z.enum(FABRIC_PRESET_IDS).optional(),
+  fabricId: z.string().min(1).max(64).nullable().optional(),
+  collar: z.enum(COLLAR_VARIANTS).optional(),
+  sleeves: z.enum(SLEEVE_VARIANTS).optional(),
+  sublimation: sublimationPatternSchema.nullable().optional(),
+});
+
 export const garmentConfigSchema = z.object({
   colors: garmentColorsSchema,
   fabric: z.enum(FABRIC_PRESET_IDS),
@@ -52,6 +67,10 @@ export const garmentConfigSchema = z.object({
   view: z.enum(VIEW_PRESETS),
   sublimation: sublimationPatternSchema.nullable().default(null),
   placements: z.array(visualAssetPlacementSchema).max(24),
+  /** Bundle component overrides keyed by component product id. */
+  componentOverrides: z
+    .record(z.string().min(1).max(64), garmentComponentOverrideSchema)
+    .default({}),
 });
 
 export type StoredGarmentConfig = z.infer<typeof garmentConfigSchema>;

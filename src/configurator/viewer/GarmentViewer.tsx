@@ -40,6 +40,8 @@ export type GarmentViewerProps = {
   showViewControls?: boolean;
   /** attachment id → image URL so placements draw as real on-mesh decals. */
   assetUrls?: Record<string, string>;
+  /** Bundle only: render just this component instead of the whole outfit. */
+  focusComponentId?: string | null;
   className?: string;
 };
 
@@ -77,7 +79,7 @@ function detectWebGLSupport(): boolean {
  */
 export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>(
   function GarmentViewer(
-    { config, descriptor, view, onViewChange, showViewControls = true, assetUrls, className },
+    { config, descriptor, view, onViewChange, showViewControls = true, assetUrls, focusComponentId, className },
     ref,
   ) {
     const normalized = normalizeGarmentConfig(config);
@@ -170,6 +172,7 @@ export const GarmentViewer = forwardRef<GarmentViewerHandle, GarmentViewerProps>
               onCaptureBridge={onCaptureBridge}
               assetUrls={assetUrls}
               onContextLost={() => setSupport("lost")}
+              focusComponentId={focusComponentId}
             />
           </Canvas>
         )}

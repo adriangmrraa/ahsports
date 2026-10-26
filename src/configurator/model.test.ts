@@ -13,6 +13,7 @@ import {
   isGarmentZone,
   isHexColor,
   normalizeGarmentConfig,
+  resolveComponentConfig,
 } from "@/configurator/model";
 
 describe("isHexColor", () => {
@@ -110,6 +111,66 @@ describe("normalizeGarmentConfig", () => {
     assert.deepEqual(config.sublimation, { assetRef: "att-pattern", repeat: 12 });
     assert.equal(normalizeGarmentConfig({ sublimation: { assetRef: "", repeat: 2 } }).sublimation, null);
   });
+
+  it("keeps placement componentId pins and drops invalid ones", () => {
+    const config = normalizeGarmentConfig({
+      placements: [
+        { id: "p1", zone: "leg-left", assetRef: "att-a", componentId: "prod-short", anchor: { u: 0.5, v: 0.5 }, scale: 1, rotationDeg: 0 },
+        { id: "p2", zone: "leg-right", assetRef: "att-b", componentId: 42, anchor: { u: 0.5, v: 0.5 }, scale: 1, rotationDeg: 0 },
+      ],
+    });
+    assert.equal(config.placements[0].componentId, "prod-short");
+    assert.equal(config.placements[1].componentId, undefined);
+  });
+
+  it("normalizes component overrides field by field and drops empty ones", () => {
+    const config = normalizeGarmentConfig({
+      componentOverrides: {
+        "prod-short": {
+          colors: { primary: "#112233", secondary: "nope" },
+          collar: "crew",
+          sleeves: "larga",
+          sublimation: { assetRef: "att-sub", repeat: 50 },
+        },
+        "prod-empty": { collar: "mandarina" },
+        "prod-junk": "garbage",
+      },
+    });
+    const override = config.componentOverrides?.["prod-short"];
+    assert.equal(override?.colors?.primary, "#112233");
+    assert.equal(override?.colors?.secondary, undefined);
+    assert.equal(override?.collar, "crew");
+    assert.equal(override?.sleeves, undefined);
+    assert.deepEqual(override?.sublimation, { assetRef: "att-sub", repeat: 12 });
+    assert.equal(config.componentOverrides?.["prod-empty"], undefined);
+    assert.equal(config.componentOverrides?.["prod-junk"], undefined);
+  });
+});
+
+describe("resolveComponentConfig", () => {
+  it("returns the base config untouched for single garments or unknown ids", () => {
+    const config = normalizeGarmentConfig({ collar: "polo" });
+    assert.equal(resolveComponentConfig(config), config);
+    assert.equal(resolveComponentConfig(config, "no-such"), config);
+  });
+
+  it("merges only the override fields and inherits the rest", () => {
+    const config = normalizeGarmentConfig({
+      colors: { primary: "#111111", secondary: "#222222", accent: "#333333" },
+      collar: "polo",
+      sleeves: "long",
+      sublimation: { assetRef: "att-base", repeat: 3 },
+      componentOverrides: {
+        "prod-short": { colors: { primary: "#ff0000" }, sleeves: "short", sublimation: null },
+      },
+    });
+    const resolved = resolveComponentConfig(config, "prod-short");
+    assert.equal(resolved.colors.primary, "#ff0000");
+    assert.equal(resolved.colors.secondary, "#222222"); // inherited
+    assert.equal(resolved.collar, "polo"); // inherited
+    assert.equal(resolved.sleeves, "short"); // overridden
+    assert.equal(resolved.sublimation, null); // explicit null wins over base
+  });
 });
 
 describe("garmentAssetRefs", () => {
@@ -122,5 +183,18 @@ describe("garmentAssetRefs", () => {
       ],
     });
     assert.deepEqual(garmentAssetRefs(config), ["att-logo", "att-pattern"]);
+  });
+
+  it("also collects per-component sublimation refs", () => {
+    const config = normalizeGarmentConfig({
+      sublimation: { assetRef: "att-base", repeat: 2 },
+      componentOverrides: {
+        "prod-short": { sublimation: { assetRef: "att-legs", repeat: 4 } },
+      },
+      placements: [
+        { id: "p1", zone: "leg-left", assetRef: "att-logo", componentId: "prod-short", anchor: { u: 0.5, v: 0.5 }, scale: 1, rotationDeg: 0 },
+      ],
+    });
+    assert.deepEqual(garmentAssetRefs(config).sort(), ["att-base", "att-legs", "att-logo"]);
   });
 });

@@ -47,6 +47,8 @@ export type ProductGarmentProps = {
   descriptor?: ProductGarmentDescriptor | null;
   config: GarmentConfig;
   assetUrls?: Record<string, string>;
+  /** Bundle only: render just this component instead of the whole outfit. */
+  focusComponentId?: string | null;
   /** Reports the resolution when it changes — useful for debug surfaces. */
   onResolved?: (resolution: RendererResolution) => void;
 };
@@ -60,7 +62,7 @@ export type ProductGarmentProps = {
  * host them. Bundles tag each component inside BundleGarment instead, so the
  * outer wrapper intentionally carries no scope.
  */
-export function ProductGarment({ descriptor, config, assetUrls, onResolved }: ProductGarmentProps) {
+export function ProductGarment({ descriptor, config, assetUrls, focusComponentId, onResolved }: ProductGarmentProps) {
   const resolution = useMemo(
     () => resolveGarmentRenderer(descriptor),
     [descriptor],
@@ -74,7 +76,7 @@ export function ProductGarment({ descriptor, config, assetUrls, onResolved }: Pr
 
   return (
     <group name={`scope-${scope ?? "none"}`} userData={{ scope }}>
-      <Model config={config} descriptor={descriptor} assetUrls={assetUrls} />
+      <Model config={config} descriptor={descriptor} assetUrls={assetUrls} focusComponentId={focusComponentId} />
     </group>
   );
 }

@@ -1,5 +1,7 @@
 import { useMemo, type ComponentType } from "react";
 import { RENDERER_SCOPE, resolveGarmentRenderer } from "../registry";
+import { resolveComponentConfig } from "../model";
+import { computeBundleLayout } from "../bundle-layout";
 import { FallbackGarment } from "./FallbackGarment";
 import { SportsJersey, type GarmentModelProps } from "./SportsJersey";
 import { HoodieGarment } from "./HoodieGarment";
@@ -39,12 +41,13 @@ function ComponentGarment({ config, descriptor, assetUrls }: GarmentModelProps) 
 /**
  * Conjunto renderer: draws each real component product with its own family
  * renderer, laid out side by side as an outfit. Each component is wrapped in
- * a scope-tagged group (`userData.scope`) so the decal layer raycasts upper
- * zones against upper garments and leg zones against bottoms only.
+ * a scope+component-tagged group so the decal layer raycasts a pinned
+ * placement against that exact garment, and applies the component's own
+ * config overrides (colors, collar, sleeves, sublimation).
  *
  * A component-less bundle falls back honestly instead of drawing empty space.
  */
-export function BundleGarment({ config, descriptor, assetUrls }: GarmentModelProps) {
+export function BundleGarment({ config, descriptor, assetUrls, focusComponentId }: GarmentModelProps) {
   const resolved = useMemo(
     () =>
       (descriptor?.components ?? []).map((component) => ({
@@ -54,27 +57,38 @@ export function BundleGarment({ config, descriptor, assetUrls }: GarmentModelPro
     [descriptor],
   );
 
+  // Focus mode: render just the pinned component centered at full size.
+  const visible = useMemo(
+    () =>
+      focusComponentId && resolved.some((r) => r.component.id === focusComponentId)
+        ? resolved.filter((r) => r.component.id === focusComponentId)
+        : resolved,
+    [resolved, focusComponentId],
+  );
+
+  const layout = useMemo(
+    () => computeBundleLayout(visible.map((r) => r.resolution.key)),
+    [visible],
+  );
+
   if (resolved.length === 0) return <FallbackGarment config={config} assetUrls={assetUrls} />;
 
-  // Side-by-side outfit layout: each garment keeps its own canonical frame
-  // (zone aims stay in component-local space; the group offset is absorbed by
-  // matrixWorld during decal projection).
-  const spread = 0.62;
-  const start = -((resolved.length - 1) * spread) / 2;
-
   return (
-    <group name="bundle">
-      {resolved.map(({ component, resolution }, i) => {
+    <group name="bundle" scale={layout.scale}>
+      {visible.map(({ component, resolution }, i) => {
         const scope = RENDERER_SCOPE[resolution.key];
         return (
           <group
-            key={i}
+            key={component.id ?? i}
             name={`component-${scope}`}
-            userData={{ scope }}
-            position={[start + i * spread, 0, 0]}
-            scale={0.82}
+            userData={{ scope, componentId: component.id }}
+            position={[layout.offsets[i], 0, 0]}
           >
-            <ComponentGarment config={config} descriptor={component} assetUrls={assetUrls} />
+            <ComponentGarment
+              config={resolveComponentConfig(config, component.id)}
+              descriptor={component}
+              assetUrls={assetUrls}
+            />
           </group>
         );
       })}

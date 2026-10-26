@@ -12,6 +12,8 @@ export type GarmentModelProps = {
   descriptor?: ProductGarmentDescriptor | null;
   /** Attachment id → URL, shared by base sublimation and decal renderers. */
   assetUrls?: Record<string, string>;
+  /** Bundle only: render just this component instead of the whole outfit. */
+  focusComponentId?: string | null;
 };
 
 function FabricMaterial({ color, preset, pattern }: { color: HexColor; preset: FabricVisualPreset; pattern?: Texture | null }) {
